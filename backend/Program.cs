@@ -35,6 +35,8 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+app.UseStaticFiles(); // Serve static files (favicon, etc.)
+
 app.UseCors("AllowAll");
 
 if (app.Environment.IsDevelopment())

@@ -1,0 +1,68 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  AZURE_BACKEND_APP_NAME: creerlio-api
+  AZURE_FRONTEND_APP_NAME: creerlio-app
+  DOTNET_VERSION: '8.0.x'
+  NODE_VERSION: '20.x'
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: Build Backend
+      run: |
+        cd backend
+        dotnet restore
+        dotnet build --configuration Release
+        dotnet publish Creerlio.Api/Creerlio.Api.csproj -c Release -o publish
+    
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.AZURE_BACKEND_APP_NAME }}
+        publish-profile: ${{ secrets.AZURE_BACKEND_PUBLISH_PROFILE }}
+        package: backend/publish
+
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/frontend-app/package-lock.json
+    
+    - name: Install dependencies
+      run: |
+        cd frontend/frontend-app
+        npm ci
+    
+    - name: Build Frontend
+      run: |
+        cd frontend/frontend-app
+        npm run build
+      env:
+        NEXT_PUBLIC_API_URL: https://${{ env.AZURE_BACKEND_APP_NAME }}.azurewebsites.net
+    
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.AZURE_FRONTEND_APP_NAME }}
+        publish-profile: ${{ secrets.AZURE_FRONTEND_PUBLISH_PROFILE }}
+        package: frontend/frontend-app

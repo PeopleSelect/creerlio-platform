@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  output: 'standalone', // Required for Azure deployment
   turbopack: {
     root: __dirname,
   },
@@ -12,7 +13,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "connect-src 'self' http://localhost:* https://*.app.github.dev https://api.mapbox.com https://*.tiles.mapbox.com",
+            value: "connect-src 'self' http://localhost:* https://*.app.github.dev https://*.azurewebsites.net https://api.mapbox.com https://*.tiles.mapbox.com",
           },
         ],
       },

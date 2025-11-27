@@ -14,6 +14,7 @@ env:
 jobs:
   deploy-backend:
     runs-on: ubuntu-latest
+    if: secrets.AZURE_CREDENTIALS != ''
     steps:
     - uses: actions/checkout@v4
     
@@ -21,6 +22,7 @@ jobs:
       uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
+      continue-on-error: true
     
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -42,6 +44,7 @@ jobs:
 
   deploy-frontend:
     runs-on: ubuntu-latest
+    if: secrets.AZURE_CREDENTIALS != ''
     steps:
     - uses: actions/checkout@v4
     
@@ -49,6 +52,7 @@ jobs:
       uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
+      continue-on-error: true
     
     - name: Setup Node.js
       uses: actions/setup-node@v4

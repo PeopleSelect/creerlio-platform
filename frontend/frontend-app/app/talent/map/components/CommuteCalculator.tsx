@@ -84,7 +84,7 @@ export default function CommuteCalculator({
                   instruction: step.instruction || '',
                   distance: step.distance || 0,
                   duration: step.duration || 0
-                }))
+                })) : []
               }
             };
           }

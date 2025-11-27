@@ -7,7 +7,7 @@ export interface UploadedFile {
   size: number;
   dataUrl: string; // base64 data URL
   uploadedAt: number;
-  category: 'profile' | 'portfolio' | 'resume' | 'certificate' | 'logo' | 'cover';
+  category: 'profile' | 'portfolio' | 'resume' | 'certificate' | 'logo' | 'cover' | 'video';
 }
 
 const STORAGE_KEY_PREFIX = 'creerlio_uploads_';

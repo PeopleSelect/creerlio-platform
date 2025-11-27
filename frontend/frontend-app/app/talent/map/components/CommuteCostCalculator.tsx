@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Car, Bus, Bike, Clock, DollarSign, Leaf, TrendingUp, Calendar } from 'lucide-react';
+import { Car, Bus, Bike, Clock, DollarSign, Leaf, TrendingUp, Calendar, Calculator } from 'lucide-react';
 
 interface CommuteCost {
   transportMode: string;

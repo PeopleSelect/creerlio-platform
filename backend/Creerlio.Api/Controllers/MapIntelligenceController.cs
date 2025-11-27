@@ -26,6 +26,100 @@ public class MapIntelligenceController : ControllerBase
     }
 
     /// <summary>
+    /// Find nearby amenities (cafes, gyms, childcare, etc.)
+    /// </summary>
+    [HttpPost("amenities")]
+    public async Task<ActionResult<List<AmenityResult>>> FindNearbyAmenities([FromBody] AmenitySearchRequest request)
+    {
+        _logger.LogInformation("Finding {Category} within {Radius}m of ({Lat}, {Lng})", 
+            request.Category, request.Radius, request.Latitude, request.Longitude);
+
+        var cacheKey = $"amenities_{request.Latitude}_{request.Longitude}_{request.Radius}_{request.Category}";
+        
+        if (_cache.TryGetValue(cacheKey, out List<AmenityResult>? cached) && cached != null)
+        {
+            return Ok(cached);
+        }
+
+        var amenities = GenerateMockAmenities(request);
+        _cache.Set(cacheKey, amenities, TimeSpan.FromHours(12));
+
+        return Ok(amenities);
+    }
+
+    /// <summary>
+    /// Calculate comprehensive commute costs (financial + time + environmental)
+    /// </summary>
+    [HttpPost("commute-costs")]
+    public async Task<ActionResult<CommuteCostResult>> CalculateCommuteCosts([FromBody] CommuteCostRequest request)
+    {
+        _logger.LogInformation("Calculating commute costs from ({FromLat}, {FromLng}) to ({ToLat}, {ToLng})", 
+            request.FromLatitude, request.FromLongitude, request.ToLatitude, request.ToLongitude);
+
+        var cacheKey = $"commute_{request.FromLatitude}_{request.FromLongitude}_{request.ToLatitude}_{request.ToLongitude}_{request.TransportMode}";
+        
+        if (_cache.TryGetValue(cacheKey, out CommuteCostResult? cached) && cached != null)
+        {
+            return Ok(cached);
+        }
+
+        var distance = CalculateDistance(
+            new LocationPoint { Latitude = request.FromLatitude, Longitude = request.FromLongitude },
+            new LocationPoint { Latitude = request.ToLatitude, Longitude = request.ToLongitude }
+        );
+
+        var result = CalculateComprehensiveCosts(distance, request.TransportMode, request.DaysPerWeek);
+        _cache.Set(cacheKey, result, TimeSpan.FromHours(24));
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Compare multiple route options with detailed cost breakdown
+    /// </summary>
+    [HttpPost("compare-routes")]
+    public async Task<ActionResult<RouteComparisonResult>> CompareRoutes([FromBody] RouteComparisonRequest request)
+    {
+        _logger.LogInformation("Comparing routes from ({FromLat}, {FromLng}) to ({ToLat}, {ToLng})", 
+            request.FromLatitude, request.FromLongitude, request.ToLatitude, request.ToLongitude);
+
+        var distance = CalculateDistance(
+            new LocationPoint { Latitude = request.FromLatitude, Longitude = request.FromLongitude },
+            new LocationPoint { Latitude = request.ToLatitude, Longitude = request.ToLongitude }
+        );
+
+        var drivingCosts = CalculateComprehensiveCosts(distance, "driving", 5);
+        var publicTransportCosts = CalculateComprehensiveCosts(distance, "public_transport", 5);
+        var cyclingCosts = CalculateComprehensiveCosts(distance, "cycling", 5);
+
+        return Ok(new RouteComparisonResult
+        {
+            Driving = drivingCosts,
+            PublicTransport = publicTransportCosts,
+            Cycling = cyclingCosts,
+            Distance = Math.Round(distance, 2)
+        });
+    }
+
+    /// <summary>
+    /// Get traffic conditions for a route
+    /// </summary>
+    [HttpPost("traffic")]
+    public async Task<ActionResult<TrafficResult>> GetTrafficConditions([FromBody] TrafficRequest request)
+    {
+        _logger.LogInformation("Getting traffic conditions");
+
+        return Ok(new TrafficResult
+        {
+            CurrentCondition = "Light",
+            DelayMinutes = 5,
+            BestTimeToLeave = DateTime.Now.AddHours(1),
+            TypicalDuration = 25,
+            CurrentDuration = 30
+        });
+    }
+
+    /// <summary>
     /// Calculate route with travel time, distance, and estimated costs including tolls
     /// </summary>
     [HttpPost("route")]
@@ -229,6 +323,105 @@ public class MapIntelligenceController : ControllerBase
     }
 
     // Helper methods
+
+    private List<AmenityResult> GenerateMockAmenities(AmenitySearchRequest request)
+    {
+        var random = new Random(request.Latitude.GetHashCode());
+        var amenities = new List<AmenityResult>();
+
+        var names = request.Category.ToLower() switch
+        {
+            "cafe" => new[] { "Starbucks", "The Coffee Club", "Gloria Jean's", "Zarraffa's", "Hudson's Coffee" },
+            "gym" => new[] { "Anytime Fitness", "Jetts", "F45", "Fitness First", "Snap Fitness" },
+            "childcare" => new[] { "Little Learners", "Bright Stars", "KinderCare", "Guardian", "G8 Education" },
+            "supermarket" => new[] { "Woolworths", "Coles", "IGA", "Aldi", "Harris Farm" },
+            "pharmacy" => new[] { "Chemist Warehouse", "Priceline", "Amcal", "Terry White", "Blooms" },
+            "restaurant" => new[] { "Grill'd", "Nando's", "Subway", "McDonald's", "KFC" },
+            "medical" => new[] { "Medical Centre", "Family Practice", "Bulk Billing Doctors", "GP Clinic", "Health Hub" },
+            _ => new[] { "Local Business", "Service Provider", "Retail Shop" }
+        };
+
+        for (int i = 0; i < 8; i++)
+        {
+            var angle = random.NextDouble() * Math.PI * 2;
+            var distance = random.NextDouble() * (request.Radius / 1000.0); // Convert to km
+            var latOffset = distance * Math.Cos(angle) / 111.0;
+            var lngOffset = distance * Math.Sin(angle) / (111.0 * Math.Cos(request.Latitude * Math.PI / 180));
+
+            amenities.Add(new AmenityResult
+            {
+                Id = Guid.NewGuid().ToString(),
+                Name = names[random.Next(names.Length)],
+                Category = request.Category,
+                Latitude = request.Latitude + latOffset,
+                Longitude = request.Longitude + lngOffset,
+                Distance = Math.Round(distance, 2),
+                Rating = Math.Round(3.5 + random.NextDouble() * 1.5, 1),
+                Address = $"{random.Next(1, 200)} Main St",
+                Phone = $"04{random.Next(10, 99)} {random.Next(100, 999)} {random.Next(100, 999)}",
+                OpenNow = random.Next(0, 2) == 0
+            });
+        }
+
+        return amenities.OrderBy(a => a.Distance).ToList();
+    }
+
+    private CommuteCostResult CalculateComprehensiveCosts(double distanceKm, string mode, int daysPerWeek)
+    {
+        var result = new CommuteCostResult
+        {
+            TransportMode = mode,
+            Distance = Math.Round(distanceKm, 2)
+        };
+
+        // Time calculations
+        var timePerTripMinutes = mode switch
+        {
+            "driving" => distanceKm / 50 * 60, // 50 km/h average
+            "public_transport" => distanceKm / 35 * 60 + 15, // 35 km/h + wait time
+            "cycling" => distanceKm / 20 * 60, // 20 km/h
+            "walking" => distanceKm / 5 * 60, // 5 km/h
+            _ => distanceKm / 40 * 60
+        };
+
+        result.TimePerTrip = Math.Round(timePerTripMinutes, 1);
+        result.DailyTime = Math.Round(timePerTripMinutes * 2, 1); // Round trip
+        result.WeeklyTime = Math.Round(result.DailyTime * daysPerWeek, 1);
+        result.MonthlyTime = Math.Round(result.WeeklyTime * 4.33, 1);
+        result.YearlyTime = Math.Round(result.WeeklyTime * 52, 1);
+
+        // Cost calculations
+        var costPerTrip = mode switch
+        {
+            "driving" => CalculateFuelCost(distanceKm, mode) + (distanceKm > 10 ? 5 : 0), // Fuel + tolls
+            "public_transport" => CalculatePublicTransportCost(distanceKm),
+            "cycling" => 0.5, // Maintenance cost
+            "walking" => 0,
+            _ => 5
+        };
+
+        result.DailyCost = Math.Round(costPerTrip * 2, 2); // Round trip
+        result.WeeklyCost = Math.Round(result.DailyCost * daysPerWeek, 2);
+        result.MonthlyCost = Math.Round(result.WeeklyCost * 4.33, 2);
+        result.YearlyCost = Math.Round(result.WeeklyCost * 52, 2);
+
+        // Environmental impact (kg CO2)
+        var co2PerKm = mode switch
+        {
+            "driving" => 0.21, // Average car
+            "public_transport" => 0.05, // Bus/train
+            "cycling" => 0,
+            "walking" => 0,
+            _ => 0.15
+        };
+
+        result.DailyCO2 = Math.Round(distanceKm * 2 * co2PerKm, 2);
+        result.WeeklyCO2 = Math.Round(result.DailyCO2 * daysPerWeek, 2);
+        result.MonthlyCO2 = Math.Round(result.WeeklyCO2 * 4.33, 2);
+        result.YearlyCO2 = Math.Round(result.WeeklyCO2 * 52, 2);
+
+        return result;
+    }
 
     private double CalculateFuelCost(double distanceKm, string travelMode)
     {
@@ -694,4 +887,94 @@ public class LocationPoint
 {
     public double Latitude { get; set; }
     public double Longitude { get; set; }
+}
+
+public class AmenitySearchRequest
+{
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+    public int Radius { get; set; } = 1000; // meters
+    public string Category { get; set; } = "cafe";
+}
+
+public class AmenityResult
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Category { get; set; } = "";
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+    public double Distance { get; set; } // km
+    public double Rating { get; set; }
+    public string Address { get; set; } = "";
+    public string? Phone { get; set; }
+    public bool OpenNow { get; set; }
+}
+
+public class CommuteCostRequest
+{
+    public double FromLatitude { get; set; }
+    public double FromLongitude { get; set; }
+    public double ToLatitude { get; set; }
+    public double ToLongitude { get; set; }
+    public string TransportMode { get; set; } = "driving";
+    public int DaysPerWeek { get; set; } = 5;
+}
+
+public class CommuteCostResult
+{
+    public string TransportMode { get; set; } = "";
+    public double Distance { get; set; }
+    
+    // Time
+    public double TimePerTrip { get; set; }
+    public double DailyTime { get; set; }
+    public double WeeklyTime { get; set; }
+    public double MonthlyTime { get; set; }
+    public double YearlyTime { get; set; }
+    
+    // Costs
+    public double DailyCost { get; set; }
+    public double WeeklyCost { get; set; }
+    public double MonthlyCost { get; set; }
+    public double YearlyCost { get; set; }
+    
+    // Environmental
+    public double DailyCO2 { get; set; }
+    public double WeeklyCO2 { get; set; }
+    public double MonthlyCO2 { get; set; }
+    public double YearlyCO2 { get; set; }
+}
+
+public class RouteComparisonRequest
+{
+    public double FromLatitude { get; set; }
+    public double FromLongitude { get; set; }
+    public double ToLatitude { get; set; }
+    public double ToLongitude { get; set; }
+}
+
+public class RouteComparisonResult
+{
+    public CommuteCostResult Driving { get; set; } = new();
+    public CommuteCostResult PublicTransport { get; set; } = new();
+    public CommuteCostResult Cycling { get; set; } = new();
+    public double Distance { get; set; }
+}
+
+public class TrafficRequest
+{
+    public double FromLatitude { get; set; }
+    public double FromLongitude { get; set; }
+    public double ToLatitude { get; set; }
+    public double ToLongitude { get; set; }
+}
+
+public class TrafficResult
+{
+    public string CurrentCondition { get; set; } = "";
+    public int DelayMinutes { get; set; }
+    public DateTime BestTimeToLeave { get; set; }
+    public int TypicalDuration { get; set; }
+    public int CurrentDuration { get; set; }
 }

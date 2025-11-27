@@ -145,7 +145,7 @@ export default function ApplicationDetailPage() {
         <div className="bg-white rounded-lg shadow-sm p-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Application Timeline</h2>
           <div className="space-y-6">
-            {application.timeline.map((event, idx) => (
+            {application.timeline.map((event, idx) => event && typeof event === 'object' && 'date' in event ? (
               <div key={idx} className="flex gap-4">
                 <div className="flex flex-col items-center">
                   <div className="w-4 h-4 bg-amber-600 rounded-full"></div>
@@ -165,7 +165,7 @@ export default function ApplicationDetailPage() {
                   <p className="text-gray-700 mt-1">{event.description}</p>
                 </div>
               </div>
-            ))}
+            ) : null)}
           </div>
         </div>
       </div>

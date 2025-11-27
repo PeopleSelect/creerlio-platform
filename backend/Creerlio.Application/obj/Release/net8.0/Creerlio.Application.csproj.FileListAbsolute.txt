@@ -2,9 +2,7 @@
 /workspaces/creerlio-platform/backend/Creerlio.Application/bin/Release/net8.0/Creerlio.Application.dll
 /workspaces/creerlio-platform/backend/Creerlio.Application/bin/Release/net8.0/Creerlio.Application.pdb
 /workspaces/creerlio-platform/backend/Creerlio.Application/bin/Release/net8.0/Creerlio.Domain.dll
-/workspaces/creerlio-platform/backend/Creerlio.Application/bin/Release/net8.0/Creerlio.Infrastructure.dll
 /workspaces/creerlio-platform/backend/Creerlio.Application/bin/Release/net8.0/Creerlio.Domain.pdb
-/workspaces/creerlio-platform/backend/Creerlio.Application/bin/Release/net8.0/Creerlio.Infrastructure.pdb
 /workspaces/creerlio-platform/backend/Creerlio.Application/obj/Release/net8.0/Creerlio.Application.csproj.AssemblyReference.cache
 /workspaces/creerlio-platform/backend/Creerlio.Application/obj/Release/net8.0/Creerlio.Application.GeneratedMSBuildEditorConfig.editorconfig
 /workspaces/creerlio-platform/backend/Creerlio.Application/obj/Release/net8.0/Creerlio.Application.AssemblyInfoInputs.cache

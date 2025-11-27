@@ -198,3 +198,10 @@
 /workspaces/creerlio-platform/backend/Creerlio.Api/obj/Release/net8.0/Creerlio.Api.genruntimeconfig.cache
 /workspaces/creerlio-platform/backend/Creerlio.Api/obj/Release/net8.0/ref/Creerlio.Api.dll
 /workspaces/creerlio-platform/backend/Creerlio.Api/bin/Release/net8.0/appsettings.Production.json
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Release/net8.0/UglyToad.PdfPig.Core.dll
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Release/net8.0/UglyToad.PdfPig.DocumentLayoutAnalysis.dll
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Release/net8.0/UglyToad.PdfPig.Fonts.dll
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Release/net8.0/UglyToad.PdfPig.Package.dll
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Release/net8.0/UglyToad.PdfPig.Tokenization.dll
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Release/net8.0/UglyToad.PdfPig.Tokens.dll
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Release/net8.0/UglyToad.PdfPig.dll

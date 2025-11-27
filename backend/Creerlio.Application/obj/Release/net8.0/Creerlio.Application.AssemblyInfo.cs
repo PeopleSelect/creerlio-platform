@@ -13,11 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Creerlio.Application")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-<<<<<<< HEAD:backend/Creerlio.Application/obj/Release/net8.0/Creerlio.Application.AssemblyInfo.cs
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fffceb0c840b5ff18fcb44d36b1e1c85c6d486bc")]
-=======
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c91ed81091f72a0493f0ceab6e6809d52fe364e4")]
->>>>>>> 2269715 (feat: Implement Resume AI parsing service (backend)):backend/Creerlio.Application/obj/Debug/net8.0/Creerlio.Application.AssemblyInfo.cs
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7d35c17f500d404a714582a307a9098b157730a7")]
 [assembly: System.Reflection.AssemblyProductAttribute("Creerlio.Application")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Creerlio.Application")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

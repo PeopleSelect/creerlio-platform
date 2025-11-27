@@ -14,3 +14,5 @@
 /workspaces/creerlio-platform/backend/Creerlio.Infrastructure/obj/Release/net8.0/refint/Creerlio.Infrastructure.dll
 /workspaces/creerlio-platform/backend/Creerlio.Infrastructure/obj/Release/net8.0/Creerlio.Infrastructure.pdb
 /workspaces/creerlio-platform/backend/Creerlio.Infrastructure/obj/Release/net8.0/ref/Creerlio.Infrastructure.dll
+/workspaces/creerlio-platform/backend/Creerlio.Infrastructure/bin/Release/net8.0/Creerlio.Application.dll
+/workspaces/creerlio-platform/backend/Creerlio.Infrastructure/bin/Release/net8.0/Creerlio.Application.pdb

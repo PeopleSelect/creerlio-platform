@@ -1,0 +1,12 @@
+using Creerlio.Domain.Entities;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace Creerlio.Application.Interfaces
+{
+    public interface ISystemRepository
+    {
+        Task<IEnumerable<User>> GetUsersAsync();
+        Task SaveChangesAsync();
+    }
+}

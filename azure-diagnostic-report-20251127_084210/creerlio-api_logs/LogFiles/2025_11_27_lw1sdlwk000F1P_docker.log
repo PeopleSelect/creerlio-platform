@@ -1,0 +1,64 @@
+2025-11-27T04:28:45.0784672Z Container start method called.
+2025-11-27T04:28:45.0973596Z Establishing network.
+2025-11-27T04:28:45.1648943Z Pulling image: appsvc/dotnetcore:8.0_20251016.4.tuxprod.
+2025-11-27T04:28:46.0324763Z Container is starting.
+2025-11-27T04:28:46.0413618Z Establishing user namespace if not established already.
+2025-11-27T04:28:46.0430836Z Establishing network if not established already.
+2025-11-27T04:28:46.0515826Z Mounting volumes.
+2025-11-27T04:28:46.0544235Z Nested mountpoint 
+2025-11-27T04:28:46.1087499Z Nested mountpoint volatile/logs
+2025-11-27T04:28:46.1784008Z Nested mountpoint 
+2025-11-27T04:28:46.4006025Z Nested mountpoint 
+2025-11-27T04:28:46.5150889Z Nested mountpoint 
+2025-11-27T04:28:47.0772704Z Creating container.
+2025-11-27T04:28:47.1229498Z Creating pipes for streaming container io.
+2025-11-27T04:28:47.1231858Z Creating stdout named pipe at /podr/container/pipe/06ed5418be14_creerlio-api/stdout_e0de48501e984f97b2a94857dbfb7f29.
+2025-11-27T04:28:47.1256011Z Successfully created stdout named pipe at: /podr/container/pipe/06ed5418be14_creerlio-api/stdout_e0de48501e984f97b2a94857dbfb7f29.
+2025-11-27T04:28:47.1423659Z Opening named pipe /podr/container/pipe/06ed5418be14_creerlio-api/stdout_e0de48501e984f97b2a94857dbfb7f29 for reading in non-blocking mode.
+2025-11-27T04:28:47.1425640Z Successfully opened named pipe: /podr/container/pipe/06ed5418be14_creerlio-api/stdout_e0de48501e984f97b2a94857dbfb7f29.
+2025-11-27T04:28:47.1426927Z Successfully removed non-blocking flag from /podr/container/pipe/06ed5418be14_creerlio-api/stdout_e0de48501e984f97b2a94857dbfb7f29.
+2025-11-27T04:28:47.1428390Z Creating stderr named pipe at /podr/container/pipe/06ed5418be14_creerlio-api/stderr_030cdbf9f9854025b8dc7cad95fdae84.
+2025-11-27T04:28:47.1431047Z Successfully created stderr named pipe at: /podr/container/pipe/06ed5418be14_creerlio-api/stderr_030cdbf9f9854025b8dc7cad95fdae84.
+2025-11-27T04:28:47.1432049Z Opening named pipe /podr/container/pipe/06ed5418be14_creerlio-api/stderr_030cdbf9f9854025b8dc7cad95fdae84 for reading in non-blocking mode.
+2025-11-27T04:28:47.1433309Z Successfully opened named pipe: /podr/container/pipe/06ed5418be14_creerlio-api/stderr_030cdbf9f9854025b8dc7cad95fdae84.
+2025-11-27T04:28:47.1434376Z Successfully removed non-blocking flag from /podr/container/pipe/06ed5418be14_creerlio-api/stderr_030cdbf9f9854025b8dc7cad95fdae84.
+2025-11-27T04:28:47.1714373Z Creating container with image: appsvc/dotnetcore:8.0_20251016.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/dotnetcore:8.0_20251016.4.tuxprod
+2025-11-27T04:28:48.0360279Z Starting container: 06ed5418be14_creerlio-api.
+2025-11-27T04:28:48.1170808Z Starting watchers and probes.
+2025-11-27T04:28:48.1341599Z Starting metrics collection.
+2025-11-27T04:28:48.1473779Z Container is running.
+2025-11-27T04:28:48.3371343Z Container start method finished after 3249 ms.
+2025-11-27T04:29:40.1764826Z Site startup probe succeeded after 51.7311635 seconds.
+2025-11-27T04:29:40.6571378Z Site is running with deployment version: ed5e24a7-42a7-4efb-a7b9-58d9ffdd659d
+2025-11-27T04:29:40.6761187Z Site started.
+2025-11-27T04:29:40.8302329Z Site is running with patch version DOTNETCORE 8.0.21
+2025-11-27T08:42:42.9421051Z Container start method called.
+2025-11-27T08:42:42.9497249Z Establishing network.
+2025-11-27T08:42:42.9498709Z Pulling image: appsvc/dotnetcore:8.0_20251016.4.tuxprod.
+2025-11-27T08:42:45.3555938Z Container is starting.
+2025-11-27T08:42:45.3768400Z Establishing user namespace if not established already.
+2025-11-27T08:42:45.3938395Z Establishing network if not established already.
+2025-11-27T08:42:45.3939939Z Mounting volumes.
+2025-11-27T08:42:45.3941728Z Nested mountpoint 
+2025-11-27T08:42:45.6636995Z Nested mountpoint volatile/logs
+2025-11-27T08:42:46.3567730Z Nested mountpoint 
+2025-11-27T08:42:46.7092200Z Nested mountpoint 
+2025-11-27T08:42:46.7405981Z Nested mountpoint 
+2025-11-27T08:42:50.6809297Z Creating container.
+2025-11-27T08:42:50.6827664Z Creating pipes for streaming container io.
+2025-11-27T08:42:50.6830064Z Creating stdout named pipe at /podr/container/pipe/187400074c8a_creerlio-api/stdout_ab5ad28462604945956567e6793497f6.
+2025-11-27T08:42:50.6889090Z Successfully created stdout named pipe at: /podr/container/pipe/187400074c8a_creerlio-api/stdout_ab5ad28462604945956567e6793497f6.
+2025-11-27T08:42:50.6892241Z Opening named pipe /podr/container/pipe/187400074c8a_creerlio-api/stdout_ab5ad28462604945956567e6793497f6 for reading in non-blocking mode.
+2025-11-27T08:42:50.6894921Z Successfully opened named pipe: /podr/container/pipe/187400074c8a_creerlio-api/stdout_ab5ad28462604945956567e6793497f6.
+2025-11-27T08:42:50.6898523Z Successfully removed non-blocking flag from /podr/container/pipe/187400074c8a_creerlio-api/stdout_ab5ad28462604945956567e6793497f6.
+2025-11-27T08:42:50.6901066Z Creating stderr named pipe at /podr/container/pipe/187400074c8a_creerlio-api/stderr_aa7ba3aab9f54e08b2249b9d010ce002.
+2025-11-27T08:42:50.6904971Z Successfully created stderr named pipe at: /podr/container/pipe/187400074c8a_creerlio-api/stderr_aa7ba3aab9f54e08b2249b9d010ce002.
+2025-11-27T08:42:50.7006792Z Opening named pipe /podr/container/pipe/187400074c8a_creerlio-api/stderr_aa7ba3aab9f54e08b2249b9d010ce002 for reading in non-blocking mode.
+2025-11-27T08:42:50.7086985Z Successfully opened named pipe: /podr/container/pipe/187400074c8a_creerlio-api/stderr_aa7ba3aab9f54e08b2249b9d010ce002.
+2025-11-27T08:42:50.7861667Z Successfully removed non-blocking flag from /podr/container/pipe/187400074c8a_creerlio-api/stderr_aa7ba3aab9f54e08b2249b9d010ce002.
+2025-11-27T08:42:50.7875059Z Creating container with image: appsvc/dotnetcore:8.0_20251016.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/dotnetcore:8.0_20251016.4.tuxprod
+2025-11-27T08:42:54.8540405Z Starting container: 187400074c8a_creerlio-api.
+2025-11-27T08:42:57.7108079Z Starting watchers and probes.
+2025-11-27T08:42:57.7120490Z Starting metrics collection.
+2025-11-27T08:42:57.7279216Z Container is running.
+2025-11-27T08:42:58.1562897Z Container start method finished after 15213 ms.

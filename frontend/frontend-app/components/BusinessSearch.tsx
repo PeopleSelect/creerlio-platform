@@ -105,7 +105,7 @@ export default function BusinessSearch() {
       setResults(businesses);
 
       // If no results, send notification to platform admin
-      if (mockBusinesses.length === 0) {
+      if (businesses.length === 0) {
         await sendNoResultsNotification();
       }
     } catch (error) {

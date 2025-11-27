@@ -1,0 +1,5 @@
+<step title="Incoming Request" date="2025-11-27T05:07:02.033" instance="7caa93" url="/logstream" method="GET" type="request" pid="833,1,15" Host="creerlio-app.scm.azurewebsites.net" User-Agent="AZURECLI/2.80.0 (DEB)" Accept-Encoding="identity" Authorization="Bea..." x-ms-client-request-id="c3abd842-cb4e-11f0-8a4e-000d3aa1e2fa" X-ARR-LOG-ID="c3abd842-cb4e-11f0-8a4e-000d3aa1e2fa" CLIENT-IP="23.97.62.152:38456" X-SITE-DEPLOYMENT-ID="creerlio-app" WAS-DEFAULT-HOSTNAME="creerlio-app.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/logstream" X-Client-IP="23.97.62.152" X-Client-Port="38456" >
+  <step title="LogStreamHandlerMiddleware.Invoke" date="2025-11-27T05:07:02.341" /><!-- duration: 222ms -->
+  <step title="Error occurred" date="2025-11-27T05:25:02.714" type="error" text="LogStreamManager: ProcessRequest end" /><!-- duration: 6ms -->
+  <step title="Outgoing response" date="2025-11-27T05:25:02.733" type="response" statusCode="200" statusText="OK" /><!-- duration: 3ms -->
+</step><!-- duration: 1080705ms -->

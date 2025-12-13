@@ -1,0 +1,17 @@
+[
+  {
+    "name": "NEXT_PUBLIC_API_URL",
+    "slotSetting": false,
+    "value": "https://creerlio-api.azurewebsites.net"
+  },
+  {
+    "name": "NODE_ENV",
+    "slotSetting": false,
+    "value": "production"
+  },
+  {
+    "name": "WEBSITE_HTTPLOGGING_RETENTION_DAYS",
+    "slotSetting": false,
+    "value": "3"
+  }
+]

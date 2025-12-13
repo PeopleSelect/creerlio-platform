@@ -1,0 +1,496 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Creerlio.Domain.Entities;
+
+namespace Creerlio.Application.Services.AI;
+
+/// <summary>
+/// AI-powered job matching service with multi-factor scoring algorithm
+/// Weights: Skills (40%), Experience (30%), Education (10%), Location (10%), Culture (5%), Behavioral (5%)
+/// </summary>
+public class JobMatchingService
+{
+    private readonly ILogger<JobMatchingService> _logger;
+
+    // Scoring weights (must total 100%)
+    private const decimal SKILLS_WEIGHT = 0.40m;
+    private const decimal EXPERIENCE_WEIGHT = 0.30m;
+    private const decimal EDUCATION_WEIGHT = 0.10m;
+    private const decimal LOCATION_WEIGHT = 0.10m;
+    private const decimal CULTURE_WEIGHT = 0.05m;
+    private const decimal BEHAVIORAL_WEIGHT = 0.05m;
+
+    public JobMatchingService(ILogger<JobMatchingService> logger)
+    {
+        _logger = logger;
+    }
+
+    public async Task<JobMatch> CalculateMatchAsync(TalentProfile talent, JobPosting job)
+    {
+        _logger.LogInformation("Calculating match score for Talent {TalentId} and Job {JobId}", 
+            talent.Id, job.Id);
+
+        var breakdown = new MatchBreakdown
+        {
+            MatchId = Guid.NewGuid()
+        };
+
+        // Calculate individual component scores
+        breakdown.SkillsMatchScore = await CalculateSkillsMatchAsync(talent, job, breakdown);
+        breakdown.ExperienceMatchScore = CalculateExperienceMatch(talent, job);
+        breakdown.EducationMatchScore = CalculateEducationMatch(talent, job);
+        breakdown.LocationMatchScore = CalculateLocationMatch(talent, job);
+        breakdown.CultureFitScore = await CalculateCultureFitAsync(talent, job);
+        breakdown.CareerGrowthScore = CalculateCareerGrowthPotential(talent, job);
+
+        // Calculate weighted overall score
+        var overallScore = (int)Math.Round(
+            (breakdown.SkillsMatchScore * SKILLS_WEIGHT) +
+            (breakdown.ExperienceMatchScore * EXPERIENCE_WEIGHT) +
+            (breakdown.EducationMatchScore * EDUCATION_WEIGHT) +
+            (breakdown.LocationMatchScore * LOCATION_WEIGHT) +
+            (breakdown.CultureFitScore * CULTURE_WEIGHT) +
+            (breakdown.CareerGrowthScore * BEHAVIORAL_WEIGHT)
+        );
+
+        var match = new JobMatch
+        {
+            Id = breakdown.MatchId,
+            TalentProfileId = talent.Id,
+            JobPostingId = job.Id,
+            CalculatedAt = DateTime.UtcNow,
+            MatchScore = overallScore,
+            MatchQuality = GetMatchQuality(overallScore),
+            Breakdown = breakdown,
+            MatchExplanation = GenerateMatchExplanation(breakdown, overallScore),
+            MatchReasons = GenerateMatchReasons(breakdown),
+            Concerns = GenerateConcerns(breakdown)
+        };
+
+        _logger.LogInformation("Match calculated: Overall={Score}, Skills={Skills}, Experience={Exp}", 
+            overallScore, breakdown.SkillsMatchScore, breakdown.ExperienceMatchScore);
+
+        return match;
+    }
+
+    public async Task<List<JobMatch>> FindBestMatchesAsync(TalentProfile talent, List<JobPosting> jobs, int topN = 10)
+    {
+        _logger.LogInformation("Finding top {N} matches for Talent {TalentId} from {JobCount} jobs", 
+            topN, talent.Id, jobs.Count);
+
+        var matches = new List<JobMatch>();
+
+        foreach (var job in jobs)
+        {
+            if (job.Status != "Published") continue;
+            
+            var match = await CalculateMatchAsync(talent, job);
+            matches.Add(match);
+        }
+
+        return matches
+            .OrderByDescending(m => m.MatchScore)
+            .Take(topN)
+            .ToList();
+    }
+
+    #region Skills Matching (40% weight)
+
+    private async Task<int> CalculateSkillsMatchAsync(TalentProfile talent, JobPosting job, MatchBreakdown breakdown)
+    {
+        var requiredSkills = job.RequiredSkills ?? new List<string>();
+        var preferredSkills = job.PreferredSkills ?? new List<string>();
+        var talentSkills = talent.Skills.Select(s => s.Name.ToLowerInvariant()).ToList();
+
+        breakdown.SkillMatches = new List<SkillMatch>();
+
+        // Required skills (70% of skills score)
+        var requiredMatches = 0;
+        var requiredTotal = requiredSkills.Count;
+
+        foreach (var requiredSkill in requiredSkills)
+        {
+            var hasSkill = talentSkills.Any(ts => 
+                ts.Contains(requiredSkill.ToLowerInvariant()) || 
+                requiredSkill.ToLowerInvariant().Contains(ts));
+
+            var talentSkillData = talent.Skills.FirstOrDefault(s => 
+                s.Name.Contains(requiredSkill, StringComparison.OrdinalIgnoreCase));
+
+            breakdown.SkillMatches.Add(new SkillMatch
+            {
+                MatchId = breakdown.MatchId,
+                SkillName = requiredSkill,
+                IsRequired = true,
+                HasSkill = hasSkill,
+                TalentProficiency = talentSkillData?.ProficiencyLevel ?? 0,
+                RequiredProficiency = 3, // Assume required skills need proficiency 3+
+                YearsExperience = talentSkillData?.YearsOfExperience ?? 0
+            });
+
+            if (hasSkill) requiredMatches++;
+        }
+
+        // Preferred skills (20% of skills score)
+        var preferredMatches = 0;
+        var preferredTotal = preferredSkills.Count;
+
+        foreach (var preferredSkill in preferredSkills)
+        {
+            var hasSkill = talentSkills.Any(ts => 
+                ts.Contains(preferredSkill.ToLowerInvariant()) || 
+                preferredSkill.ToLowerInvariant().Contains(ts));
+
+            var talentSkillData = talent.Skills.FirstOrDefault(s => 
+                s.Name.Contains(preferredSkill, StringComparison.OrdinalIgnoreCase));
+
+            breakdown.SkillMatches.Add(new SkillMatch
+            {
+                MatchId = breakdown.MatchId,
+                SkillName = preferredSkill,
+                IsRequired = false,
+                HasSkill = hasSkill,
+                TalentProficiency = talentSkillData?.ProficiencyLevel ?? 0,
+                RequiredProficiency = 2,
+                YearsExperience = talentSkillData?.YearsOfExperience ?? 0
+            });
+
+            if (hasSkill) preferredMatches++;
+        }
+
+        // Identify bonus skills (10% of skills score)
+        var bonusSkills = talentSkills
+            .Where(ts => !requiredSkills.Any(rs => rs.ToLowerInvariant().Contains(ts)) &&
+                         !preferredSkills.Any(ps => ps.ToLowerInvariant().Contains(ts)))
+            .Take(5)
+            .ToList();
+
+        breakdown.BonusSkills = bonusSkills.Select(s => 
+            talent.Skills.First(ts => ts.Name.ToLowerInvariant() == s).Name).ToList();
+
+        // Identify missing required skills
+        breakdown.MissingSkills = requiredSkills
+            .Where(rs => !talentSkills.Any(ts => 
+                ts.Contains(rs.ToLowerInvariant()) || rs.ToLowerInvariant().Contains(ts)))
+            .ToList();
+
+        // Calculate final skills score
+        var requiredScore = requiredTotal > 0 ? (requiredMatches * 70 / requiredTotal) : 70;
+        var preferredScore = preferredTotal > 0 ? (preferredMatches * 20 / preferredTotal) : 20;
+        var bonusScore = Math.Min(bonusSkills.Count * 2, 10);
+
+        var finalScore = requiredScore + preferredScore + bonusScore;
+
+        await Task.CompletedTask;
+        return Math.Min(finalScore, 100);
+    }
+
+    #endregion
+
+    #region Experience Matching (30% weight)
+
+    private int CalculateExperienceMatch(TalentProfile talent, JobPosting job)
+    {
+        var totalYears = talent.WorkExperiences
+            .Sum(exp => CalculateYears(exp.StartDate, exp.EndDate ?? DateTime.Now));
+
+        // Experience level matching
+        var experienceLevelScore = job.ExperienceLevel?.ToLowerInvariant() switch
+        {
+            "entry" when totalYears <= 2 => 100,
+            "entry" when totalYears <= 4 => 80,
+            "junior" or "mid" when totalYears >= 2 && totalYears <= 6 => 100,
+            "mid" or "mid-level" when totalYears >= 4 && totalYears <= 8 => 100,
+            "senior" when totalYears >= 6 => 100,
+            "senior" when totalYears >= 4 => 80,
+            "lead" or "principal" when totalYears >= 8 => 100,
+            "lead" or "principal" when totalYears >= 6 => 70,
+            _ => 60 // Generic scoring
+        };
+
+        // Industry relevance (20% of experience score)
+        var hasRelevantIndustry = talent.WorkExperiences.Any(exp => 
+            job.Industry?.Contains(exp.Company, StringComparison.OrdinalIgnoreCase) ?? false);
+        var industryScore = hasRelevantIndustry ? 20 : 10;
+
+        // Role relevance (30% of experience score)
+        var hasRelevantRole = talent.WorkExperiences.Any(exp => 
+            exp.Title.Contains(job.Title, StringComparison.OrdinalIgnoreCase) ||
+            job.Title.Contains(exp.Title, StringComparison.OrdinalIgnoreCase));
+        var roleScore = hasRelevantRole ? 30 : 15;
+
+        // Technology overlap (50% of experience score)
+        var techScore = (int)(experienceLevelScore * 0.5);
+
+        return Math.Min(industryScore + roleScore + techScore, 100);
+    }
+
+    private double CalculateYears(DateTime start, DateTime end)
+    {
+        return (end - start).TotalDays / 365.25;
+    }
+
+    #endregion
+
+    #region Education Matching (10% weight)
+
+    private int CalculateEducationMatch(TalentProfile talent, JobPosting job)
+    {
+        if (!talent.Educations.Any()) return 40; // Baseline for no education data
+
+        var highestDegree = GetHighestDegreeLevel(talent.Educations);
+        var requiredLevel = ParseRequiredEducationLevel(job.Requirements);
+
+        // Degree level matching
+        var degreeScore = highestDegree >= requiredLevel ? 70 : 40;
+
+        // Field relevance
+        var hasRelevantField = talent.Educations.Any(edu => 
+            IsRelevantField(edu.FieldOfStudy, job.Category, job.Industry));
+        var fieldScore = hasRelevantField ? 30 : 15;
+
+        return Math.Min(degreeScore + fieldScore, 100);
+    }
+
+    private int GetHighestDegreeLevel(List<Education> educations)
+    {
+        var levels = educations.Select(edu => edu.Degree.ToLowerInvariant() switch
+        {
+            var d when d.Contains("phd") || d.Contains("doctorate") => 5,
+            var d when d.Contains("master") || d.Contains("mba") => 4,
+            var d when d.Contains("bachelor") => 3,
+            var d when d.Contains("associate") || d.Contains("diploma") => 2,
+            var d when d.Contains("certificate") => 1,
+            _ => 0
+        });
+
+        return levels.Any() ? levels.Max() : 0;
+    }
+
+    private int ParseRequiredEducationLevel(List<string> requirements)
+    {
+        var reqText = string.Join(" ", requirements).ToLowerInvariant();
+        
+        if (reqText.Contains("phd") || reqText.Contains("doctorate")) return 5;
+        if (reqText.Contains("master") || reqText.Contains("mba")) return 4;
+        if (reqText.Contains("bachelor") || reqText.Contains("degree")) return 3;
+        if (reqText.Contains("diploma") || reqText.Contains("associate")) return 2;
+        
+        return 1; // No specific requirement
+    }
+
+    private bool IsRelevantField(string field, string category, string industry)
+    {
+        var fieldLower = field.ToLowerInvariant();
+        var categoryLower = category?.ToLowerInvariant() ?? "";
+        var industryLower = industry?.ToLowerInvariant() ?? "";
+
+        // Tech fields
+        if ((categoryLower.Contains("software") || categoryLower.Contains("tech")) &&
+            (fieldLower.Contains("computer") || fieldLower.Contains("software") || 
+             fieldLower.Contains("information") || fieldLower.Contains("engineering")))
+            return true;
+
+        // Business fields
+        if ((categoryLower.Contains("business") || categoryLower.Contains("management")) &&
+            (fieldLower.Contains("business") || fieldLower.Contains("management") || 
+             fieldLower.Contains("commerce") || fieldLower.Contains("mba")))
+            return true;
+
+        return false;
+    }
+
+    #endregion
+
+    #region Location Matching (10% weight)
+
+    private int CalculateLocationMatch(TalentProfile talent, JobPosting job)
+    {
+        // Remote work gets full score
+        if (job.WorkModel?.Equals("Remote", StringComparison.OrdinalIgnoreCase) ?? false)
+            return 100;
+
+        // Hybrid work
+        if (job.WorkModel?.Equals("Hybrid", StringComparison.OrdinalIgnoreCase) ?? false)
+        {
+            // Check if within reasonable distance (same city/state)
+            var sameLocation = talent.PersonalInformation?.City?.Equals(
+                job.Location, StringComparison.OrdinalIgnoreCase) ?? false;
+            return sameLocation ? 90 : 60;
+        }
+
+        // Office work - needs to be in same location
+        var talentLocation = $"{talent.PersonalInformation?.City}, {talent.PersonalInformation?.State}";
+        var jobLocation = job.Location ?? "";
+
+        if (talentLocation.Contains(jobLocation, StringComparison.OrdinalIgnoreCase) ||
+            jobLocation.Contains(talentLocation, StringComparison.OrdinalIgnoreCase))
+            return 100;
+
+        // Same state but different city
+        if (talent.PersonalInformation?.State?.Equals(
+            ExtractState(jobLocation), StringComparison.OrdinalIgnoreCase) ?? false)
+            return 40;
+
+        // Willing to relocate
+        if (talent.CareerPreferences?.WillingToRelocate ?? false)
+            return 50;
+
+        return 20;
+    }
+
+    private string ExtractState(string location)
+    {
+        var parts = location.Split(',');
+        return parts.Length > 1 ? parts[1].Trim() : "";
+    }
+
+    #endregion
+
+    #region Culture Fit (5% weight)
+
+    private async Task<int> CalculateCultureFitAsync(TalentProfile talent, JobPosting job)
+    {
+        // This would use NLP to analyze talent's career preferences, values, and job description
+        // For now, using basic matching
+
+        var score = 50; // Baseline
+
+        // Work model preference
+        if (talent.CareerPreferences?.PreferredWorkModel == job.WorkModel)
+            score += 20;
+
+        // Employment type preference
+        if (talent.CareerPreferences?.PreferredEmploymentTypes?.Contains(job.EmploymentType) ?? false)
+            score += 15;
+
+        // Company size preference
+        // if (talent.CareerPreferences?.PreferredCompanySizes?.Contains(job.BusinessProfile.CompanySize) ?? false)
+        //     score += 15;
+
+        await Task.CompletedTask;
+        return Math.Min(score, 100);
+    }
+
+    #endregion
+
+    #region Career Growth / Behavioral (5% weight)
+
+    private int CalculateCareerGrowthPotential(TalentProfile talent, JobPosting job)
+    {
+        var score = 50; // Baseline
+
+        // Upward mobility potential
+        var currentSeniority = GetSeniorityLevel(talent.WorkExperiences.FirstOrDefault()?.Title ?? "");
+        var jobSeniority = GetSeniorityLevel(job.Title);
+
+        if (jobSeniority > currentSeniority) score += 20; // Growth opportunity
+        if (jobSeniority == currentSeniority) score += 10; // Lateral move
+
+        // Salary alignment with career stage
+        var expectedSalary = talent.CareerPreferences?.ExpectedSalary;
+        if (expectedSalary.HasValue && job.MinSalary.HasValue)
+        {
+            if (job.MinSalary >= expectedSalary * 0.9m) score += 15;
+            if (job.MaxSalary >= expectedSalary * 1.1m) score += 15;
+        }
+
+        return Math.Min(score, 100);
+    }
+
+    private int GetSeniorityLevel(string title)
+    {
+        var titleLower = title.ToLowerInvariant();
+        
+        if (titleLower.Contains("intern") || titleLower.Contains("trainee")) return 1;
+        if (titleLower.Contains("junior") || titleLower.Contains("entry")) return 2;
+        if (titleLower.Contains("mid") || titleLower.Contains("developer") || titleLower.Contains("engineer")) return 3;
+        if (titleLower.Contains("senior") || titleLower.Contains("sr")) return 4;
+        if (titleLower.Contains("lead") || titleLower.Contains("principal")) return 5;
+        if (titleLower.Contains("staff") || titleLower.Contains("architect")) return 6;
+        if (titleLower.Contains("director") || titleLower.Contains("head")) return 7;
+        if (titleLower.Contains("vp") || titleLower.Contains("vice president")) return 8;
+        if (titleLower.Contains("cto") || titleLower.Contains("cio") || titleLower.Contains("ceo")) return 9;
+        
+        return 3; // Default to mid-level
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    private string GetMatchQuality(int score) => score switch
+    {
+        >= 90 => "Perfect",
+        >= 80 => "Excellent",
+        >= 70 => "Good",
+        >= 60 => "Fair",
+        _ => "Poor"
+    };
+
+    private string GenerateMatchExplanation(MatchBreakdown breakdown, int overallScore)
+    {
+        if (overallScore >= 90)
+            return "This is an exceptional match! The candidate meets or exceeds requirements across all key areas.";
+        
+        if (overallScore >= 80)
+            return "This is a strong match. The candidate has the core skills and experience needed for success.";
+        
+        if (overallScore >= 70)
+            return "This is a good match. The candidate has most of the required qualifications with some gaps.";
+        
+        if (overallScore >= 60)
+            return "This is a fair match. The candidate has some relevant experience but may need additional training.";
+        
+        return "This match has significant gaps. Consider only if other factors compensate.";
+    }
+
+    private List<string> GenerateMatchReasons(MatchBreakdown breakdown)
+    {
+        var reasons = new List<string>();
+
+        if (breakdown.SkillsMatchScore >= 80)
+            reasons.Add($"Strong skills match ({breakdown.SkillsMatchScore}%) - has most required technical skills");
+        
+        if (breakdown.ExperienceMatchScore >= 80)
+            reasons.Add($"Excellent experience match ({breakdown.ExperienceMatchScore}%) - relevant background and seniority");
+        
+        if (breakdown.EducationMatchScore >= 80)
+            reasons.Add($"Education aligns well ({breakdown.EducationMatchScore}%) - has appropriate qualifications");
+        
+        if (breakdown.LocationMatchScore >= 90)
+            reasons.Add($"Location is perfect ({breakdown.LocationMatchScore}%) - no relocation needed");
+        
+        if (breakdown.CareerGrowthScore >= 80)
+            reasons.Add($"Strong career fit ({breakdown.CareerGrowthScore}%) - aligns with growth trajectory");
+
+        if (breakdown.BonusSkills.Count > 3)
+            reasons.Add($"Brings {breakdown.BonusSkills.Count} bonus skills not in job requirements");
+
+        return reasons;
+    }
+
+    private List<string> GenerateConcerns(MatchBreakdown breakdown)
+    {
+        var concerns = new List<string>();
+
+        if (breakdown.SkillsMatchScore < 60)
+            concerns.Add($"Skills gap ({breakdown.SkillsMatchScore}%) - missing {breakdown.MissingSkills.Count} required skills");
+        
+        if (breakdown.ExperienceMatchScore < 60)
+            concerns.Add($"Experience mismatch ({breakdown.ExperienceMatchScore}%) - may lack required background");
+        
+        if (breakdown.LocationMatchScore < 50)
+            concerns.Add($"Location challenge ({breakdown.LocationMatchScore}%) - may require relocation");
+        
+        if (breakdown.MissingSkills.Count > 3)
+            concerns.Add($"Missing critical skills: {string.Join(", ", breakdown.MissingSkills.Take(3))}");
+
+        return concerns;
+    }
+
+    #endregion
+}

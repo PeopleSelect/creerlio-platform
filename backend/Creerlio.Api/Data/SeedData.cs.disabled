@@ -1,0 +1,123 @@
+using Creerlio.Api.Identity;
+using Creerlio.Domain.Entities;
+using Creerlio.Infrastructure;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
+namespace Creerlio.Api.Data;
+
+public static class SeedData
+{
+    public static async Task Initialize(IServiceProvider serviceProvider)
+    {
+        var userManager = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var dbContext = serviceProvider.GetRequiredService<CreerlioDbContext>();
+
+        // Seed Talent User
+        var talentUser = await userManager.FindByEmailAsync("talent@demo.com");
+        if (talentUser == null)
+        {
+            talentUser = new ApplicationUser
+            {
+                UserName = "talent@demo.com",
+                Email = "talent@demo.com",
+                FirstName = "John",
+                LastName = "Doe",
+                UserType = "talent",
+                EmailConfirmed = true
+            };
+            await userManager.CreateAsync(talentUser, "Password123!");
+
+            // Create talent profile
+            var talentProfile = new TalentProfile
+            {
+                Id = Guid.NewGuid(),
+                UserId = Guid.Parse(talentUser.Id),
+                FirstName = "John",
+                LastName = "Doe",
+                Headline = "Senior Full-Stack Developer | React | .NET | Azure",
+                Summary = "Experienced software engineer with 5+ years building scalable web applications. Passionate about clean code and user experience.",
+                Location = "San Francisco, CA",
+                Status = "actively looking",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            dbContext.TalentProfiles.Add(talentProfile);
+        }
+
+        // Seed Business User
+        var businessUser = await userManager.FindByEmailAsync("business@demo.com");
+        if (businessUser == null)
+        {
+            businessUser = new ApplicationUser
+            {
+                UserName = "business@demo.com",
+                Email = "business@demo.com",
+                FirstName = "Jane",
+                LastName = "Smith",
+                UserType = "business",
+                EmailConfirmed = true
+            };
+            await userManager.CreateAsync(businessUser, "Password123!");
+
+            // Create business profile
+            var businessProfile = new BusinessProfile
+            {
+                Id = Guid.NewGuid(),
+                UserId = Guid.Parse(businessUser.Id),
+                CompanyName = "TechCorp Inc.",
+                Industry = "Technology",
+                Location = "San Francisco, CA",
+                Description = "Leading technology company building innovative solutions",
+                Website = "https://techcorp.com",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            dbContext.BusinessProfiles.Add(businessProfile);
+
+            // Create sample roles
+            var roles = new List<Role>
+            {
+                new Role
+                {
+                    Id = Guid.NewGuid(),
+                    BusinessProfileId = businessProfile.Id,
+                    Title = "Senior Software Engineer",
+                    Description = "We're looking for an experienced software engineer to join our team and help build the next generation of our platform.",
+                    Location = "San Francisco, CA (Hybrid)",
+                    Seniority = "Senior",
+                    EmploymentType = "Full-time",
+                    SalaryMin = 150000,
+                    SalaryMax = 200000,
+                    RequiredSkills = new List<string> { "React", "Node.js", ".NET", "Azure", "SQL" },
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                },
+                new Role
+                {
+                    Id = Guid.NewGuid(),
+                    BusinessProfileId = businessProfile.Id,
+                    Title = "Product Manager",
+                    Description = "Lead product strategy and roadmap for our flagship products. Work closely with engineering and design teams.",
+                    Location = "Remote",
+                    Seniority = "Mid-Level",
+                    EmploymentType = "Full-time",
+                    SalaryMin = 120000,
+                    SalaryMax = 160000,
+                    RequiredSkills = new List<string> { "Product Management", "Agile", "User Research", "Data Analysis" },
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                }
+            };
+
+            foreach (var role in roles)
+            {
+                dbContext.Set<Role>().Add(role);
+            }
+        }
+
+        await dbContext.SaveChangesAsync();
+    }
+}

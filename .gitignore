@@ -51,3 +51,4 @@ htmlcov/
 # Generated files
 generated_resumes/
 *.pdf
+*.zip

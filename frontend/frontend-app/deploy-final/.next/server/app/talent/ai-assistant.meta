@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/talent/layout,_N_T_/talent/ai-assistant/layout,_N_T_/talent/ai-assistant/page,_N_T_/talent/ai-assistant"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/talent/ai-assistant/__PAGE__",
+    "/talent/ai-assistant",
+    "/talent",
+    "/_index",
+    "/_head"
+  ]
+}

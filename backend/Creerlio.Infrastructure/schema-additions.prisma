@@ -1,0 +1,206 @@
+// Prisma Schema Additions for Master Data
+// Add these models to your existing schema.prisma file
+
+// Location Management
+model Country {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  code      String?  @unique // ISO country code
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+model State {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  country   String   @default("Australia")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  cities    City[]
+
+  @@unique([country, code])
+  @@index([code])
+}
+
+model City {
+  id        String   @id @default(cuid())
+  name      String
+  stateId   String
+  state     State    @relation(fields: [stateId], references: [id])
+  postcode  String?
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, stateId])
+  @@index([name])
+  @@index([stateId])
+  @@index([postcode])
+}
+
+// Education Providers
+model University {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  abbreviation String?
+  location     String?
+  website      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([name])
+}
+
+model TAFEInstitute {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  state     String
+  website   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([state])
+}
+
+// Industries and Job Categories
+model Industry {
+  id             String        @id @default(cuid())
+  name           String        @unique
+  description    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  subCategories  JobCategory[]
+
+  @@index([name])
+}
+
+model JobCategory {
+  id         String   @id @default(cuid())
+  name       String
+  industryId String
+  industry   Industry @relation(fields: [industryId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([name, industryId])
+  @@index([name])
+  @@index([industryId])
+}
+
+// Credentials and Licences
+model Credential {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  category    String   // Construction, Transport, Healthcare, etc.
+  industry    String?
+  description String?
+  validityPeriod Int?  // months
+  issuingBody String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([category])
+  @@index([industry])
+}
+
+// Visa Types
+model VisaType {
+  id          String   @id @default(cuid())
+  subclass    String   @unique
+  name        String
+  category    String   // skilled, student, workingHoliday, etc.
+  workRights  String?  // Full, Limited, None
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([subclass])
+  @@index([category])
+}
+
+// Skills Library
+model Skill {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  category    String   // soft, hard, technical, trade
+  subCategory String?  // For technical: programming, webDev, etc.
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([category])
+  @@index([subCategory])
+}
+
+// Update your existing TalentProfile model to include these relationships:
+// Add these fields to your TalentProfile model:
+//
+// model TalentProfile {
+//   ...existing fields...
+//   
+//   // Location
+//   state       String?
+//   city        String?
+//   suburb      String?
+//   postcode    String?
+//   
+//   // Work Rights
+//   workRights  String?
+//   visaType    String?
+//   visaExpiry  DateTime?
+//   
+//   // Education
+//   educationLevel String?
+//   university     String?
+//   tafe           String?
+//   
+//   // Industry & Experience
+//   industry       String?
+//   jobCategory    String?
+//   yearsExperience Int?
+//   employmentType String?
+//   
+//   // Skills & Credentials (as JSON arrays or separate junction tables)
+//   skills         String[] // Array of skill names
+//   credentials    String[] // Array of credential names
+//   
+//   // Availability
+//   availability   String?
+//   remoteWork     Boolean @default(false)
+//   hybridWork     Boolean @default(false)
+//   onsiteWork     Boolean @default(true)
+// }
+
+// Update your existing BusinessProfile model:
+// Add these fields to your BusinessProfile model:
+//
+// model BusinessProfile {
+//   ...existing fields...
+//   
+//   // Location
+//   state       String?
+//   city        String?
+//   suburb      String?
+//   postcode    String?
+//   latitude    Float?
+//   longitude   Float?
+//   
+//   // Business Info
+//   businessType String?
+//   businessSize String?
+//   yearsInOperation Int?
+//   
+//   // Industry
+//   industry    String?
+//   
+//   // Hiring Info
+//   activelyHiring Boolean @default(false)
+//   offersSponorship Boolean @default(false)
+// }

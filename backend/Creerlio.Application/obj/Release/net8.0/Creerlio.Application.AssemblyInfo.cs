@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Creerlio.Application")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7d35c17f500d404a714582a307a9098b157730a7")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+458273d643a93f27c94029d31324696ebbb95a7f")]
 [assembly: System.Reflection.AssemblyProductAttribute("Creerlio.Application")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Creerlio.Application")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

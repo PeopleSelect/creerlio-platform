@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/talent/layout,_N_T_/talent/portfolio/layout,_N_T_/talent/portfolio/editor/layout,_N_T_/talent/portfolio/editor/page,_N_T_/talent/portfolio/editor"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/talent/portfolio/editor/__PAGE__",
+    "/talent/portfolio/editor",
+    "/talent/portfolio",
+    "/talent",
+    "/_index",
+    "/_head"
+  ]
+}

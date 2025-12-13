@@ -1,0 +1,8 @@
+{
+  "name": "creerlio-platform",
+  "version": "1.0.0",
+  "scripts": {
+    "lint": "eslint .",
+    "test": "jest"
+  }
+}

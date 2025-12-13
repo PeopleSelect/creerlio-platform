@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/talent/layout,_N_T_/talent/profile/layout,_N_T_/talent/profile/page,_N_T_/talent/profile"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/talent/profile/__PAGE__",
+    "/talent/profile",
+    "/talent",
+    "/_index",
+    "/_head"
+  ]
+}

@@ -208,3 +208,10 @@
 >>>>>>> 2269715 (feat: Implement Resume AI parsing service (backend))
 /workspaces/creerlio-platform/backend/Creerlio.Api/bin/Debug/net8.0/appsettings.Production.json
 /workspaces/creerlio-platform/backend/Creerlio.Api/bin/Debug/net8.0/Creerlio.Api.staticwebassets.runtime.json
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Debug/net8.0/publish/web.config
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Debug/net8.0/package.json
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Debug/net8.0/publish/appsettings.Development.json
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Debug/net8.0/publish/appsettings.json
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Debug/net8.0/publish/appsettings.Production.json
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Debug/net8.0/publish/Creerlio.Api.deps.json
+/workspaces/creerlio-platform/backend/Creerlio.Api/bin/Debug/net8.0/publish/Creerlio.Api.runtimeconfig.json

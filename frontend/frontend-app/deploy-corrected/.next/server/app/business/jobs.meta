@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/business/layout,_N_T_/business/jobs/layout,_N_T_/business/jobs/page,_N_T_/business/jobs"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/business/jobs/__PAGE__",
+    "/business/jobs",
+    "/business",
+    "/_index",
+    "/_head"
+  ]
+}

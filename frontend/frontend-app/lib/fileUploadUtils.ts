@@ -59,7 +59,7 @@ export async function saveUploadedFile(
 
     // Use localStorage for other file types
     const storageKey = `${STORAGE_KEY_PREFIX}${userId}_${category}`;
-    const existing = getUploadedFiles(userId, category);
+    const existing = await getUploadedFiles(userId, category);
     const updated = [...existing, file];
     
     try {
@@ -142,8 +142,8 @@ export async function getUploadedFiles(userId: string, category: string): Promis
 /**
  * Get a single file by ID
  */
-export function getUploadedFile(userId: string, category: string, fileId: string): UploadedFile | null {
-  const files = getUploadedFiles(userId, category);
+export async function getUploadedFile(userId: string, category: string, fileId: string): Promise<UploadedFile | null> {
+  const files = await getUploadedFiles(userId, category);
   return files.find(f => f.id === fileId) || null;
 }
 

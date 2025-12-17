@@ -1,3 +1,0 @@
-module.exports=[53250,a=>{"use strict";function b(){return"https://creerlio-api.azurewebsites.net"}async function c(a,b){try{let c=await fetch(a,b);if(!c.ok){let a=await c.text();return console.error(`API Error (${c.status}):`,a.substring(0,200)),{data:null,error:`HTTP ${c.status}: ${c.statusText}`}}let d=await c.text();try{return{data:JSON.parse(d),error:null}}catch(a){return console.error("JSON Parse Error:",d.substring(0,200)),{data:null,error:"Invalid JSON response from server"}}}catch(a){return console.error("Fetch Error:",a),{data:null,error:a instanceof Error?a.message:"Network error"}}}a.s(["getApiBaseUrl",()=>b,"safeFetch",()=>c])}];
-
-//# sourceMappingURL=lib_api_ts_7b69fe3b._.js.map

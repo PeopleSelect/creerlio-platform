@@ -1,0 +1,29 @@
+# Azure App Service Configuration
+# This file can be used with Azure Resource Manager templates
+
+apiVersion: 2021-02-01
+kind: appservice
+properties:
+  name: creerlio-platform
+  location: eastus
+  serverFarmId: /subscriptions/{subscription-id}/resourceGroups/creerlio-platform-rg/providers/Microsoft.Web/serverfarms/creerlio-plan
+  siteConfig:
+    linuxFxVersion: "PYTHON|3.11"
+    appSettings:
+      - name: DATABASE_URL
+        value: "@Microsoft.KeyVault(SecretUri=https://creerlio-kv.vault.azure.net/secrets/Database-ConnectionString/)"
+      - name: OPENAI_API_KEY
+        value: "@Microsoft.KeyVault(SecretUri=https://creerlio-kv.vault.azure.net/secrets/OpenAI-API-Key/)"
+      - name: GOOGLE_MAPS_API_KEY
+        value: "@Microsoft.KeyVault(SecretUri=https://creerlio-kv.vault.azure.net/secrets/GoogleMaps-API-Key/)"
+      - name: SECRET_KEY
+        value: "@Microsoft.KeyVault(SecretUri=https://creerlio-kv.vault.azure.net/secrets/Secret-Key/)"
+      - name: SCM_DO_BUILD_DURING_DEPLOYMENT
+        value: "true"
+      - name: WEBSITES_ENABLE_APP_SERVICE_STORAGE
+        value: "true"
+    alwaysOn: true
+    http20Enabled: true
+    minTlsVersion: "1.2"
+
+

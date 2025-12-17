@@ -4,6 +4,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
+env/
+venv/
+ENV/
 build/
 develop-eggs/
 dist/
@@ -20,35 +23,50 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
-venv/
-env/
-ENV/
-
-# Environment Variables
+# Environment
 .env
 .env.local
+.env.production
+.env.development
 
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
+# Node
+node_modules/
+.next/
+out/
+.npm
+.eslintcache
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Azure
+.azure/
+
 # OS
 .DS_Store
 Thumbs.db
 
 # Logs
+logs/
 *.log
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
+# Temporary files
+tmp/
+temp/
+*.tmp
 
-# Generated files
-generated_resumes/
-*.pdf
-*.zip
+# Build artifacts
+dist/
+build/
+
+

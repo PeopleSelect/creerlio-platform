@@ -1,0 +1,248 @@
+"""
+Data Models for Creerlio Platform
+SQLAlchemy models for business profiles, talent profiles, and resume data
+"""
+
+from sqlalchemy import Column, Integer, String, Float, Text, JSON, DateTime, Boolean, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from pydantic import BaseModel, EmailStr
+from typing import Optional, List, Dict
+
+Base = declarative_base()
+
+
+# ==================== SQLAlchemy Models ====================
+
+class BusinessProfile(Base):
+    """Business profile model"""
+    __tablename__ = "business_profiles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False, index=True)
+    description = Column(Text)
+    industry = Column(String(100))
+    website = Column(String(255))
+    email = Column(String(255))
+    phone = Column(String(50))
+    
+    # Location data
+    address = Column(String(500))
+    city = Column(String(100))
+    state = Column(String(100))
+    country = Column(String(100))
+    postal_code = Column(String(20))
+    latitude = Column(Float)
+    longitude = Column(Float)
+    location = Column(String(500))  # Full location string
+    
+    # Additional data
+    tags = Column(JSON)  # List of tags/categories
+    metadata = Column(JSON)  # Additional flexible data
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+
+class TalentProfile(Base):
+    """Talent profile model"""
+    __tablename__ = "talent_profiles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False, index=True)
+    email = Column(String(255), unique=True, index=True)
+    phone = Column(String(50))
+    bio = Column(Text)
+    
+    # Professional data
+    title = Column(String(255))
+    skills = Column(JSON)  # List of skills
+    experience_years = Column(Integer)
+    education = Column(JSON)  # List of education entries
+    certifications = Column(JSON)  # List of certifications
+    
+    # Location data
+    address = Column(String(500))
+    city = Column(String(100))
+    state = Column(String(100))
+    country = Column(String(100))
+    postal_code = Column(String(20))
+    latitude = Column(Float)
+    longitude = Column(Float)
+    location = Column(String(500))
+    
+    # Portfolio data
+    portfolio_url = Column(String(500))
+    portfolio_data = Column(JSON)  # Structured portfolio content
+    
+    # Resume connection
+    resume_id = Column(Integer, ForeignKey("resume_data.id"), nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+    
+    # Relationships
+    resume = relationship("ResumeData", back_populates="talent_profiles")
+
+
+class ResumeData(Base):
+    """Parsed resume data model"""
+    __tablename__ = "resume_data"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Personal information
+    name = Column(String(255))
+    email = Column(String(255))
+    phone = Column(String(50))
+    address = Column(String(500))
+    linkedin = Column(String(255))
+    github = Column(String(255))
+    website = Column(String(255))
+    
+    # Professional summary
+    summary = Column(Text)
+    objective = Column(Text)
+    
+    # Work experience
+    experience = Column(JSON)  # List of work experience entries
+    # Format: [{"company": "", "title": "", "start_date": "", "end_date": "", "description": "", "achievements": []}]
+    
+    # Education
+    education = Column(JSON)  # List of education entries
+    # Format: [{"institution": "", "degree": "", "field": "", "start_date": "", "end_date": "", "gpa": ""}]
+    
+    # Skills
+    skills = Column(JSON)  # List of skills with categories
+    # Format: {"technical": [], "soft": [], "languages": [], "tools": []}
+    
+    # Certifications
+    certifications = Column(JSON)  # List of certifications
+    
+    # Projects
+    projects = Column(JSON)  # List of projects
+    
+    # Languages
+    languages = Column(JSON)  # List of languages with proficiency
+    
+    # Awards & Achievements
+    awards = Column(JSON)  # List of awards
+    
+    # Raw parsed data
+    raw_data = Column(JSON)  # Complete parsed structure
+    
+    # File metadata
+    original_filename = Column(String(255))
+    file_type = Column(String(50))
+    file_size = Column(Integer)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    talent_profiles = relationship("TalentProfile", back_populates="resume")
+
+
+# ==================== Pydantic Models (for API) ====================
+
+class BusinessProfileCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    industry: Optional[str] = None
+    website: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    postal_code: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    tags: Optional[List[str]] = None
+    metadata: Optional[Dict] = None
+
+
+class BusinessProfileResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    industry: Optional[str]
+    website: Optional[str]
+    email: Optional[str]
+    phone: Optional[str]
+    address: Optional[str]
+    city: Optional[str]
+    state: Optional[str]
+    country: Optional[str]
+    location: Optional[str]
+    latitude: Optional[float]
+    longitude: Optional[float]
+    tags: Optional[List[str]]
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class TalentProfileCreate(BaseModel):
+    name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    title: Optional[str] = None
+    skills: Optional[List[str]] = None
+    experience_years: Optional[int] = None
+    education: Optional[List[Dict]] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    portfolio_data: Optional[Dict] = None
+
+
+class TalentProfileResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    phone: Optional[str]
+    bio: Optional[str]
+    title: Optional[str]
+    skills: Optional[List[str]]
+    experience_years: Optional[int]
+    location: Optional[str]
+    latitude: Optional[float]
+    longitude: Optional[float]
+    portfolio_url: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class ResumeDataResponse(BaseModel):
+    id: int
+    name: Optional[str]
+    email: Optional[str]
+    phone: Optional[str]
+    summary: Optional[str]
+    experience: Optional[List[Dict]]
+    education: Optional[List[Dict]]
+    skills: Optional[Dict]
+    certifications: Optional[List[Dict]]
+    projects: Optional[List[Dict]]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+

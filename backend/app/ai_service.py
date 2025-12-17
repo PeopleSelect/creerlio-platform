@@ -241,3 +241,4 @@ class AIService:
             raise Exception(f"Error enhancing resume: {str(e)}")
 
 
+

@@ -15,6 +15,33 @@ Base = declarative_base()
 
 # ==================== SQLAlchemy Models ====================
 
+class User(Base):
+    """User account model for authentication"""
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    username = Column(String(100), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(255))
+    user_type = Column(String(50), default="talent")  # "talent" or "business"
+    is_active = Column(Boolean, default=True)
+    is_verified = Column(Boolean, default=False)
+    
+    # Profile connections
+    talent_profile_id = Column(Integer, ForeignKey("talent_profiles.id"), nullable=True)
+    business_profile_id = Column(Integer, ForeignKey("business_profiles.id"), nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login = Column(DateTime, nullable=True)
+    
+    # Relationships
+    talent_profile = relationship("TalentProfile", foreign_keys=[talent_profile_id])
+    business_profile = relationship("BusinessProfile", foreign_keys=[business_profile_id])
+
+
 class BusinessProfile(Base):
     """Business profile model"""
     __tablename__ = "business_profiles"
@@ -39,7 +66,7 @@ class BusinessProfile(Base):
     
     # Additional data
     tags = Column(JSON)  # List of tags/categories
-    metadata = Column(JSON)  # Additional flexible data
+    extra_metadata = Column(JSON)  # Additional flexible data (renamed from 'metadata' to avoid SQLAlchemy conflict)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -166,7 +193,7 @@ class BusinessProfileCreate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     tags: Optional[List[str]] = None
-    metadata: Optional[Dict] = None
+    extra_metadata: Optional[Dict] = None
 
 
 class BusinessProfileResponse(BaseModel):

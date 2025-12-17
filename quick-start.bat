@@ -21,7 +21,15 @@ cd backend
 
 if not exist "venv" (
     echo Creating Python virtual environment...
-    python -m venv venv
+    py -m venv venv
+    if errorlevel 1 (
+        python -m venv venv
+        if errorlevel 1 (
+            echo ❌ Python not found. Please install Python and add to PATH.
+            pause
+            exit /b 1
+        )
+    )
 )
 
 echo Activating virtual environment...

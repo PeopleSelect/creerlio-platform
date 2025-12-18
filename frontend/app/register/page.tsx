@@ -43,10 +43,10 @@ export default function RegisterPage() {
       newErrors.username = 'Username must be at least 3 characters'
     }
 
-    if (!formData.password) {
-      newErrors.password = 'Password is required'
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters'
+    // BYPASS MODE: Password validation is optional
+    // Only validate if password is provided (allow empty passwords)
+    if (formData.password && formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters (if provided)'
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -90,17 +90,11 @@ export default function RegisterPage() {
       }
       
       // Prepare request body with explicit password field
-      // Ensure password is always included (validation ensures it's not empty)
-      if (!formData.password) {
-        setErrors({ submit: 'Password is required' })
-        setIsLoading(false)
-        return
-      }
-      
+      // BYPASS MODE: Password is optional - allow empty passwords
       const requestBody = {
         email: formData.email,
         username: formData.username,
-        password: formData.password, // Explicitly include password - required field
+        password: formData.password || "", // Include password (empty string if not provided - bypass mode)
         full_name: formData.full_name?.trim() || undefined,
         user_type: formData.user_type
       }

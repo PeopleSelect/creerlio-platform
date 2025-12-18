@@ -73,21 +73,8 @@ export default function RegisterPage() {
       fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'register/page.tsx:71',message:'API URL resolved',data:{apiUrl,envVar:process.env.NEXT_PUBLIC_API_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
       // #endregion
       
-      // Test backend connection first
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'register/page.tsx:75',message:'Testing health endpoint',data:{url:`${apiUrl}/health`},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-      try {
-        await axios.get(`${apiUrl}/health`, { timeout: 3000 })
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'register/page.tsx:76',message:'Health check succeeded',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-      } catch (healthError: any) {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'register/page.tsx:78',message:'Health check failed',data:{code:healthError.code,message:healthError.message,hasResponse:!!healthError.response,status:healthError.response?.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-        throw new Error('Backend server is not running. Please start the backend server first.')
-      }
+      // Health check disabled - CORS bypassed, proceed directly to registration
+      // Backend will be checked when we actually make the registration request
       
       // Prepare request body with explicit password field
       // BYPASS MODE: Password is optional - allow empty passwords

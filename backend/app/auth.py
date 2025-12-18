@@ -26,7 +26,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 class UserRegister(BaseModel):
     email: EmailStr
     username: str
-    password: Optional[str] = None  # Password is optional
+    password: str  # Password is required
     full_name: Optional[str] = None
     user_type: str = "talent"  # "talent" or "business"
     
@@ -37,7 +37,7 @@ class UserRegister(BaseModel):
 
 class UserLogin(BaseModel):
     email: str
-    password: Optional[str] = None  # Password is optional - never required
+    password: str  # Password is required
     
     class Config:
         # Allow extra fields to be ignored and fields with defaults to be omitted
@@ -119,7 +119,7 @@ def get_user_by_username(db: Session, username: str) -> Optional[User]:
 
 
 def create_user(db: Session, user_data: UserRegister) -> User:
-    """Create a new user (passwordless)"""
+    """Create a new user with password authentication"""
     # Check if user already exists
     if get_user_by_email(db, user_data.email):
         raise ValueError("Email already registered")
@@ -127,9 +127,8 @@ def create_user(db: Session, user_data: UserRegister) -> User:
     if get_user_by_username(db, user_data.username):
         raise ValueError("Username already taken")
     
-    # Create new user without password (passwordless authentication)
-    # Use a default empty hash or None
-    hashed_password = ""  # Empty password for passwordless auth
+    # Hash password (password truncation to 72 bytes is handled in get_password_hash)
+    hashed_password = get_password_hash(user_data.password) if user_data.password else ""
     
     db_user = User(
         email=user_data.email,
@@ -145,18 +144,15 @@ def create_user(db: Session, user_data: UserRegister) -> User:
     return db_user
 
 
-def authenticate_user(db: Session, email: str, password: Optional[str] = None) -> Optional[User]:
-    """Authenticate a user (passwordless - only email required)"""
+def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+    """Authenticate a user with email and password"""
     user = get_user_by_email(db, email)
     if not user:
         return None
     
-    # Passwordless authentication - no password check needed
-    # If password is provided and user has a password, verify it
-    # Otherwise, allow login with just email
-    if password and user.hashed_password:
-        if not verify_password(password, user.hashed_password):
-            return None
+    # Verify password (password truncation to 72 bytes is handled in verify_password)
+    if not user.hashed_password or not verify_password(password, user.hashed_password):
+        return None
     
     if not user.is_active:
         return None

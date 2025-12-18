@@ -29,7 +29,8 @@ export default function LoginPage() {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
       const response = await axios.post(`${apiUrl}/api/auth/login`, {
-        email: formData.email
+        email: formData.email,
+        password: formData.password
       })
 
       if (response.data.access_token) {
@@ -114,7 +115,7 @@ export default function LoginPage() {
             <span className="text-white text-2xl font-bold">Creerlio</span>
           </Link>
           <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-          <p className="text-gray-400">Sign in with your email</p>
+          <p className="text-gray-400">Sign in with your email and password</p>
         </div>
 
         {/* Login Form */}
@@ -133,6 +134,22 @@ export default function LoginPage() {
                 required
                 className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
                 placeholder="you@example.com"
+              />
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Password
+              </label>
+              <input
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                placeholder="••••••••"
               />
             </div>
 

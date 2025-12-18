@@ -10,6 +10,8 @@ export default function RegisterPage() {
   const [formData, setFormData] = useState({
     email: '',
     username: '',
+    password: '',
+    confirmPassword: '',
     full_name: '',
     user_type: 'talent'
   })
@@ -39,6 +41,16 @@ export default function RegisterPage() {
       newErrors.username = 'Username is required'
     } else if (formData.username.length < 3) {
       newErrors.username = 'Username must be at least 3 characters'
+    }
+
+    if (!formData.password) {
+      newErrors.password = 'Password is required'
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters'
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match'
     }
 
     setErrors(newErrors)
@@ -95,7 +107,8 @@ export default function RegisterPage() {
         // Auto-login after registration to get access token
         try {
           const loginResponse = await axios.post(`${apiUrl}/api/auth/login`, {
-            email: formData.email
+            email: formData.email,
+            password: formData.password
           })
           
           if (loginResponse.data.access_token) {
@@ -264,6 +277,43 @@ export default function RegisterPage() {
                 {errors.username && <p className="mt-1 text-sm text-red-400">{errors.username}</p>}
               </div>
 
+              {/* Password */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Password <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  className={`w-full px-4 py-3 bg-white border rounded-lg text-black placeholder-gray-400 focus:outline-none transition-colors ${
+                    errors.password ? 'border-red-500' : 'border-blue-500/20 focus:border-blue-500'
+                  }`}
+                  placeholder="••••••••"
+                />
+                {errors.password && <p className="mt-1 text-sm text-red-400">{errors.password}</p>}
+              </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Confirm Password <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  required
+                  className={`w-full px-4 py-3 bg-white border rounded-lg text-black placeholder-gray-400 focus:outline-none transition-colors ${
+                    errors.confirmPassword ? 'border-red-500' : 'border-blue-500/20 focus:border-blue-500'
+                  }`}
+                  placeholder="••••••••"
+                />
+                {errors.confirmPassword && <p className="mt-1 text-sm text-red-400">{errors.confirmPassword}</p>}
+              </div>
 
               {/* Submit Error */}
               {errors.submit && (

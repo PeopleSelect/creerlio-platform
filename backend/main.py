@@ -168,14 +168,14 @@ async def health_check():
 
 @app.post("/api/auth/register", response_model=UserResponse)
 async def register(request: Request, db=Depends(get_db)):
-    """Register a new user (passwordless)"""
+    """Register a new user with email and password"""
     body = await request.json()
     try:
-        # Create UserRegister model, ensuring password is None if not provided
+        # Create UserRegister model with required password
         user_data = UserRegister(
             email=body.get("email"),
             username=body.get("username"),
-            password=body.get("password"),  # Will be None if not provided
+            password=body.get("password"),  # Required
             full_name=body.get("full_name"),
             user_type=body.get("user_type", "talent")
         )
@@ -198,15 +198,13 @@ async def register(request: Request, db=Depends(get_db)):
 
 @app.post("/api/auth/login")
 async def login(body: dict = Body(...), db=Depends(get_db)):
-    """Login and get access token with user info (passwordless - email only)"""
-    # Create UserLogin model from request body (password optional - never required)
-    # Only include password in model if it's actually provided
-    login_data = {"email": body.get("email")}
-    if "password" in body and body.get("password") is not None:
-        login_data["password"] = body.get("password")
-    
+    """Login and get access token with email and password"""
+    # Create UserLogin model from request body (password required)
     try:
-        credentials = UserLogin(**login_data)
+        credentials = UserLogin(
+            email=body.get("email"),
+            password=body.get("password")  # Required
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
     

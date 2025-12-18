@@ -26,7 +26,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 class UserRegister(BaseModel):
     email: EmailStr
     username: str
-    password: str  # Password is required
+    password: Optional[str] = ""  # Password is optional (bypass mode)
     full_name: Optional[str] = None
     user_type: str = "talent"  # "talent" or "business"
     
@@ -37,7 +37,7 @@ class UserRegister(BaseModel):
 
 class UserLogin(BaseModel):
     email: str
-    password: str  # Password is required
+    password: Optional[str] = ""  # Password is optional (bypass mode)
     
     class Config:
         # Allow extra fields to be ignored and fields with defaults to be omitted

@@ -179,28 +179,20 @@ async def register(request: Request, db=Depends(get_db)):
         pass
     # #endregion
     try:
-        # Validate password is present and not empty
-        password = body.get("password")
+        # BYPASS MODE: Password is optional - allow empty/missing passwords
+        password = body.get("password") or ""  # Default to empty string if missing
         # #region agent log
         try:
             with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"main.py:183","message":"Password validation check","data":{"password_value":password,"password_type":type(password).__name__ if password is not None else "None","password_is_none":password is None,"password_is_empty_str":password == "","password_bool":bool(password) if password is not None else None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
+                f.write(json.dumps({"location":"main.py:183","message":"Password validation check (bypass mode)","data":{"password_value":"[REDACTED]" if password else "empty","password_type":type(password).__name__ if password is not None else "None","password_is_none":password is None,"password_is_empty_str":password == "","has_password":bool(password)},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
         except:
             pass
         # #endregion
         
-        if password is None or (isinstance(password, str) and not password.strip()):
-            # #region agent log
-            try:
-                with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                    f.write(json.dumps({"location":"main.py:191","message":"Password missing or empty in request body","data":{"body_keys":list(body.keys()) if body else None,"password_value":password,"password_type":type(password).__name__ if password is not None else "None"},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
-            except:
-                pass
-            # #endregion
-            raise HTTPException(status_code=400, detail="Password is required")
-        
-        # Ensure password is a string (not None)
-        if not isinstance(password, str):
+        # Ensure password is a string (not None) - allow empty strings in bypass mode
+        if password is None:
+            password = ""
+        elif not isinstance(password, str):
             password = str(password)
         
         # Create UserRegister model with required password
@@ -265,28 +257,20 @@ async def login(body: dict = Body(...), db=Depends(get_db)):
         pass
     # #endregion
     
-    # Validate password is present and not empty
-    password = body.get("password")
+    # BYPASS MODE: Password is optional - allow empty/missing passwords
+    password = body.get("password") or ""  # Default to empty string if missing
     # #region agent log
     try:
         with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:250","message":"Password validation check (login)","data":{"password_value":password,"password_type":type(password).__name__ if password is not None else "None","password_is_none":password is None,"password_is_empty_str":password == "","password_bool":bool(password) if password is not None else None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
+            f.write(json.dumps({"location":"main.py:250","message":"Password validation check (login - bypass mode)","data":{"password_value":"[REDACTED]" if password else "empty","password_type":type(password).__name__ if password is not None else "None","password_is_none":password is None,"password_is_empty_str":password == "","has_password":bool(password)},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
     except:
         pass
     # #endregion
     
-    if password is None or (isinstance(password, str) and not password.strip()):
-        # #region agent log
-        try:
-            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"main.py:258","message":"Password missing or empty in login request","data":{"body_keys":list(body.keys()) if body else None,"password_value":password,"password_type":type(password).__name__ if password is not None else "None"},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
-        except:
-            pass
-        # #endregion
-        raise HTTPException(status_code=400, detail="Password is required")
-    
-    # Ensure password is a string (not None)
-    if not isinstance(password, str):
+    # Ensure password is a string (not None) - allow empty strings in bypass mode
+    if password is None:
+        password = ""
+    elif not isinstance(password, str):
         password = str(password)
     
     # Create UserLogin model from request body (password required)

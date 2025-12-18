@@ -532,6 +532,172 @@ async def get_public_jobs(
     return {"jobs": jobs, "count": len(jobs)}
 
 
+# ==================== Applications ====================
+
+@app.post("/api/applications")
+async def create_application(
+    application_data: dict,
+    email: str,
+    db=Depends(get_db)
+):
+    """Create a new job application (talent only)"""
+    try:
+        # Get user by email
+        user = get_user_by_email(db, email)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if user.user_type != "talent":
+            raise HTTPException(status_code=403, detail="Only talent users can apply to jobs")
+        
+        # Get talent profile
+        if not user.talent_profile_id:
+            raise HTTPException(status_code=400, detail="Talent profile not found. Please complete your profile first.")
+        
+        talent_profile = db.query(TalentProfile).filter(TalentProfile.id == user.talent_profile_id).first()
+        if not talent_profile:
+            raise HTTPException(status_code=404, detail="Talent profile not found")
+        
+        # Get job
+        job = db.query(Job).filter(Job.id == application_data.get("job_id")).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        # Validate job is published
+        if job.status != "published":
+            raise HTTPException(status_code=400, detail="Job is not published")
+        
+        if not job.is_active:
+            raise HTTPException(status_code=400, detail="Job is not active")
+        
+        # Check if application already exists
+        existing = db.query(Application).filter(
+            Application.job_id == job.id,
+            Application.talent_profile_id == talent_profile.id
+        ).first()
+        
+        if existing:
+            raise HTTPException(status_code=400, detail="You have already applied to this job")
+        
+        # Create application
+        application = Application(
+            job_id=job.id,
+            talent_profile_id=talent_profile.id,
+            status="applied",
+            cover_letter=application_data.get("cover_letter"),
+            notes=application_data.get("notes"),
+            extra_metadata=application_data.get("extra_metadata")
+        )
+        
+        db.add(application)
+        db.commit()
+        db.refresh(application)
+        
+        return {
+            "success": True,
+            "application": {
+                "id": application.id,
+                "job_id": application.job_id,
+                "talent_profile_id": application.talent_profile_id,
+                "status": application.status,
+                "created_at": application.created_at
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create application: {str(e)}")
+
+
+@app.get("/api/applications/me")
+async def get_my_applications(
+    email: str,
+    db=Depends(get_db)
+):
+    """Get current user's applications (talent only)"""
+    # Get user by email
+    user = get_user_by_email(db, email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.user_type != "talent":
+        raise HTTPException(status_code=403, detail="Only talent users can view applications")
+    
+    # Get talent profile
+    if not user.talent_profile_id:
+        return {"applications": [], "count": 0}
+    
+    # Get applications
+    applications = db.query(Application).filter(
+        Application.talent_profile_id == user.talent_profile_id
+    ).order_by(Application.created_at.desc()).all()
+    
+    # Include job details
+    result = []
+    for app in applications:
+        job = db.query(Job).filter(Job.id == app.job_id).first()
+        result.append({
+            "id": app.id,
+            "job_id": app.job_id,
+            "job_title": job.title if job else None,
+            "job_location": job.location or job.city if job else None,
+            "status": app.status,
+            "created_at": app.created_at,
+            "updated_at": app.updated_at
+        })
+    
+    return {"applications": result, "count": len(result)}
+
+
+@app.get("/api/applications/job/{job_id}")
+async def get_job_applications(
+    job_id: int,
+    email: str,
+    db=Depends(get_db)
+):
+    """Get applications for a specific job (business owner only)"""
+    # Get user by email
+    user = get_user_by_email(db, email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.user_type != "business":
+        raise HTTPException(status_code=403, detail="Only business users can view job applications")
+    
+    # Get job
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Verify ownership
+    if not user.business_profile_id or user.business_profile_id != job.business_profile_id:
+        raise HTTPException(status_code=403, detail="You don't have permission to view applications for this job")
+    
+    # Get applications
+    applications = db.query(Application).filter(
+        Application.job_id == job_id
+    ).order_by(Application.created_at.desc()).all()
+    
+    # Include talent profile details
+    result = []
+    for app in applications:
+        talent = db.query(TalentProfile).filter(TalentProfile.id == app.talent_profile_id).first()
+        result.append({
+            "id": app.id,
+            "talent_profile_id": app.talent_profile_id,
+            "talent_name": talent.name if talent else None,
+            "talent_email": talent.email if talent else None,
+            "talent_title": talent.title if talent else None,
+            "status": app.status,
+            "cover_letter": app.cover_letter,
+            "created_at": app.created_at,
+            "updated_at": app.updated_at
+        })
+    
+    return {"applications": result, "count": len(result)}
+
+
 # ==================== Talent Profiles ====================
 
 @app.post("/api/talent")

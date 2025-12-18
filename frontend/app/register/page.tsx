@@ -95,6 +95,7 @@ export default function RegisterPage() {
       const response = await axios.post(`${apiUrl}/api/auth/register`, {
         email: formData.email,
         username: formData.username,
+        password: formData.password,
         full_name: formData.full_name?.trim() || undefined,
         user_type: formData.user_type
       })
@@ -147,7 +148,7 @@ export default function RegisterPage() {
       }
     } catch (error: any) {
       // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'register/page.tsx:127',message:'Registration request failed',data:{hasResponse:!!error.response,status:error.response?.status,code:error.code,message:error.message,isNetworkError:!error.response},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'register/page.tsx:140',message:'Registration request failed',data:{hasResponse:!!error.response,status:error.response?.status,error_detail:error.response?.data?.detail,error_data:error.response?.data,code:error.code,message:error.message,isNetworkError:!error.response},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
       // #endregion
       if (error.response) {
         // Handle different error response formats

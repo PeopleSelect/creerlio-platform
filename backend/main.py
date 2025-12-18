@@ -170,12 +170,38 @@ async def health_check():
 async def register(request: Request, db=Depends(get_db)):
     """Register a new user with email and password"""
     body = await request.json()
+    # #region agent log
     try:
+        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
+            f.write(json.dumps({"location":"main.py:172","message":"Register endpoint called","data":{"body_keys":list(body.keys()) if body else None,"has_password":"password" in body if body else False,"password_type":type(body.get("password")).__name__ if body else None,"password_value_length":len(str(body.get("password"))) if body and body.get("password") else None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
+    except:
+        pass
+    # #endregion
+    try:
+        # Validate password is present and not empty
+        password = body.get("password")
+        if not password or (isinstance(password, str) and not password.strip()):
+            # #region agent log
+            try:
+                with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
+                    f.write(json.dumps({"location":"main.py:182","message":"Password missing or empty in request body","data":{"body_keys":list(body.keys()) if body else None,"password_value":password,"password_type":type(password).__name__ if password else None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
+            except:
+                pass
+            # #endregion
+            raise HTTPException(status_code=400, detail="Password is required")
+        
         # Create UserRegister model with required password
+        # #region agent log
+        try:
+            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
+                f.write(json.dumps({"location":"main.py:195","message":"Creating UserRegister model","data":{"email":body.get("email"),"username":body.get("username"),"has_password":bool(password),"password_length":len(str(password)) if password else 0},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"C"})+"\n")
+        except:
+            pass
+        # #endregion
         user_data = UserRegister(
             email=body.get("email"),
             username=body.get("username"),
-            password=body.get("password"),  # Required
+            password=password,  # Required - already validated above
             full_name=body.get("full_name"),
             user_type=body.get("user_type", "talent")
         )
@@ -199,13 +225,47 @@ async def register(request: Request, db=Depends(get_db)):
 @app.post("/api/auth/login")
 async def login(body: dict = Body(...), db=Depends(get_db)):
     """Login and get access token with email and password"""
+    # #region agent log
+    try:
+        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
+            f.write(json.dumps({"location":"main.py:210","message":"Login endpoint called","data":{"body_keys":list(body.keys()) if body else None,"has_password":"password" in body if body else False,"password_type":type(body.get("password")).__name__ if body else None,"password_value_length":len(str(body.get("password"))) if body and body.get("password") else None,"email":body.get("email") if body else None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
+    except:
+        pass
+    # #endregion
+    
+    # Validate password is present and not empty
+    password = body.get("password")
+    if not password or (isinstance(password, str) and not password.strip()):
+        # #region agent log
+        try:
+            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
+                f.write(json.dumps({"location":"main.py:236","message":"Password missing or empty in login request","data":{"body_keys":list(body.keys()) if body else None,"password_value":password,"password_type":type(password).__name__ if password else None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
+        except:
+            pass
+        # #endregion
+        raise HTTPException(status_code=400, detail="Password is required")
+    
     # Create UserLogin model from request body (password required)
+    # #region agent log
+    try:
+        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
+            f.write(json.dumps({"location":"main.py:245","message":"Creating UserLogin model","data":{"email":body.get("email"),"has_password":bool(password),"password_length":len(str(password)) if password else 0},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"C"})+"\n")
+    except:
+        pass
+    # #endregion
     try:
         credentials = UserLogin(
             email=body.get("email"),
-            password=body.get("password")  # Required
+            password=password  # Required - already validated above
         )
     except Exception as e:
+        # #region agent log
+        try:
+            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
+                f.write(json.dumps({"location":"main.py:235","message":"UserLogin model creation failed","data":{"error":str(e),"error_type":type(e).__name__,"email":body.get("email") if body else None,"has_password":bool(body.get("password")) if body else False},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"D"})+"\n")
+        except:
+            pass
+        # #endregion
         raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
     
     user = authenticate_user(db, credentials.email, credentials.password)

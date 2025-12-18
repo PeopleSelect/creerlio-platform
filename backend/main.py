@@ -6,7 +6,7 @@ FastAPI application with AI resume parsing, business profiles, and mapping featu
 import json
 import time
 import os
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -136,11 +136,6 @@ app = FastAPI(
 
 # CORS configuration
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
-# #region agent log
-import json
-with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-    f.write(json.dumps({"location":"main.py:55","message":"CORS configuration","data":{"allowed_origins":allowed_origins,"env_var":os.getenv("ALLOWED_ORIGINS")},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"C"})+"\n")
-# #endregion
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -172,13 +167,18 @@ async def health_check():
 # ==================== Authentication & User Management ====================
 
 @app.post("/api/auth/register", response_model=UserResponse)
-async def register(user_data: UserRegister, db=Depends(get_db)):
-    """Register a new user"""
-    # #region agent log
-    with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-        f.write(json.dumps({"location":"main.py:75","message":"Register endpoint accessed","data":{"email":user_data.email,"username":user_data.username},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    # #endregion
+async def register(request: Request, db=Depends(get_db)):
+    """Register a new user (passwordless)"""
+    body = await request.json()
     try:
+        # Create UserRegister model, ensuring password is None if not provided
+        user_data = UserRegister(
+            email=body.get("email"),
+            username=body.get("username"),
+            password=body.get("password"),  # Will be None if not provided
+            full_name=body.get("full_name"),
+            user_type=body.get("user_type", "talent")
+        )
         user = create_user(db, user_data)
         return UserResponse(
             id=user.id,
@@ -197,17 +197,24 @@ async def register(user_data: UserRegister, db=Depends(get_db)):
 
 
 @app.post("/api/auth/login")
-async def login(credentials: UserLogin, db=Depends(get_db)):
-    """Login and get access token with user info"""
-    # #region agent log
-    with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-        f.write(json.dumps({"location":"main.py:96","message":"Login endpoint accessed","data":{"email":credentials.email},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    # #endregion
+async def login(body: dict = Body(...), db=Depends(get_db)):
+    """Login and get access token with user info (passwordless - email only)"""
+    # Create UserLogin model from request body (password optional - never required)
+    # Only include password in model if it's actually provided
+    login_data = {"email": body.get("email")}
+    if "password" in body and body.get("password") is not None:
+        login_data["password"] = body.get("password")
+    
+    try:
+        credentials = UserLogin(**login_data)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
+    
     user = authenticate_user(db, credentials.email, credentials.password)
     if not user:
         raise HTTPException(
             status_code=401,
-            detail="Incorrect email or password",
+            detail="User not found or inactive",
             headers={"WWW-Authenticate": "Bearer"},
         )
     

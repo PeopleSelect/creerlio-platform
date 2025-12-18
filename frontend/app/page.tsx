@@ -10,6 +10,7 @@ const MapboxMap = dynamic(() => import("@/components/MapboxMap"), {
 
 export default function Home() {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [activeTab, setActiveTab] = useState<'talent' | 'business'>('talent');
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -35,25 +36,55 @@ export default function Home() {
 
       {/* ================= NAVBAR ================= */}
       <header className="sticky top-0 z-50 backdrop-blur bg-slate-950/70 border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-4xl font-bold">
-            <span className="text-blue-400">C</span>reerlio
+        <div className="max-w-7xl mx-auto px-8 py-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-4xl font-bold">
+              <span className="text-blue-400">C</span>reerlio
+            </div>
+
+            <nav className="hidden lg:flex items-center gap-[10mm] text-sm text-slate-300">
+              <Link href="/about" className="hover:text-blue-400">About</Link>
+              <Link href="/analytics" className="hover:text-blue-400">Analytics</Link>
+              <Link href="/search" className="hover:text-blue-400">Search</Link>
+            </nav>
+
+            <Link
+              href="/register"
+              className="px-5 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 font-semibold text-sm ml-8"
+            >
+              Free Trial
+            </Link>
           </div>
 
-          <nav className="hidden lg:flex items-center gap-12 text-sm text-slate-300">
-            <Link href="/about" className="hover:text-blue-400">About</Link>
-            <Link href="/talent" className="hover:text-blue-400">Talent</Link>
-            <Link href="/business" className="hover:text-blue-400">Business</Link>
-            <Link href="/analytics" className="hover:text-blue-400">Analytics</Link>
-            <Link href="/search" className="hover:text-blue-400">Search</Link>
-          </nav>
-
-          <Link
-            href="/register"
-            className="px-5 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 font-semibold text-sm ml-8"
-          >
-            Free Trial
-          </Link>
+          {/* Tabs */}
+          <div className="flex items-center gap-2 border-b border-white/10">
+            <button
+              onClick={() => setActiveTab('talent')}
+              className={`px-6 py-3 text-sm font-medium transition-all relative ${
+                activeTab === 'talent'
+                  ? 'text-blue-400'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              Talent
+              {activeTab === 'talent' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-400"></span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('business')}
+              className={`px-6 py-3 text-sm font-medium transition-all relative ${
+                activeTab === 'business'
+                  ? 'text-blue-400'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              Business
+              {activeTab === 'business' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-400"></span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -62,33 +93,61 @@ export default function Home() {
 
         {/* LEFT COPY */}
         <div className="space-y-8">
-          <h1 className="text-5xl lg:text-6xl font-extrabold leading-tight">
-            Creerlio  The AI powered<br />
-            <span className="text-blue-400 drop-shadow-[0_0_30px_rgba(96,165,250,0.9)]">
-              Talent & Business Platform
-            </span>
-          </h1>
-
-          <p className="text-lg text-slate-300 max-w-xl leading-relaxed">
-            Smarter hiring, deeper talent insight, and proactive workforce strategy.
-            Creerlio connects businesses and talent through AI-powered matching,
-            location intelligence, and dynamic portfolios.
-          </p>
-
-          <div className="flex gap-4">
-            <Link
-              href="/register"
-              className="px-6 py-3 rounded-xl bg-blue-500 hover:bg-blue-600 font-semibold"
-            >
-              Get Started
-            </Link>
-            <Link
-              href="/talent"
-              className="px-6 py-3 rounded-xl border border-blue-400/60 text-blue-300 hover:bg-blue-500/10"
-            >
-              View Talent
-            </Link>
-          </div>
+          {activeTab === 'talent' ? (
+            <>
+              <h1 className="text-5xl lg:text-6xl font-extrabold leading-tight">
+                Find Your Next<br />
+                <span className="text-blue-400 drop-shadow-[0_0_30px_rgba(96,165,250,0.9)]">
+                  Opportunity
+                </span>
+              </h1>
+              <p className="text-lg text-slate-300 max-w-xl leading-relaxed">
+                Showcase your skills with rich multimedia portfolios, connect with top employers,
+                and leverage AI-powered matching to find the perfect role.
+              </p>
+              <div className="flex gap-4">
+                <Link
+                  href="/register"
+                  className="px-6 py-3 rounded-xl bg-blue-500 hover:bg-blue-600 font-semibold"
+                >
+                  Create Profile
+                </Link>
+                <Link
+                  href="/dashboard/talent"
+                  className="px-6 py-3 rounded-xl border border-blue-400/60 text-blue-300 hover:bg-blue-500/10"
+                >
+                  Talent Dashboard
+                </Link>
+              </div>
+            </>
+          ) : (
+            <>
+              <h1 className="text-5xl lg:text-6xl font-extrabold leading-tight">
+                Hire Smarter with<br />
+                <span className="text-blue-400 drop-shadow-[0_0_30px_rgba(96,165,250,0.9)]">
+                  AI-Powered Matching
+                </span>
+              </h1>
+              <p className="text-lg text-slate-300 max-w-xl leading-relaxed">
+                Access deep talent insights, location intelligence, and proactive workforce strategy.
+                Find the right candidates faster with AI-powered matching.
+              </p>
+              <div className="flex gap-4">
+                <Link
+                  href="/register"
+                  className="px-6 py-3 rounded-xl bg-blue-500 hover:bg-blue-600 font-semibold"
+                >
+                  Get Started
+                </Link>
+                <Link
+                  href="/dashboard/business"
+                  className="px-6 py-3 rounded-xl border border-blue-400/60 text-blue-300 hover:bg-blue-500/10"
+                >
+                  Business Dashboard
+                </Link>
+              </div>
+            </>
+          )}
         </div>
 
         {/* RIGHT VISUAL */}
@@ -118,35 +177,63 @@ export default function Home() {
       {/* ================= FEATURES ================= */}
       <section className="max-w-7xl mx-auto px-8 py-28">
         <h2 className="text-4xl font-bold mb-14">
-          Feature Set
+          {activeTab === 'talent' ? 'For Talent' : 'For Business'}
         </h2>
 
         <div className="grid md:grid-cols-3 gap-10">
+          {activeTab === 'talent' ? (
+            <>
+              <div className="rounded-2xl bg-slate-900/70 border border-white/10 p-8">
+                <h3 className="text-xl font-semibold mb-3">Rich Multimedia Portfolios</h3>
+                <p className="text-slate-400">
+                  Go beyond CVs with video, images, credentials, and interactive
+                  talent profiles designed for modern hiring.
+                </p>
+              </div>
 
-          <div className="rounded-2xl bg-slate-900/70 border border-white/10 p-8">
-            <h3 className="text-xl font-semibold mb-3">Rich Multimedia Portfolios</h3>
-            <p className="text-slate-400">
-              Go beyond CVs with video, images, credentials, and interactive
-              talent profiles designed for modern hiring.
-            </p>
-          </div>
+              <div className="rounded-2xl bg-slate-900/70 border border-white/10 p-8">
+                <h3 className="text-xl font-semibold mb-3">AI-Powered Matching</h3>
+                <p className="text-slate-400">
+                  Get matched with opportunities that align with your skills,
+                  experience, and career goals.
+                </p>
+              </div>
 
-          <div className="rounded-2xl bg-slate-900/70 border border-white/10 p-8">
-            <h3 className="text-xl font-semibold mb-3">Business Intelligence</h3>
-            <p className="text-slate-400">
-              Workforce analytics, AI matching, and proactive hiring insights
-              built for scale.
-            </p>
-          </div>
+              <div className="rounded-2xl bg-slate-900/70 border border-white/10 p-8">
+                <h3 className="text-xl font-semibold mb-3">Location Insights</h3>
+                <p className="text-slate-400">
+                  Discover opportunities based on location preferences,
+                  commute zones, and relocation feasibility.
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="rounded-2xl bg-slate-900/70 border border-white/10 p-8">
+                <h3 className="text-xl font-semibold mb-3">Business Intelligence</h3>
+                <p className="text-slate-400">
+                  Workforce analytics, AI matching, and proactive hiring insights
+                  built for scale.
+                </p>
+              </div>
 
-          <div className="rounded-2xl bg-slate-900/70 border border-white/10 p-8">
-            <h3 className="text-xl font-semibold mb-3">Location Intelligence</h3>
-            <p className="text-slate-400">
-              Map-based insights into talent density, relocation feasibility,
-              commute zones, and opportunity distribution.
-            </p>
-          </div>
+              <div className="rounded-2xl bg-slate-900/70 border border-white/10 p-8">
+                <h3 className="text-xl font-semibold mb-3">Talent Discovery</h3>
+                <p className="text-slate-400">
+                  Access deep talent pools with rich profiles, skills matching,
+                  and location-based search capabilities.
+                </p>
+              </div>
 
+              <div className="rounded-2xl bg-slate-900/70 border border-white/10 p-8">
+                <h3 className="text-xl font-semibold mb-3">Location Intelligence</h3>
+                <p className="text-slate-400">
+                  Map-based insights into talent density, relocation feasibility,
+                  commute zones, and opportunity distribution.
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </section>
 

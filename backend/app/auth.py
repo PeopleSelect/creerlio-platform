@@ -26,14 +26,22 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 class UserRegister(BaseModel):
     email: EmailStr
     username: str
-    password: str
+    password: Optional[str] = None  # Password is optional
     full_name: Optional[str] = None
     user_type: str = "talent"  # "talent" or "business"
+    
+    class Config:
+        # Allow extra fields to be ignored and fields with defaults to be omitted
+        extra = "ignore"
 
 
 class UserLogin(BaseModel):
     email: str
-    password: str
+    password: Optional[str] = None  # Password is optional - never required
+    
+    class Config:
+        # Allow extra fields to be ignored and fields with defaults to be omitted
+        extra = "ignore"
 
 
 class UserResponse(BaseModel):
@@ -57,12 +65,29 @@ class Token(BaseModel):
 # ==================== Password Hashing ====================
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash"""
+    """Verify a password against its hash
+    
+    Note: bcrypt has a 72-byte limit. Passwords longer than 72 bytes will be truncated.
+    """
+    # Truncate password to 72 bytes to match how it was hashed
+    password_bytes = plain_password.encode('utf-8')
+    if len(password_bytes) > 72:
+        password_bytes = password_bytes[:72]
+        plain_password = password_bytes.decode('utf-8', errors='ignore')
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
-    """Hash a password"""
+    """Hash a password
+    
+    Note: bcrypt has a 72-byte limit. Passwords should be truncated before calling this function.
+    This function includes a safety truncation as well.
+    """
+    # Safety truncation (should already be truncated in UserRegister model)
+    password_bytes = password.encode('utf-8')
+    if len(password_bytes) > 72:
+        password_bytes = password_bytes[:72]
+        password = password_bytes.decode('utf-8', errors='ignore')
     return pwd_context.hash(password)
 
 
@@ -94,7 +119,7 @@ def get_user_by_username(db: Session, username: str) -> Optional[User]:
 
 
 def create_user(db: Session, user_data: UserRegister) -> User:
-    """Create a new user"""
+    """Create a new user (passwordless)"""
     # Check if user already exists
     if get_user_by_email(db, user_data.email):
         raise ValueError("Email already registered")
@@ -102,8 +127,10 @@ def create_user(db: Session, user_data: UserRegister) -> User:
     if get_user_by_username(db, user_data.username):
         raise ValueError("Username already taken")
     
-    # Create new user
-    hashed_password = get_password_hash(user_data.password)
+    # Create new user without password (passwordless authentication)
+    # Use a default empty hash or None
+    hashed_password = ""  # Empty password for passwordless auth
+    
     db_user = User(
         email=user_data.email,
         username=user_data.username,
@@ -118,14 +145,18 @@ def create_user(db: Session, user_data: UserRegister) -> User:
     return db_user
 
 
-def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
-    """Authenticate a user"""
+def authenticate_user(db: Session, email: str, password: Optional[str] = None) -> Optional[User]:
+    """Authenticate a user (passwordless - only email required)"""
     user = get_user_by_email(db, email)
     if not user:
         return None
     
-    if not verify_password(password, user.hashed_password):
-        return None
+    # Passwordless authentication - no password check needed
+    # If password is provided and user has a password, verify it
+    # Otherwise, allow login with just email
+    if password and user.hashed_password:
+        if not verify_password(password, user.hashed_password):
+            return None
     
     if not user.is_active:
         return None

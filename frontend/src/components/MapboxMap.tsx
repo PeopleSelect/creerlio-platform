@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
@@ -15,10 +16,20 @@ interface MapboxMapProps {
   zoom?: number
 }
 
+type MapStyle = 'dark' | 'light' | 'satellite' | 'streets'
+
+const mapStyles: Record<MapStyle, string> = {
+  dark: 'mapbox://styles/mapbox/dark-v11',
+  light: 'mapbox://styles/mapbox/light-v11',
+  satellite: 'mapbox://styles/mapbox/satellite-v9',
+  streets: 'mapbox://styles/mapbox/streets-v12',
+}
+
 export default function MapboxMap({ className = '', center, zoom = 11 }: MapboxMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [activeStyle, setActiveStyle] = useState<MapStyle>('dark')
 
   useEffect(() => {
     if (!mapContainer.current || typeof window === 'undefined' || !mapboxgl) return
@@ -35,7 +46,7 @@ export default function MapboxMap({ className = '', center, zoom = 11 }: MapboxM
     if (!map.current) {
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
-        style: 'mapbox://styles/mapbox/dark-v11', // Dark theme to match the design
+        style: mapStyles[activeStyle],
         center: mapCenter,
         zoom: zoom,
         attributionControl: false, // Hide attribution for cleaner look
@@ -52,6 +63,9 @@ export default function MapboxMap({ className = '', center, zoom = 11 }: MapboxM
       map.current.on('load', () => {
         setIsLoading(false)
       })
+    } else {
+      // Update map style when activeStyle changes
+      map.current.setStyle(mapStyles[activeStyle])
     }
 
     return () => {
@@ -60,10 +74,27 @@ export default function MapboxMap({ className = '', center, zoom = 11 }: MapboxM
         map.current = null
       }
     }
-  }, [center, zoom])
+  }, [center, zoom, activeStyle])
 
   return (
     <div className={`relative w-full h-full ${className}`}>
+      {/* Style Tabs */}
+      <div className="absolute top-4 left-4 z-20 flex gap-2 bg-slate-900/90 backdrop-blur-sm rounded-lg p-1 border border-white/10">
+        {(['dark', 'light', 'satellite', 'streets'] as MapStyle[]).map((style) => (
+          <button
+            key={style}
+            onClick={() => setActiveStyle(style)}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+              activeStyle === style
+                ? 'bg-blue-500 text-white'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            {style.charAt(0).toUpperCase() + style.slice(1)}
+          </button>
+        ))}
+      </div>
+
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-800/50 rounded-lg z-10">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>

@@ -13,7 +13,13 @@ export default function RegisterPage() {
     password: '',
     confirmPassword: '',
     full_name: '',
-    user_type: 'talent'
+    user_type: 'talent',
+    // Business-specific fields
+    business_name: '',
+    industry: '',
+    business_location: '',
+    website: '',
+    phone: ''
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
@@ -51,6 +57,11 @@ export default function RegisterPage() {
 
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match'
+    }
+
+    // Business-specific validation
+    if (formData.user_type === 'business' && !formData.business_name) {
+      newErrors.business_name = 'Business name is required'
     }
 
     setErrors(newErrors)
@@ -118,13 +129,35 @@ export default function RegisterPage() {
           })
           
           if (loginResponse.data.access_token) {
-            localStorage.setItem('access_token', loginResponse.data.access_token)
+            const accessToken = loginResponse.data.access_token
+            localStorage.setItem('access_token', accessToken)
             localStorage.setItem('user_email', formData.email)
             
             // Get user_type from login response, registration response, or formData
             const userType = loginResponse.data.user?.user_type || 
                             response.data.user_type || 
                             formData.user_type
+            
+            // If business user, create business profile with collected information
+            if (userType === 'business' && formData.business_name) {
+              try {
+                await axios.put(`${apiUrl}/api/business/me`, {
+                  name: formData.business_name,
+                  industry: formData.industry || undefined,
+                  location: formData.business_location || undefined,
+                  website: formData.website || undefined,
+                  phone: formData.phone || undefined
+                }, {
+                  params: { email: formData.email },
+                  headers: {
+                    Authorization: `Bearer ${accessToken}`
+                  }
+                })
+              } catch (businessError) {
+                // Business profile creation failed, but continue with redirect
+                console.error('Failed to create business profile:', businessError)
+              }
+            }
             
             // Redirect based on user type
             if (userType === 'business') {
@@ -230,20 +263,115 @@ export default function RegisterPage() {
                 </select>
               </div>
 
-              {/* Full Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  name="full_name"
-                  value={formData.full_name}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
-                  placeholder="John Doe"
-                />
-              </div>
+              {/* Full Name / Business Name - Conditional based on user type */}
+              {formData.user_type === 'business' ? (
+                <>
+                  {/* Business Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Business Name <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="business_name"
+                      value={formData.business_name}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                      placeholder="Acme Corporation"
+                    />
+                  </div>
+                  
+                  {/* Industry */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Industry
+                    </label>
+                    <input
+                      type="text"
+                      name="industry"
+                      value={formData.industry}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                      placeholder="Technology, Healthcare, Finance, etc."
+                    />
+                  </div>
+                  
+                  {/* Business Location */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Business Location
+                    </label>
+                    <input
+                      type="text"
+                      name="business_location"
+                      value={formData.business_location}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                      placeholder="City, State, Country"
+                    />
+                  </div>
+                  
+                  {/* Website */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Website
+                    </label>
+                    <input
+                      type="url"
+                      name="website"
+                      value={formData.website}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                      placeholder="https://www.example.com"
+                    />
+                  </div>
+                  
+                  {/* Phone */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Phone
+                    </label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                      placeholder="+1 (555) 123-4567"
+                    />
+                  </div>
+                  
+                  {/* Contact Person Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Contact Person Name
+                    </label>
+                    <input
+                      type="text"
+                      name="full_name"
+                      value={formData.full_name}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                      placeholder="John Doe"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    name="full_name"
+                    value={formData.full_name}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="John Doe"
+                  />
+                </div>
+              )}
 
               {/* Email */}
               <div>

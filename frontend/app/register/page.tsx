@@ -89,16 +89,27 @@ export default function RegisterPage() {
         throw new Error('Backend server is not running. Please start the backend server first.')
       }
       
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'register/page.tsx:80',message:'Attempting registration request',data:{url:`${apiUrl}/api/auth/register`},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-      const response = await axios.post(`${apiUrl}/api/auth/register`, {
+      // Prepare request body with explicit password field
+      // Ensure password is always included (validation ensures it's not empty)
+      if (!formData.password) {
+        setErrors({ submit: 'Password is required' })
+        setIsLoading(false)
+        return
+      }
+      
+      const requestBody = {
         email: formData.email,
         username: formData.username,
-        password: formData.password,
+        password: formData.password, // Explicitly include password - required field
         full_name: formData.full_name?.trim() || undefined,
         user_type: formData.user_type
-      })
+      }
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'register/page.tsx:93',message:'Attempting registration request',data:{url:`${apiUrl}/api/auth/register`,requestBody:{...requestBody,password:'[REDACTED]'},hasPassword:'password' in requestBody,passwordLength:requestBody.password?.length || 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      
+      const response = await axios.post(`${apiUrl}/api/auth/register`, requestBody)
       // #region agent log
       fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'register/page.tsx:88',message:'Registration request succeeded',data:{status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
       // #endregion

@@ -11,9 +11,11 @@ if (typeof window !== 'undefined') {
 
 interface MapboxMapProps {
   className?: string
+  center?: { lat: number; lng: number }
+  zoom?: number
 }
 
-export default function MapboxMap({ className = '' }: MapboxMapProps) {
+export default function MapboxMap({ className = '', center, zoom = 11 }: MapboxMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<any>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -27,21 +29,24 @@ export default function MapboxMap({ className = '' }: MapboxMapProps) {
     // Set Mapbox access token
     mapboxgl.accessToken = MAPBOX_TOKEN
 
+    // Use provided center or default to Sydney
+    const mapCenter = center ? [center.lng, center.lat] : [151.2093, -33.8688]
+
     if (!map.current) {
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/dark-v11', // Dark theme to match the design
-        center: [151.2093, -33.8688], // Sydney, NSW, Australia coordinates
-        zoom: 11,
+        center: mapCenter,
+        zoom: zoom,
         attributionControl: false, // Hide attribution for cleaner look
       })
 
       // Add navigation controls
       map.current.addControl(new mapboxgl.NavigationControl(), 'top-right')
 
-      // Add a marker for Sydney
+      // Add a marker
       new mapboxgl.Marker({ color: '#3b82f6' })
-        .setLngLat([151.2093, -33.8688])
+        .setLngLat(mapCenter)
         .addTo(map.current)
 
       map.current.on('load', () => {
@@ -55,7 +60,7 @@ export default function MapboxMap({ className = '' }: MapboxMapProps) {
         map.current = null
       }
     }
-  }, [])
+  }, [center, zoom])
 
   return (
     <div className={`relative w-full h-full ${className}`}>

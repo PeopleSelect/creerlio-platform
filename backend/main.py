@@ -173,10 +173,10 @@ async def health_check(request: Request):
 
 # ==================== Authentication & User Management ====================
 
-# Add CORS headers to ALL responses - WORKAROUND
+# Add CORS headers to ALL responses - WORKAROUND (runs BEFORE route handlers)
 @app.middleware("http")
 async def add_cors_header(request: Request, call_next):
-    # Handle preflight OPTIONS requests FIRST
+    # Handle preflight OPTIONS requests
     if request.method == "OPTIONS":
         from fastapi.responses import Response
         return Response(
@@ -190,13 +190,10 @@ async def add_cors_header(request: Request, call_next):
         )
     # For all other requests, add CORS headers
     response = await call_next(request)
-    # CRITICAL: Use setdefault to ensure headers are added even if response already has some
-    if "access-control-allow-origin" not in response.headers:
-        response.headers["access-control-allow-origin"] = "*"
-    if "access-control-allow-methods" not in response.headers:
-        response.headers["access-control-allow-methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-    if "access-control-allow-headers" not in response.headers:
-        response.headers["access-control-allow-headers"] = "*"
+    # Force CORS headers - use lowercase keys that FastAPI expects
+    response.headers["access-control-allow-origin"] = "*"
+    response.headers["access-control-allow-methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    response.headers["access-control-allow-headers"] = "*"
     return response
 
 @app.post("/api/auth/register", response_model=UserResponse)
@@ -1086,7 +1083,7 @@ async def generate_business_pdf(business_id: int, db=Depends(get_db)):
 
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", 8002))  # Changed to 8002 to bypass stuck process on 8000
+    port = int(os.getenv("PORT", 8000))
     # #region agent log
     with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
         f.write(json.dumps({"location":"main.py:407","message":"Server startup configuration","data":{"host":host,"port":port,"env_host":os.getenv("HOST"),"env_port":os.getenv("PORT")},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")

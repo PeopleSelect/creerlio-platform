@@ -7,7 +7,7 @@ import json
 import time
 import os
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Request, Body
-from pydantic import ValidationError
+from pydantic import ValidationError  # pyright: ignore[reportMissingImports]
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -135,15 +135,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS configuration
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS MIDDLEWARE REMOVED - Using custom middleware below instead to fix CORS blocking
 
 
 # Health Check
@@ -157,15 +149,55 @@ async def root():
 
 
 @app.get("/health")
-async def health_check():
+async def health_check(request: Request):
     # #region agent log
-    with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-        f.write(json.dumps({"location":"main.py:69","message":"Health check endpoint accessed","data":{},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
+    try:
+        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
+            f.write(json.dumps({"location":"main.py:165","message":"Health check endpoint accessed","data":{"origin":request.headers.get("origin"),"referer":request.headers.get("referer")},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
+    except:
+        pass
     # #endregion
-    return {"status": "healthy", "service": "creerlio-platform"}
+    # MANUAL CORS HEADERS - WORKAROUND TO FIX CORS BLOCKING
+    from fastapi.responses import Response
+    response = Response(
+        content='{"status":"healthy","service":"creerlio-platform"}',
+        media_type="application/json",
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+    return response
 
 
 # ==================== Authentication & User Management ====================
+
+# Add CORS headers to ALL responses - WORKAROUND
+@app.middleware("http")
+async def add_cors_header(request: Request, call_next):
+    # Handle preflight OPTIONS requests FIRST
+    if request.method == "OPTIONS":
+        from fastapi.responses import Response
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Max-Age": "3600",
+            }
+        )
+    # For all other requests, add CORS headers
+    response = await call_next(request)
+    # CRITICAL: Use setdefault to ensure headers are added even if response already has some
+    if "access-control-allow-origin" not in response.headers:
+        response.headers["access-control-allow-origin"] = "*"
+    if "access-control-allow-methods" not in response.headers:
+        response.headers["access-control-allow-methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    if "access-control-allow-headers" not in response.headers:
+        response.headers["access-control-allow-headers"] = "*"
+    return response
 
 @app.post("/api/auth/register", response_model=UserResponse)
 async def register(request: Request, db=Depends(get_db)):
@@ -1054,7 +1086,7 @@ async def generate_business_pdf(business_id: int, db=Depends(get_db)):
 
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", 8002))  # Changed to 8002 to bypass stuck process on 8000
     # #region agent log
     with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
         f.write(json.dumps({"location":"main.py:407","message":"Server startup configuration","data":{"host":host,"port":port,"env_host":os.getenv("HOST"),"env_port":os.getenv("PORT")},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")

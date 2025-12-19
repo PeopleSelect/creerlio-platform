@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 from app.models import User
 
 # Password hashing - Using Argon2id (no password length limit)
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+# Explicitly set to argon2 only, no fallback schemes
+pwd_context = CryptContext(schemes=["argon2"])
 
 # JWT settings
 SECRET_KEY = os.getenv("SECRET_KEY", "dev_secret_key_change_in_production")
@@ -26,7 +27,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 class UserRegister(BaseModel):
     email: EmailStr
     username: str
-    password: Optional[str] = ""  # Password is optional (bypass mode)
+    password: Optional[str] = ""  # BYPASS MODE: Default to empty string, completely optional
     full_name: Optional[str] = None
     user_type: str = "talent"  # "talent" or "business"
     
@@ -37,7 +38,7 @@ class UserRegister(BaseModel):
 
 class UserLogin(BaseModel):
     email: str
-    password: Optional[str] = ""  # Password is optional (bypass mode)
+    password: Optional[str] = ""  # BYPASS MODE: Default to empty string, completely optional
     
     class Config:
         # Allow extra fields to be ignored and fields with defaults to be omitted
@@ -67,23 +68,21 @@ class Token(BaseModel):
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash using Argon2id
     
+    BYPASS MODE: During construction, always return True to skip password verification.
     Argon2id has no password length limit, so no truncation is needed.
     """
-    if not plain_password:
-        return False
-    
-    return pwd_context.verify(plain_password, hashed_password)
+    # BYPASS: Skip password verification during construction
+    return True
 
 
 def get_password_hash(password: str) -> str:
     """Hash a password using Argon2id
     
+    BYPASS MODE: During construction, skip password hashing entirely.
     Argon2id has no password length limit, so passwords of any length can be hashed.
     """
-    if not password:
-        return ""
-    
-    return pwd_context.hash(password)
+    # BYPASS: Skip password hashing during construction
+    return ""
 
 
 # ==================== JWT Token ====================
@@ -122,8 +121,8 @@ def create_user(db: Session, user_data: UserRegister) -> User:
     if get_user_by_username(db, user_data.username):
         raise ValueError("Username already taken")
     
-    # Hash password using Argon2id (no length limit)
-    hashed_password = get_password_hash(user_data.password) if user_data.password else ""
+    # BYPASS MODE: Skip password hashing during construction
+    hashed_password = ""
     
     db_user = User(
         email=user_data.email,
@@ -148,20 +147,8 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     if not user.is_active:
         return None
     
-    # BYPASS MODE: If password is empty/None, allow login without verification
-    if not password or password.strip() == "":
-        # Update last login
-        user.last_login = datetime.utcnow()
-        db.commit()
-        return user
-    
-    # If password provided, verify it (only if user has a hashed password)
-    if user.hashed_password:
-        if not verify_password(password, user.hashed_password):
-            return None
-    # If user has no hashed password but provided password, reject (security)
-    elif password:
-        return None
+    # BYPASS MODE: Skip all password verification during construction
+    # Allow login regardless of password
     
     # Update last login
     user.last_login = datetime.utcnow()

@@ -112,8 +112,6 @@ export default function Home() {
             {/* Navigation Links */}
             <nav className="hidden lg:flex items-center gap-x-8 text-sm text-slate-300">
               <Link href="/about" className="hover:text-blue-400 transition-colors">About</Link>
-              <Link href="/#talent" className="hover:text-blue-400 transition-colors">Talent</Link>
-              <Link href="/#business" className="hover:text-blue-400 transition-colors">Business</Link>
               <Link href="/analytics" className="hover:text-blue-400 transition-colors">Analytics</Link>
               <Link href="/search" className="hover:text-blue-400 transition-colors">Search</Link>
               <Link href="/jobs" className="hover:text-blue-400 transition-colors">Jobs</Link>

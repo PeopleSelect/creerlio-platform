@@ -160,13 +160,8 @@ export default function BusinessDashboard() {
               </ul>
               <h2 className="text-3xl font-bold text-white mt-8">Future Employment Relationships begin NOW!</h2>
             </div>
-            <div className="relative h-96">
-              <div className="absolute inset-0 bg-gradient-to-r from-red-500/20 to-transparent rounded-lg">
-                <div className="absolute inset-0 opacity-30" style={{
-                  backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,0,0,0.5) 1px, transparent 0)',
-                  backgroundSize: '40px 40px'
-                }}></div>
-              </div>
+            <div className="relative h-96 rounded-lg overflow-hidden">
+              <MapboxMap className="w-full h-full" />
             </div>
           </div>
         </section>
@@ -311,13 +306,6 @@ export default function BusinessDashboard() {
                 </p>
               </div>
             </div>
-          </div>
-        </section>
-
-        {/* Map Section - KEEP THIS */}
-        <section className="mb-12 border-t border-gray-800 pt-12">
-          <div className="h-[600px] rounded-lg overflow-hidden">
-            <MapboxMap className="w-full h-full" />
           </div>
         </section>
 

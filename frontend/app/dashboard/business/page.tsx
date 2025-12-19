@@ -17,15 +17,15 @@ export default function BusinessDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white">
       {/* Header */}
-      <header className="container mx-auto px-6 py-4">
+      <header className="container mx-auto px-6 py-4 border-b border-gray-800">
         <div className="flex items-center justify-between mb-4">
           <Link href="/" className="flex items-center space-x-2">
-            <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-xl">C</span>
             </div>
-            <span className="text-orange-500 text-2xl font-bold">CREERLIO</span>
+            <span className="text-white text-2xl font-bold">Creerlio</span>
           </Link>
           <div className="flex items-center gap-2">
             <span className="text-white text-sm">Connect With Us:</span>
@@ -44,17 +44,17 @@ export default function BusinessDashboard() {
         </div>
         <h1 className="text-4xl font-bold text-white text-center mb-4">Next Gen Recruitment Solutions</h1>
         <nav className="flex justify-center gap-6 border-b border-gray-800 pb-4">
-          <Link href="/" className="text-white hover:text-orange-500">Home</Link>
-          <Link href="#" className="text-white hover:text-orange-500">Win $500 Hyatt Voucher</Link>
-          <Link href="#" className="text-white hover:text-orange-500">Focus Groups</Link>
-          <Link href="/dashboard/business" className="text-red-500 font-semibold">CREERLIO for Business</Link>
-          <Link href="/dashboard/talent" className="text-white hover:text-orange-500">CREERLIO for Talent</Link>
-          <Link href="#" className="text-white hover:text-orange-500">Features</Link>
+          <Link href="/" className="text-gray-300 hover:text-blue-400 transition-colors">Home</Link>
+          <Link href="#" className="text-gray-300 hover:text-blue-400 transition-colors">Win $500 Hyatt Voucher</Link>
+          <Link href="#" className="text-gray-300 hover:text-blue-400 transition-colors">Focus Groups</Link>
+          <Link href="/dashboard/business" className="text-blue-400 font-semibold">CREERLIO for Business</Link>
+          <Link href="/dashboard/talent" className="text-gray-300 hover:text-blue-400 transition-colors">CREERLIO for Talent</Link>
+          <Link href="#" className="text-gray-300 hover:text-blue-400 transition-colors">Features</Link>
         </nav>
       </header>
 
       {/* Hero Section with Benefits */}
-      <section className="relative bg-black py-12 px-6">
+      <section className="relative py-12 px-6">
         <div className="container mx-auto max-w-7xl">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div className="space-y-4">
@@ -63,7 +63,7 @@ export default function BusinessDashboard() {
                 <li>NO MORE sifting through 100s of Resumes</li>
                 <li>MORE Quality Talent</li>
                 <li>MORE Productivity</li>
-                <li>and MORE Profit for your Business with <span className="text-orange-500">CREERLIO</span></li>
+                <li>and MORE Profit for your Business with <span className="text-blue-400">CREERLIO</span></li>
               </ul>
               <h2 className="text-3xl font-bold text-white mt-8">Future Employment Relationships begin NOW!</h2>
             </div>
@@ -80,7 +80,7 @@ export default function BusinessDashboard() {
       </section>
 
       {/* Cost Efficiency Section */}
-      <section className="bg-gray-900 py-16 px-6 border-t border-gray-800">
+      <section className="py-16 px-6 border-t border-gray-800">
         <div className="container mx-auto max-w-7xl">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div className="relative h-96 rounded-lg overflow-hidden">
@@ -113,7 +113,7 @@ export default function BusinessDashboard() {
       </section>
 
       {/* Quality of Talent Section */}
-      <section className="bg-black py-16 px-6 border-t border-gray-800">
+      <section className="py-16 px-6 border-t border-gray-800">
         <div className="container mx-auto max-w-7xl">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div className="relative h-96 rounded-lg overflow-hidden">
@@ -143,7 +143,7 @@ export default function BusinessDashboard() {
       </section>
 
       {/* Engagement and Relationships Section */}
-      <section className="bg-gray-900 py-16 px-6 border-t border-gray-800">
+      <section className="py-16 px-6 border-t border-gray-800">
         <div className="container mx-auto max-w-7xl">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div className="relative h-96 rounded-lg overflow-hidden">
@@ -176,7 +176,7 @@ export default function BusinessDashboard() {
       </section>
 
       {/* Future Planning Section */}
-      <section className="bg-black py-16 px-6 border-t border-gray-800">
+      <section className="py-16 px-6 border-t border-gray-800">
         <div className="container mx-auto max-w-7xl">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div className="relative h-96 rounded-lg overflow-hidden">
@@ -205,7 +205,7 @@ export default function BusinessDashboard() {
       </section>
 
       {/* Seamless Integration Section */}
-      <section className="bg-black py-16 px-6 border-t border-gray-800 relative overflow-hidden">
+      <section className="py-16 px-6 border-t border-gray-800 relative overflow-hidden">
         <div className="absolute inset-0 opacity-20">
           <div className="absolute inset-0" style={{
             backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,100,0,0.5) 1px, transparent 0)',
@@ -223,7 +223,7 @@ export default function BusinessDashboard() {
             </div>
             <div>
               <p className="text-white text-lg leading-relaxed">
-                Integrate <span className="text-orange-500 font-semibold">CREERLIO</span> seamlessly with your existing Website. Our flexible integration capabilities allow you to connect our HR software with your preferred tools and platforms, maximizing efficiency and productivity.
+                Integrate <span className="text-blue-400 font-semibold">CREERLIO</span> seamlessly with your existing Website. Our flexible integration capabilities allow you to connect our HR software with your preferred tools and platforms, maximizing efficiency and productivity.
               </p>
             </div>
           </div>
@@ -231,7 +231,7 @@ export default function BusinessDashboard() {
       </section>
 
       {/* Map Section - KEEP THIS */}
-      <section className="bg-gray-900 py-16 px-6 border-t border-gray-800">
+      <section className="py-16 px-6 border-t border-gray-800">
         <div className="container mx-auto max-w-7xl">
           <div className="h-[600px] rounded-lg overflow-hidden">
             <MapboxMap className="w-full h-full" />
@@ -240,9 +240,9 @@ export default function BusinessDashboard() {
       </section>
 
       {/* Join the Waitlist Section */}
-      <section className="bg-black py-16 px-6 border-t border-gray-800">
+      <section className="py-16 px-6 border-t border-gray-800">
         <div className="container mx-auto max-w-7xl">
-          <h2 className="text-4xl font-bold text-orange-500 text-center mb-12">JOIN THE WAITLIST</h2>
+          <h2 className="text-4xl font-bold text-blue-400 text-center mb-12">JOIN THE WAITLIST</h2>
           <div className="grid md:grid-cols-3 gap-12">
             <div className="text-gray-400">
               <p>100 MOUNT STREET, NORTH SYDNEY,</p>
@@ -282,14 +282,14 @@ export default function BusinessDashboard() {
                 </div>
                 <button
                   type="submit"
-                  className="w-full px-6 py-3 bg-gray-900 border border-gray-600 text-gray-300 rounded hover:bg-gray-800 transition-colors"
+                  className="w-full px-6 py-3 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                 >
                   JOIN
                 </button>
               </form>
             </div>
             <div className="text-gray-400 text-right">
-              <p>© 2024 <span className="text-orange-500">Creerlio</span>. All rights reserved.</p>
+              <p>© 2024 <span className="text-blue-400">Creerlio</span>. All rights reserved.</p>
             </div>
           </div>
         </div>
@@ -297,7 +297,7 @@ export default function BusinessDashboard() {
 
       {/* Chat Icon */}
       <div className="fixed bottom-6 right-6 z-50">
-        <button className="w-14 h-14 bg-red-500 rounded-lg flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg">
+        <button className="w-14 h-14 bg-blue-500 rounded-lg flex items-center justify-center hover:bg-blue-600 transition-colors shadow-lg">
           <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>

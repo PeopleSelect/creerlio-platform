@@ -276,12 +276,26 @@ async def register(request: Request, db=Depends(get_db)):
                 user_data_dict["full_name"] = full_name
             
             # Create UserRegister - password field does not exist in model
+            # #region agent log
+            try:
+                with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
+                    f.write(json.dumps({"location":"main.py:250","message":"Creating UserRegister model","data":{"user_data_dict":user_data_dict},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
+            except:
+                pass
+            # #endregion
             user_data = UserRegister(**user_data_dict)
+            # #region agent log
+            try:
+                with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
+                    f.write(json.dumps({"location":"main.py:252","message":"UserRegister model created successfully","data":{"email":user_data.email,"username":user_data.username},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
+            except:
+                pass
+            # #endregion
         except ValidationError as ve:
             # #region agent log
             try:
                 with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                    f.write(json.dumps({"location":"main.py:207","message":"UserRegister ValidationError","data":{"errors":ve.errors()},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"D"})+"\n")
+                    f.write(json.dumps({"location":"main.py:252","message":"UserRegister ValidationError","data":{"errors":ve.errors(),"user_data_dict":user_data_dict},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
             except:
                 pass
             # #endregion

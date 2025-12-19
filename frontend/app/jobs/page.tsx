@@ -65,11 +65,23 @@ export default function JobsPage() {
         params.location = filters.location
       }
 
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'jobs/page.tsx:55',message:'Fetching jobs - before request',data:{url:`${apiUrl}/api/jobs/public`,params},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+
       const response = await axios.get(`${apiUrl}/api/jobs/public`, { params })
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'jobs/page.tsx:68',message:'Fetching jobs - response received',data:{status:response.status,hasJobs:!!response.data?.jobs,jobCount:response.data?.jobs?.length || 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+
       if (response.data && Array.isArray(response.data.jobs)) {
         setJobs(response.data.jobs)
       }
-    } catch (error) {
+    } catch (error: any) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'jobs/page.tsx:72',message:'Fetching jobs - error',data:{errorMessage:error.message,status:error.response?.status,statusText:error.response?.statusText,url:error.config?.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       console.error('Error fetching jobs:', error)
     } finally {
       setIsLoading(false)

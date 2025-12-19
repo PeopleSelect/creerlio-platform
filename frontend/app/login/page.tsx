@@ -32,11 +32,10 @@ export default function LoginPage() {
       // #region agent log
       fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login/page.tsx:31',message:'Preparing login request',data:{has_email:!!formData.email,has_password:!!formData.password,password_length:formData.password?.length || 0,email:formData.email},"timestamp":Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
       // #endregion
-      // BYPASS MODE: Always include password field (empty string if not provided)
-      // Note: Argon2id has no password length limit, so no truncation needed
+      // BYPASS MODE: Include password as empty string to satisfy backend validation
       const response = await axios.post(`${apiUrl}/api/auth/login`, {
         email: formData.email,
-        password: formData.password || ""  // Argon2id supports passwords of any length
+        password: ""  // BYPASS: Set to empty string to bypass validation
       })
       // #region agent log
       fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login/page.tsx:36',message:'Login request succeeded',data:{status:response.status},"timestamp":Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});

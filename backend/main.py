@@ -198,8 +198,11 @@ async def add_cors_header(request: Request, call_next):
 
 @app.post("/api/auth/register", response_model=UserResponse)
 async def register(request: Request, db=Depends(get_db)):
-    """Register a new user with email and password"""
+    """Register a new user with email and password - BYPASS MODE: Password optional"""
     body = await request.json()
+    # BYPASS: Ensure password field exists in body (set to empty string if missing)
+    if "password" not in body or body.get("password") is None:
+        body["password"] = ""
     # #region agent log
     try:
         with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
@@ -235,10 +238,11 @@ async def register(request: Request, db=Depends(get_db)):
             pass
         # #endregion
         try:
+            # BYPASS MODE: Set password to empty string to skip all validation
             user_data = UserRegister(
                 email=body.get("email"),
                 username=body.get("username"),
-                password=password,  # Required - already validated above
+                password=body.get("password") or "",  # BYPASS: Use empty string if missing/null
                 full_name=body.get("full_name"),
                 user_type=body.get("user_type", "talent")
             )
@@ -278,8 +282,12 @@ async def register(request: Request, db=Depends(get_db)):
 
 
 @app.post("/api/auth/login")
-async def login(body: dict = Body(...), db=Depends(get_db)):
-    """Login and get access token with email and password"""
+async def login(request: Request, db=Depends(get_db)):
+    """Login and get access token with email and password - BYPASS MODE: Password optional"""
+    body = await request.json()
+    # BYPASS: Ensure password field exists in body (set to empty string if missing)
+    if "password" not in body or body.get("password") is None:
+        body["password"] = ""
     # #region agent log
     try:
         with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
@@ -288,7 +296,7 @@ async def login(body: dict = Body(...), db=Depends(get_db)):
         pass
     # #endregion
     
-    # BYPASS MODE: Password is optional - allow empty/missing passwords
+    # BYPASS MODE: Password is optional - use empty string
     password = body.get("password") or ""  # Default to empty string if missing
     # #region agent log
     try:
@@ -313,9 +321,10 @@ async def login(body: dict = Body(...), db=Depends(get_db)):
         pass
     # #endregion
     try:
+        # BYPASS MODE: Set password to empty string to skip all validation
         credentials = UserLogin(
             email=body.get("email"),
-            password=password  # Required - already validated above
+            password=body.get("password") or ""  # BYPASS: Use empty string if missing/null
         )
     except ValidationError as ve:
         # #region agent log

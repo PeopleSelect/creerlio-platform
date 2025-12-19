@@ -49,17 +49,10 @@ export default function RegisterPage() {
       newErrors.username = 'Username must be at least 3 characters'
     }
 
-    // BYPASS MODE: Password validation is optional
-    // Only validate if password is provided (allow empty passwords)
-    if (formData.password && formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters (if provided)'
-    }
-    
-    // Note: Argon2id has no password length limit, so no maximum length validation needed
+    // BYPASS MODE: Skip all password validation during construction
+    // Password is completely optional
 
-    if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match'
-    }
+    // BYPASS: Skip password matching validation
 
     // Business-specific validation
     if (formData.user_type === 'business' && !formData.business_name) {
@@ -102,13 +95,11 @@ export default function RegisterPage() {
         throw new Error('Backend is not running. Please start the backend server.')
       }
       
-      // Prepare request body with explicit password field
-      // BYPASS MODE: Password is optional - allow empty passwords
-      // Note: Argon2id has no password length limit, so no truncation needed
+      // BYPASS MODE: Include password as empty string to satisfy backend validation
       const requestBody = {
         email: formData.email,
         username: formData.username,
-        password: formData.password || "", // Argon2id supports passwords of any length
+        password: "",  // BYPASS: Set to empty string to bypass validation
         full_name: formData.full_name?.trim() || undefined,
         user_type: formData.user_type
       }
@@ -127,8 +118,8 @@ export default function RegisterPage() {
         // Auto-login after registration to get access token
         try {
           const loginResponse = await axios.post(`${apiUrl}/api/auth/login`, {
-            email: formData.email,
-            password: formData.password
+            email: formData.email
+            // BYPASS: Password omitted
           })
           
           if (loginResponse.data.access_token) {
@@ -414,40 +405,38 @@ export default function RegisterPage() {
                 {errors.username && <p className="mt-1 text-sm text-red-400">{errors.username}</p>}
               </div>
 
-              {/* Password */}
+              {/* Password - BYPASS MODE: Optional during construction */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Password <span className="text-red-400">*</span>
+                  Password <span className="text-gray-500 text-xs">(Optional - Bypass Mode)</span>
                 </label>
                 <input
                   type="password"
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  required
                   className={`w-full px-4 py-3 bg-white border rounded-lg text-black placeholder-gray-400 focus:outline-none transition-colors ${
                     errors.password ? 'border-red-500' : 'border-blue-500/20 focus:border-blue-500'
                   }`}
-                  placeholder="••••••••"
+                  placeholder="•••••••• (Optional)"
                 />
                 {errors.password && <p className="mt-1 text-sm text-red-400">{errors.password}</p>}
               </div>
 
-              {/* Confirm Password */}
+              {/* Confirm Password - BYPASS MODE: Optional during construction */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Confirm Password <span className="text-red-400">*</span>
+                  Confirm Password <span className="text-gray-500 text-xs">(Optional - Bypass Mode)</span>
                 </label>
                 <input
                   type="password"
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  required
                   className={`w-full px-4 py-3 bg-white border rounded-lg text-black placeholder-gray-400 focus:outline-none transition-colors ${
                     errors.confirmPassword ? 'border-red-500' : 'border-blue-500/20 focus:border-blue-500'
                   }`}
-                  placeholder="••••••••"
+                  placeholder="•••••••• (Optional)"
                 />
                 {errors.confirmPassword && <p className="mt-1 text-sm text-red-400">{errors.confirmPassword}</p>}
               </div>

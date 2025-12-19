@@ -198,10 +198,26 @@ async def add_cors_header(request: Request, call_next):
 
 @app.post("/api/auth/register", response_model=UserResponse)
 async def register(request: Request, db=Depends(get_db)):
-    """Register a new user with email and password - BYPASS MODE: Password optional"""
-    body = await request.json()
-    # Password field completely removed - ignore if present
-    body.pop("password", None)
+    """Register a new user - Password completely removed during construction"""
+    try:
+        body = await request.json()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+    
+    # Password field completely removed - create clean dict without password
+    # Explicitly build dict to ensure no password field exists
+    clean_body = {}
+    if "email" in body:
+        clean_body["email"] = body["email"]
+    if "username" in body:
+        clean_body["username"] = body["username"]
+    if "full_name" in body and body["full_name"]:
+        clean_body["full_name"] = body["full_name"]
+    if "user_type" in body:
+        clean_body["user_type"] = body["user_type"]
+    else:
+        clean_body["user_type"] = "talent"
+    body = clean_body
     # #region agent log
     try:
         with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
@@ -219,13 +235,20 @@ async def register(request: Request, db=Depends(get_db)):
             pass
         # #endregion
         try:
-            # Password field completely removed
-            user_data = UserRegister(
-                email=body.get("email"),
-                username=body.get("username"),
-                full_name=body.get("full_name"),
-                user_type=body.get("user_type", "talent")
-            )
+            # Password field completely removed - create UserRegister with only required fields
+            # Build dict explicitly to avoid any password field issues
+            user_data_dict = {
+                "email": body.get("email"),
+                "username": body.get("username"),
+                "user_type": body.get("user_type", "talent")
+            }
+            # Only add full_name if it exists
+            full_name = body.get("full_name")
+            if full_name:
+                user_data_dict["full_name"] = full_name
+            
+            # Create UserRegister - password field does not exist in model
+            user_data = UserRegister(**user_data_dict)
         except ValidationError as ve:
             # #region agent log
             try:

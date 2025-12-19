@@ -27,13 +27,15 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 class UserRegister(BaseModel):
     email: EmailStr
     username: str
-    # password: REMOVED during construction
+    # password: COMPLETELY REMOVED - do not add this field
     full_name: Optional[str] = None
     user_type: str = "talent"  # "talent" or "business"
     
     class Config:
-        # Allow extra fields to be ignored and fields with defaults to be omitted
+        # Allow extra fields to be ignored (password will be ignored if sent)
         extra = "ignore"
+        # Use Pydantic v1 style config for compatibility
+        orm_mode = False
 
 
 class UserLogin(BaseModel):

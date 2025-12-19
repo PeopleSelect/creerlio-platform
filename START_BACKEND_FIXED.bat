@@ -4,27 +4,39 @@ echo Starting Creerlio Backend Server
 echo ========================================
 cd /d "%~dp0backend"
 
-REM Try to find Python
+REM Prefer project virtual environments first
+if exist "venv\Scripts\python.exe" (
+    set "PYTHON_CMD=venv\Scripts\python.exe"
+    goto have_python
+)
+
+if exist "..\venv\Scripts\python.exe" (
+    set "PYTHON_CMD=..\venv\Scripts\python.exe"
+    goto have_python
+)
+
+REM Fallback: try system Python
 where py >nul 2>&1
 if %errorlevel% == 0 (
-    set PYTHON_CMD=py
+    set "PYTHON_CMD=py"
 ) else (
     where python >nul 2>&1
     if %errorlevel% == 0 (
-        set PYTHON_CMD=python
+        set "PYTHON_CMD=python"
     ) else (
         echo ERROR: Python not found!
-        echo Please install Python 3.12 or add it to PATH
+        echo Please install Python 3.11+ or add it to PATH
         pause
         exit /b 1
     )
 )
 
+:have_python
 echo Using Python: %PYTHON_CMD%
 
-REM Create venv if it doesn't exist
+REM Create backend venv if it doesn't exist and we're not already using it
 if not exist "venv" (
-    echo Creating virtual environment...
+    echo Creating virtual environment for backend...
     %PYTHON_CMD% -m venv venv
     if errorlevel 1 (
         echo Failed to create virtual environment

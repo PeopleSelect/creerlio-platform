@@ -1,14 +1,73 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import MapboxMap from '@/components/MapboxMap'
 
+interface User {
+  id: number
+  email: string
+  username: string
+  full_name: string | null
+  user_type: string
+}
+
 export default function BusinessDashboard() {
+  const router = useRouter()
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [userType, setUserType] = useState<string | null>(null)
   const [email, setEmail] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token')
+    const email = localStorage.getItem('user_email')
+    const storedUserType = localStorage.getItem('user_type')
+    
+    setIsAuthenticated(!!token && !!email)
+    if (storedUserType) {
+      setUserType(storedUserType)
+    }
+
+    if (token && email) {
+      fetchUserInfo(email)
+    } else {
+      setIsLoading(false)
+    }
+  }, [])
+
+  const fetchUserInfo = async (email: string) => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/auth/me?email=${email}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('access_token')}`
+        }
+      })
+      if (response.ok) {
+        const userData = await response.json()
+        setUser(userData)
+      }
+    } catch (error) {
+      console.error('Error fetching user:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('user_email')
+    localStorage.removeItem('user_type')
+    setIsAuthenticated(false)
+    setUserType(null)
+    router.push('/')
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -16,46 +75,80 @@ export default function BusinessDashboard() {
     console.log({ email, firstName, lastName })
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white">
-      {/* Header */}
-      <header className="container mx-auto px-6 py-4 border-b border-gray-800">
-        <div className="flex items-center justify-between mb-4">
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-xl">C</span>
-            </div>
-            <span className="text-white text-2xl font-bold">Creerlio</span>
-          </Link>
-          <div className="flex items-center gap-2">
-            <span className="text-gray-300 text-sm">Connect With Us:</span>
-            <div className="flex gap-2">
-              <a href="#" className="w-8 h-8 rounded-full border border-gray-600 flex items-center justify-center text-gray-300 hover:bg-gray-800 hover:text-blue-400 transition-colors">
-                <span className="text-xs font-bold">in</span>
-              </a>
-              <a href="#" className="w-8 h-8 rounded-full border border-gray-600 flex items-center justify-center text-gray-300 hover:bg-gray-800 hover:text-blue-400 transition-colors">
-                <span className="text-xs font-bold">f</span>
-              </a>
-              <a href="#" className="w-8 h-8 rounded-full border border-gray-600 flex items-center justify-center text-gray-300 hover:bg-gray-800 hover:text-blue-400 transition-colors">
-                <span className="text-xs">🐦</span>
-              </a>
-            </div>
-          </div>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading dashboard...</p>
         </div>
-        <h1 className="text-4xl font-bold text-white text-center mb-4">Next Gen Recruitment Solutions</h1>
-        <nav className="flex justify-center gap-6 border-b border-gray-800 pb-4">
-          <Link href="/" className="text-gray-300 hover:text-blue-400 transition-colors">Home</Link>
-          <Link href="#" className="text-gray-300 hover:text-blue-400 transition-colors">Win $500 Hyatt Voucher</Link>
-          <Link href="#" className="text-gray-300 hover:text-blue-400 transition-colors">Focus Groups</Link>
-          <Link href="/dashboard/business" className="text-blue-400 font-semibold">CREERLIO for Business</Link>
-          <Link href="/dashboard/talent" className="text-gray-300 hover:text-blue-400 transition-colors">CREERLIO for Talent</Link>
-          <Link href="#" className="text-gray-300 hover:text-blue-400 transition-colors">Features</Link>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
+      {/* Header */}
+      <header className="container mx-auto px-6 py-4 flex items-center justify-between border-b border-gray-800">
+        <Link href="/" className="flex items-center space-x-2">
+          <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+            <span className="text-white font-bold text-xl">C</span>
+          </div>
+          <span className="text-white text-2xl font-bold">Creerlio</span>
+        </Link>
+        
+        <nav className="hidden lg:flex items-center gap-x-8 text-sm text-slate-300">
+          <Link href="/about" className="hover:text-blue-400 transition-colors">About</Link>
+          <Link href="/analytics" className="hover:text-blue-400 transition-colors">Analytics</Link>
+          <Link href="/search" className="hover:text-blue-400 transition-colors">Search</Link>
+          <Link href="/jobs" className="hover:text-blue-400 transition-colors">Jobs</Link>
+          {isAuthenticated ? (
+            <>
+              <Link 
+                href={userType === 'business' ? '/dashboard/business' : '/dashboard/talent'} 
+                className="hover:text-blue-400 transition-colors"
+              >
+                Dashboard
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="hover:text-blue-400 transition-colors"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="hover:text-blue-400 transition-colors">Login</Link>
+              <Link href="/register" className="hover:text-blue-400 transition-colors">Register</Link>
+            </>
+          )}
         </nav>
+
+        <div className="flex items-center space-x-4">
+          {isAuthenticated && (
+            <span className="text-gray-300">Welcome, {user?.full_name || user?.username}</span>
+          )}
+          {isAuthenticated && (
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              Logout
+            </button>
+          )}
+        </div>
       </header>
 
-      {/* Hero Section with Benefits */}
-      <section className="relative py-12 px-6">
-        <div className="container mx-auto max-w-7xl">
+      {/* Dashboard Content */}
+      <div className="container mx-auto px-6 py-8">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">Business Dashboard</h1>
+          <p className="text-gray-400">Next Gen Recruitment Solutions</p>
+        </div>
+
+        {/* Hero Section with Benefits */}
+        <section className="mb-12">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div className="space-y-4">
               <ul className="space-y-3 text-white text-lg">
@@ -76,12 +169,10 @@ export default function BusinessDashboard() {
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Cost Efficiency Section */}
-      <section className="py-16 px-6 border-t border-gray-800">
-        <div className="container mx-auto max-w-7xl">
+        {/* Cost Efficiency Section */}
+        <section className="mb-12 border-t border-gray-800 pt-12">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div className="relative h-96 rounded-lg overflow-hidden">
               <Image
@@ -109,12 +200,10 @@ export default function BusinessDashboard() {
               </ul>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Quality of Talent Section */}
-      <section className="py-16 px-6 border-t border-gray-800">
-        <div className="container mx-auto max-w-7xl">
+        {/* Quality of Talent Section */}
+        <section className="mb-12 border-t border-gray-800 pt-12">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div className="relative h-96 rounded-lg overflow-hidden">
               <Image
@@ -139,12 +228,10 @@ export default function BusinessDashboard() {
               </ul>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Engagement and Relationships Section */}
-      <section className="py-16 px-6 border-t border-gray-800">
-        <div className="container mx-auto max-w-7xl">
+        {/* Engagement and Relationships Section */}
+        <section className="mb-12 border-t border-gray-800 pt-12">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div className="relative h-96 rounded-lg overflow-hidden">
               <Image
@@ -172,12 +259,10 @@ export default function BusinessDashboard() {
               </ul>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Future Planning Section */}
-      <section className="py-16 px-6 border-t border-gray-800">
-        <div className="container mx-auto max-w-7xl">
+        {/* Future Planning Section */}
+        <section className="mb-12 border-t border-gray-800 pt-12">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div className="relative h-96 rounded-lg overflow-hidden">
               <Image
@@ -201,47 +286,43 @@ export default function BusinessDashboard() {
               </ul>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Seamless Integration Section */}
-      <section className="py-16 px-6 border-t border-gray-800 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute inset-0" style={{
-            backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,100,0,0.5) 1px, transparent 0)',
-            backgroundSize: '40px 40px'
-          }}></div>
-        </div>
-        <div className="container mx-auto max-w-7xl relative z-10">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div className="relative h-96 flex items-center justify-center">
-              <div className="text-center">
-                <h2 className="text-5xl font-bold text-white mb-2">Seamless</h2>
-                <h2 className="text-4xl font-bold text-white mb-2">Integration with Your</h2>
-                <h2 className="text-4xl font-bold text-white">Existing Website</h2>
+        {/* Seamless Integration Section */}
+        <section className="mb-12 border-t border-gray-800 pt-12 relative overflow-hidden">
+          <div className="absolute inset-0 opacity-20">
+            <div className="absolute inset-0" style={{
+              backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,100,0,0.5) 1px, transparent 0)',
+              backgroundSize: '40px 40px'
+            }}></div>
+          </div>
+          <div className="relative z-10">
+            <div className="grid md:grid-cols-2 gap-12 items-center">
+              <div className="relative h-96 flex items-center justify-center">
+                <div className="text-center">
+                  <h2 className="text-5xl font-bold text-white mb-2">Seamless</h2>
+                  <h2 className="text-4xl font-bold text-white mb-2">Integration with Your</h2>
+                  <h2 className="text-4xl font-bold text-white">Existing Website</h2>
+                </div>
+              </div>
+              <div>
+                <p className="text-white text-lg leading-relaxed">
+                  Integrate <span className="text-blue-400 font-semibold">CREERLIO</span> seamlessly with your existing Website. Our flexible integration capabilities allow you to connect our HR software with your preferred tools and platforms, maximizing efficiency and productivity.
+                </p>
               </div>
             </div>
-            <div>
-              <p className="text-white text-lg leading-relaxed">
-                Integrate <span className="text-blue-400 font-semibold">CREERLIO</span> seamlessly with your existing Website. Our flexible integration capabilities allow you to connect our HR software with your preferred tools and platforms, maximizing efficiency and productivity.
-              </p>
-            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Map Section - KEEP THIS */}
-      <section className="py-16 px-6 border-t border-gray-800">
-        <div className="container mx-auto max-w-7xl">
+        {/* Map Section - KEEP THIS */}
+        <section className="mb-12 border-t border-gray-800 pt-12">
           <div className="h-[600px] rounded-lg overflow-hidden">
             <MapboxMap className="w-full h-full" />
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Join the Waitlist Section */}
-      <section className="py-16 px-6 border-t border-gray-800">
-        <div className="container mx-auto max-w-7xl">
+        {/* Join the Waitlist Section */}
+        <section className="mb-12 border-t border-gray-800 pt-12">
           <h2 className="text-4xl font-bold text-blue-400 text-center mb-12">JOIN THE WAITLIST</h2>
           <div className="grid md:grid-cols-3 gap-12">
             <div className="text-gray-400">
@@ -257,7 +338,7 @@ export default function BusinessDashboard() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="w-full px-4 py-2 bg-gray-900 border border-gray-600 rounded text-white"
+                    className="w-full px-4 py-2 bg-slate-800/50 border border-gray-700 rounded text-white placeholder-gray-500"
                   />
                 </div>
                 <div>
@@ -267,7 +348,7 @@ export default function BusinessDashboard() {
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     placeholder="First name"
-                    className="w-full px-4 py-2 bg-gray-900 border border-gray-600 rounded text-white"
+                    className="w-full px-4 py-2 bg-slate-800/50 border border-gray-700 rounded text-white placeholder-gray-500"
                   />
                 </div>
                 <div>
@@ -277,7 +358,7 @@ export default function BusinessDashboard() {
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="Last name"
-                    className="w-full px-4 py-2 bg-gray-900 border border-gray-600 rounded text-white"
+                    className="w-full px-4 py-2 bg-slate-800/50 border border-gray-700 rounded text-white placeholder-gray-500"
                   />
                 </div>
                 <button
@@ -292,8 +373,8 @@ export default function BusinessDashboard() {
               <p>© 2024 <span className="text-blue-400">Creerlio</span>. All rights reserved.</p>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
       {/* Chat Icon */}
       <div className="fixed bottom-6 right-6 z-50">

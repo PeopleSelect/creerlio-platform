@@ -12,8 +12,8 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from app.models import User
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Password hashing - Using Argon2id (no password length limit)
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # JWT settings
 SECRET_KEY = os.getenv("SECRET_KEY", "dev_secret_key_change_in_production")
@@ -65,49 +65,23 @@ class Token(BaseModel):
 # ==================== Password Hashing ====================
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash
+    """Verify a password against its hash using Argon2id
     
-    Note: bcrypt has a 72-byte limit. Passwords longer than 72 bytes will be truncated.
-    This ensures verification matches how the password was hashed.
+    Argon2id has no password length limit, so no truncation is needed.
     """
     if not plain_password:
         return False
-    
-    # Truncate password to 72 bytes to match how it was hashed
-    password_bytes = plain_password.encode('utf-8')
-    if len(password_bytes) > 72:
-        password_bytes = password_bytes[:72]
-        # Decode back to string, handling any incomplete UTF-8 sequences
-        try:
-            plain_password = password_bytes.decode('utf-8')
-        except UnicodeDecodeError:
-            # If decoding fails, remove the last byte and try again
-            password_bytes = password_bytes[:71]
-            plain_password = password_bytes.decode('utf-8', errors='ignore')
     
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
-    """Hash a password
+    """Hash a password using Argon2id
     
-    Note: bcrypt has a 72-byte limit. Passwords longer than 72 bytes will be truncated.
-    This function ensures passwords are truncated to exactly 72 bytes before hashing.
+    Argon2id has no password length limit, so passwords of any length can be hashed.
     """
     if not password:
         return ""
-    
-    # Truncate password to 72 bytes to comply with bcrypt limit
-    password_bytes = password.encode('utf-8')
-    if len(password_bytes) > 72:
-        password_bytes = password_bytes[:72]
-        # Decode back to string, handling any incomplete UTF-8 sequences
-        try:
-            password = password_bytes.decode('utf-8')
-        except UnicodeDecodeError:
-            # If decoding fails, remove the last byte and try again
-            password_bytes = password_bytes[:71]
-            password = password_bytes.decode('utf-8', errors='ignore')
     
     return pwd_context.hash(password)
 
@@ -148,7 +122,7 @@ def create_user(db: Session, user_data: UserRegister) -> User:
     if get_user_by_username(db, user_data.username):
         raise ValueError("Username already taken")
     
-    # Hash password (password truncation to 72 bytes is handled in get_password_hash)
+    # Hash password using Argon2id (no length limit)
     hashed_password = get_password_hash(user_data.password) if user_data.password else ""
     
     db_user = User(

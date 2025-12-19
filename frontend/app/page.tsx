@@ -112,6 +112,8 @@ export default function Home() {
             {/* Navigation Links */}
             <nav className="hidden lg:flex items-center gap-x-8 text-sm text-slate-300">
               <Link href="/about" className="hover:text-blue-400 transition-colors">About</Link>
+              <Link href="/dashboard/talent" className="hover:text-blue-400 transition-colors">Talent</Link>
+              <Link href="/dashboard/business" className="hover:text-blue-400 transition-colors">Business</Link>
               <Link href="/analytics" className="hover:text-blue-400 transition-colors">Analytics</Link>
               <Link href="/search" className="hover:text-blue-400 transition-colors">Search</Link>
               <Link href="/jobs" className="hover:text-blue-400 transition-colors">Jobs</Link>
@@ -161,42 +163,6 @@ export default function Home() {
                 Free Trial
               </Link>
             )}
-          </div>
-
-          {/* Tabs */}
-          <div className="flex items-center gap-2 border-b border-white/10">
-            <button
-              onClick={() => {
-                setActiveTab('talent')
-                window.location.hash = '#talent'
-              }}
-              className={`px-6 py-3 text-sm font-medium transition-all relative ${
-                activeTab === 'talent'
-                  ? 'text-blue-400'
-                  : 'text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              Talent
-              {activeTab === 'talent' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-400"></span>
-              )}
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('business')
-                window.location.hash = '#business'
-              }}
-              className={`px-6 py-3 text-sm font-medium transition-all relative ${
-                activeTab === 'business'
-                  ? 'text-blue-400'
-                  : 'text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              Business
-              {activeTab === 'business' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-400"></span>
-              )}
-            </button>
           </div>
         </div>
       </header>

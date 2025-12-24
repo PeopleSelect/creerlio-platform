@@ -2,10 +2,39 @@
 
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 const MapboxMap = dynamic(() => import('../components/MapboxMap'), { ssr: false });
 
 export default function HomePage() {
+  const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const check = async () => {
+      const { data } = await supabase.auth.getSession();
+      setIsAuthenticated(!!data.session?.user?.id);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run-home-auth',hypothesisId:'C',location:'frontend/src/app/page.tsx:check',message:'home(src/app) session check',data:{hasSession:!!data.session?.user?.id,hasEmail:!!data.session?.user?.email},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    };
+    check().catch(() => setIsAuthenticated(false));
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      check().catch(() => setIsAuthenticated(false));
+    });
+    return () => {
+      sub?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run-home-render',hypothesisId:'D',location:'frontend/src/app/page.tsx:buttons',message:'home(src/app) button visibility',data:{isAuthenticated,showsCreateTalent:!isAuthenticated,showsCreateBusiness:!isAuthenticated,showsTalentDashboard:true,showsBusinessDashboard:false},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, [isAuthenticated]);
+
   return (
     <main className='min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white'>
       
@@ -18,8 +47,28 @@ export default function HomePage() {
             <Link href='#talent'>Talent</Link>
             <Link href='#business'>Business</Link>
             <Link href='#search'>Search</Link>
-            <Link href='/login'>Login</Link>
-            <Link href='/register' className='px-4 py-2 rounded bg-blue-500 text-white'>Free Trial</Link>
+            {!isAuthenticated ? (
+              <>
+                <Link href='/login' className='hover:text-blue-400 transition-colors'>Sign in</Link>
+                <Link href='/login?mode=signup&role=talent&redirect=/dashboard/talent' className='px-4 py-2 rounded bg-blue-500 text-white'>
+                  Create Talent account
+                </Link>
+                <Link href='/login?mode=signup&role=business&redirect=/dashboard/business' className='px-4 py-2 rounded bg-green-500 text-white'>
+                  Create Business account
+                </Link>
+              </>
+            ) : (
+              <button
+                type='button'
+                className='hover:text-blue-400 transition-colors'
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  router.refresh();
+                }}
+              >
+                Sign out
+              </button>
+            )}
           </nav>
         </div>
       </header>
@@ -37,12 +86,28 @@ export default function HomePage() {
             location intelligence, and dynamic portfolios.
           </p>
           <div className='flex gap-4'>
-            <Link href='/register' className='px-6 py-3 rounded bg-blue-500 font-semibold'>
-              Get Started
+            <Link href='/search' className='px-6 py-3 rounded bg-blue-500 font-semibold'>
+              Search businesses & jobs
             </Link>
+            {!isAuthenticated ? (
+              <>
+                <Link href='/login/talent?mode=signin&redirect=/dashboard/talent' className='px-6 py-3 rounded border border-white/20'>
+                  Sign in (Talent)
+                </Link>
+                <Link href='/login/business?mode=signin&redirect=/dashboard/business' className='px-6 py-3 rounded border border-white/20'>
+                  Sign in (Business)
+                </Link>
+              </>
+            ) : (
+              <>
             <Link href='/dashboard/talent' className='px-6 py-3 rounded border border-white/20'>
-              View Talent
+                  Talent Dashboard
+                </Link>
+                <Link href='/dashboard/business' className='px-6 py-3 rounded border border-white/20'>
+                  Business Dashboard
             </Link>
+              </>
+            )}
           </div>
         </div>
 

@@ -137,7 +137,29 @@ export default function PortfolioEditor() {
   async function ensureUsersRow(userId: string) {
     // Talent Bank schema FK requires public.users(id) exist with a non-null role.
     try {
-      await supabase.from('users').upsert({ id: userId, role: 'talent', email: null } as any)
+      const candidates: Array<Record<string, any>> = [
+        { id: userId, role: 'talent', email: null },
+        { id: userId, user_type: 'talent', email: null },
+        { id: userId, type: 'talent', email: null },
+        { id: userId, email: null },
+        { id: userId },
+        { user_id: userId, role: 'talent', email: null },
+        { user_id: userId, user_type: 'talent', email: null },
+        { user_id: userId, type: 'talent', email: null },
+        { user_id: userId, email: null },
+        { user_id: userId },
+      ]
+
+      for (const payload of candidates) {
+        const res = await supabase.from('users').upsert(payload as any)
+        if (!res.error) return
+        const msg = String((res.error as any)?.message ?? '')
+        const code = String((res.error as any)?.code ?? '')
+        const isMissingCol = code === 'PGRST204' || /Could not find the .* column/i.test(msg)
+        if (isMissingCol) continue
+        // RLS or other errors: stop spamming retries
+        return
+      }
     } catch {
       // ignore
     }
@@ -823,7 +845,18 @@ export default function PortfolioEditor() {
         code: error?.code ?? null,
         details: error?.details ?? null,
       })
-      alert(error?.message ? `Error saving portfolio: ${error.message}` : 'Error saving portfolio')
+      const msg = String(error?.message ?? '')
+      if (msg.includes('talent_bank_items_user_id_fkey') || msg.toLowerCase().includes('violates foreign key constraint')) {
+        alert(
+          'Error saving portfolio: your database requires a matching row in public.users for this account before writing to talent_bank_items.\n\n' +
+            'Fix:\n' +
+            '- Run Supabase migration `2025122208_users_self_row.sql` (then refresh schema cache)\n' +
+            '- Sign out + sign in again\n' +
+            '- Retry saving the portfolio.'
+        )
+      } else {
+        alert(error?.message ? `Error saving portfolio: ${error.message}` : 'Error saving portfolio')
+      }
       return false
     }
   }

@@ -91,7 +91,27 @@ export default function ResumeUploadPage() {
 
       // Ensure public.users row exists (Talent Bank FK can require it)
       try {
-        await supabase.from('users').upsert({ id: userId, email: null, role: 'talent' } as any)
+        const candidates: Array<Record<string, any>> = [
+          { id: userId, role: 'talent', email: null },
+          { id: userId, user_type: 'talent', email: null },
+          { id: userId, type: 'talent', email: null },
+          { id: userId, email: null },
+          { id: userId },
+          { user_id: userId, role: 'talent', email: null },
+          { user_id: userId, user_type: 'talent', email: null },
+          { user_id: userId, type: 'talent', email: null },
+          { user_id: userId, email: null },
+          { user_id: userId },
+        ]
+        for (const payload of candidates) {
+          const res = await supabase.from('users').upsert(payload as any)
+          if (!res.error) break
+          const msg = String((res.error as any)?.message ?? '')
+          const code = String((res.error as any)?.code ?? '')
+          const isMissingCol = code === 'PGRST204' || /Could not find the .* column/i.test(msg)
+          if (isMissingCol) continue
+          break
+        }
       } catch {
         // ignore
       }
@@ -168,7 +188,18 @@ export default function ResumeUploadPage() {
 
       router.push('/dashboard/talent/bank')
     } catch (e: any) {
-      setError(e?.message ?? 'Upload failed')
+      const msg = String(e?.message ?? 'Upload failed')
+      if (msg.includes('talent_bank_items_user_id_fkey') || msg.toLowerCase().includes('violates foreign key constraint')) {
+        setError(
+          'Upload failed: your database requires a matching row in public.users for this account before writing to talent_bank_items.\n\n' +
+            'Fix:\n' +
+            '- Run Supabase migration `2025122208_users_self_row.sql` (then refresh schema cache)\n' +
+            '- Sign out + sign in again\n' +
+            '- Retry the upload.'
+        )
+      } else {
+        setError(msg)
+      }
     } finally {
       setBusy(false)
     }

@@ -12,3 +12,4 @@ argon2-cffi==23.1.0
 psycopg2-binary
 supabase
 pydantic[email]
+googlemaps

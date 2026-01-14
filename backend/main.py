@@ -102,25 +102,7 @@ app = FastAPI(
 )
 
 
-# CORS middleware handles all requests
-
-
-# Health Check
-@app.get("/")
-async def root():
-    
-    return {"message": "Creerlio Platform API", "status": "healthy"}
-
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint - simple and fast"""
-    return {"status": "healthy", "service": "creerlio-platform"}
-
-
-# ==================== Authentication & User Management ====================
-
-# CORS middleware - simplified to prevent crashes
+# CORS middleware - MUST be registered BEFORE routes
 @app.middleware("http")
 async def add_cors_header(request: Request, call_next):
     # Handle preflight OPTIONS requests

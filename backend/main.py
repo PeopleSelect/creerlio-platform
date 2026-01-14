@@ -124,7 +124,7 @@ async def health_check():
 
 # ==================== Authentication & User Management ====================
 
-# Add CORS headers to ALL responses - WORKAROUND (runs BEFORE route handlers)
+# CORS middleware - simplified to prevent crashes
 @app.middleware("http")
 async def add_cors_header(request: Request, call_next):
     # Handle preflight OPTIONS requests
@@ -134,51 +134,33 @@ async def add_cors_header(request: Request, call_next):
             status_code=200,
             headers={
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                "Access-Control-Allow-Methods": "*",
                 "Access-Control-Allow-Headers": "*",
                 "Access-Control-Max-Age": "3600",
             }
         )
-    # For all other requests, add CORS headers
+    
+    # For all other requests
     try:
         response = await call_next(request)
-        # Safely add CORS headers - check if response has headers attribute
-        if hasattr(response, 'headers'):
-            try:
-                response.headers["access-control-allow-origin"] = "*"
-                response.headers["Access-Control-Allow-Origin"] = "*"
-                response.headers["access-control-allow-methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-                response.headers["access-control-allow-headers"] = "*"
-                response.headers["Access-Control-Allow-Headers"] = "*"
-            except (AttributeError, TypeError):
-                # Response doesn't support header modification, create new response
-                from fastapi.responses import Response
-                content = b""
-                if hasattr(response, 'body'):
-                    content = response.body
-                elif hasattr(response, 'content'):
-                    content = response.content if isinstance(response.content, bytes) else str(response.content).encode()
-                return Response(
-                    content=content,
-                    status_code=response.status_code if hasattr(response, 'status_code') else 200,
-                    headers={
-                        "Access-Control-Allow-Origin": "*",
-                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-                        "Access-Control-Allow-Headers": "*",
-                    },
-                    media_type=getattr(response, 'media_type', 'application/json')
-                )
+        # Only add headers if response supports it
+        if hasattr(response, 'headers') and response.headers is not None:
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "*"
+            response.headers["Access-Control-Allow-Headers"] = "*"
         return response
     except Exception as e:
-        # Even on errors, add CORS headers
+        # Return error with CORS headers
         from fastapi.responses import JSONResponse
+        import traceback
+        print(f"Error in request handler: {e}")
+        print(traceback.format_exc())
         return JSONResponse(
             status_code=500,
-            content={"detail": str(e)},
+            content={"detail": "Internal server error"},
             headers={
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                "Access-Control-Allow-Methods": "*",
                 "Access-Control-Allow-Headers": "*",
             }
         )

@@ -15,9 +15,7 @@ import uvicorn
 from typing import List, Optional
 from dotenv import load_dotenv
 
-# #region agent log
-# Debug logging disabled in production (hardcoded paths removed for Railway compatibility)
-# #endregion
+
 
 from app.models import (
     BusinessProfile,
@@ -51,77 +49,29 @@ import uuid
 load_dotenv()
 
 # Initialize services with error handling
-# #region agent log
-try:
-    with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-        f.write(json.dumps({"location":"main.py:34","message":"Starting service initialization","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-except:
-    pass
-# #endregion
+
 
 try:
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:40","message":"Initializing AIService","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except:
-        pass
-    # #endregion
+    
     ai_service = AIService()
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:45","message":"AIService initialized successfully","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except:
-        pass
-    # #endregion
+    
 except Exception as e:
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:48","message":"AIService initialization failed","data":{"error":str(e),"type":type(e).__name__},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except:
-        pass
-    # #endregion
+    
     print(f"Warning: AIService initialization failed: {e}")
     ai_service = None
 
 try:
     pdf_generator = PDFGenerator() if PDF_GENERATOR_AVAILABLE else None
 except Exception as e:
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:56","message":"PDFGenerator initialization failed","data":{"error":str(e),"type":type(e).__name__},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except:
-        pass
-    # #endregion
+    
     pdf_generator = None
 
 try:
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:62","message":"Initializing MappingService","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except:
-        pass
-    # #endregion
+    
     mapping_service = MappingService()
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:67","message":"MappingService initialized successfully","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except:
-        pass
-    # #endregion
+    
 except Exception as e:
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:70","message":"MappingService initialization failed","data":{"error":str(e),"type":type(e).__name__},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except:
-        pass
-    # #endregion
+    
     print(f"Warning: MappingService initialization failed: {e}")
     mapping_service = None
 
@@ -133,42 +83,8 @@ async def lifespan(app: FastAPI):
     init_db()
     
     # Log all registered routes on startup (after all routes are registered)
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            import json
-            f.write(json.dumps({"location":"main.py:lifespan:entry","message":"Lifespan function started","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"D"})+"\n")
-    except: pass
-    # #endregion
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            import json
-            routes = []
-            for route in app.routes:
-                if hasattr(route, 'path') and hasattr(route, 'methods'):
-                    route_info = {
-                        "path": route.path,
-                        "methods": list(route.methods) if route.methods else [],
-                        "name": getattr(route, 'name', None)
-                    }
-                    # Check if it's a path parameter route
-                    if '{' in route.path:
-                        route_info["hasPathParams"] = True
-                    routes.append(route_info)
-            # Filter to business routes only and sort by path
-            business_routes = sorted([r for r in routes if '/api/business' in r['path']], key=lambda x: x['path'])
-            f.write(json.dumps({"location":"main.py:lifespan","message":"Registered business routes on startup","data":{"businessRoutes":business_routes,"totalBusinessRoutes":len(business_routes),"totalRoutes":len(routes)},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-            # Check specifically for profile/me route
-            profile_me_routes = [r for r in routes if '/api/business/profile/me' in r['path']]
-            f.write(json.dumps({"location":"main.py:lifespan","message":"Profile/me route check","data":{"profileMeRoutes":profile_me_routes,"found":len(profile_me_routes)>0},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except Exception as e:
-        try:
-            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                import json
-                f.write(json.dumps({"location":"main.py:lifespan","message":"Failed to log routes","data":{"error":str(e),"errorType":type(e).__name__},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-        except: pass
-    # #endregion
+    
+    
     
     yield
     # Cleanup if needed
@@ -181,32 +97,14 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
-# #region agent log
-try:
-    with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-        import json
-        f.write(json.dumps({"location":"main.py:175","message":"FastAPI app created","data":{"routeCount":len(app.routes)},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
-except: pass
-# #endregion
+
 
 # Request logging middleware to debug route matching
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            import json
-            f.write(json.dumps({"location":"main.py:middleware","message":"Incoming request","data":{"method":request.method,"path":request.url.path,"query":str(request.query_params)},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except: pass
-    # #endregion
+    
     response = await call_next(request)
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            import json
-            f.write(json.dumps({"location":"main.py:middleware","message":"Request completed","data":{"method":request.method,"path":request.url.path,"status":response.status_code},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except: pass
-    # #endregion
+    
     return response
 
 # CORS MIDDLEWARE REMOVED - Using custom middleware below instead to fix CORS blocking
@@ -215,25 +113,13 @@ async def log_requests(request: Request, call_next):
 # Health Check
 @app.get("/")
 async def root():
-    # #region agent log
-    with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-        f.write(json.dumps({"location":"main.py:63","message":"Root endpoint accessed","data":{},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    # #endregion
+    
     return {"message": "Creerlio Platform API", "status": "healthy"}
 
 
 @app.get("/health")
 async def health_check(request: Request):
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:health_check","message":"Health check endpoint accessed - NEW CODE","data":{"origin":request.headers.get("origin"),"referer":request.headers.get("referer")},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
-    except Exception as e:
-        try:
-            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"main.py:health_check:error","message":"Failed to log health check","data":{"error":str(e)},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
-        except: pass
-    # #endregion
+    
     # MANUAL CORS HEADERS - WORKAROUND TO FIX CORS BLOCKING
     from fastapi.responses import Response
     response = Response(
@@ -293,30 +179,12 @@ async def add_cors_header(request: Request, call_next):
 @app.post("/api/auth/register")
 async def register(request: Request, db=Depends(get_db)):
     """Register a new user - Password completely removed during construction"""
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:199","message":"Register endpoint entry","data":{"method":"POST","path":"/api/auth/register"},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
-    except:
-        pass
-    # #endregion
+    
     try:
         body = await request.json()
-        # #region agent log
-        try:
-            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"main.py:203","message":"Request body parsed","data":{"body_keys":list(body.keys()) if body else None,"has_password":"password" in body if body else False},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
-        except:
-            pass
-        # #endregion
+        
     except Exception as e:
-        # #region agent log
-        try:
-            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"main.py:205","message":"JSON parse error","data":{"error":str(e)},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
-        except:
-            pass
-        # #endregion
+        
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
     
     # Password field completely removed - create clean dict without password
@@ -332,30 +200,12 @@ async def register(request: Request, db=Depends(get_db)):
         clean_body["user_type"] = body["user_type"]
     else:
         clean_body["user_type"] = "talent"
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:220","message":"Clean body created","data":{"clean_body_keys":list(clean_body.keys()),"has_password_in_clean":"password" in clean_body},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
-    except:
-        pass
-    # #endregion
+    
     body = clean_body
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:172","message":"Register endpoint called","data":{"body_keys":list(body.keys()) if body else None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except:
-        pass
-    # #endregion
+    
     try:
         # Password field completely removed - create UserRegister without password
-        # #region agent log
-        try:
-            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"main.py:195","message":"Creating UserRegister model","data":{"email":body.get("email"),"username":body.get("username")},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"C"})+"\n")
-        except:
-            pass
-        # #endregion
+        
         try:
             # Password field completely removed - create UserRegister with only required fields
             # Build dict explicitly to avoid any password field issues
@@ -370,29 +220,11 @@ async def register(request: Request, db=Depends(get_db)):
                 user_data_dict["full_name"] = full_name
             
             # Create UserRegister - password field does not exist in model
-            # #region agent log
-            try:
-                with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                    f.write(json.dumps({"location":"main.py:250","message":"Creating UserRegister model","data":{"user_data_dict":user_data_dict},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
-            except:
-                pass
-            # #endregion
+            
             user_data = UserRegister(**user_data_dict)
-            # #region agent log
-            try:
-                with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                    f.write(json.dumps({"location":"main.py:252","message":"UserRegister model created successfully","data":{"email":user_data.email,"username":user_data.username},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
-            except:
-                pass
-            # #endregion
+            
         except ValidationError as ve:
-            # #region agent log
-            try:
-                with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                    f.write(json.dumps({"location":"main.py:252","message":"UserRegister ValidationError","data":{"errors":ve.errors(),"user_data_dict":user_data_dict},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
-            except:
-                pass
-            # #endregion
+            
             # Format Pydantic validation errors
             error_messages = []
             for error in ve.errors():
@@ -427,35 +259,17 @@ async def login(request: Request, db=Depends(get_db)):
     body = await request.json()
     # Password field completely removed - ignore if present
     body.pop("password", None)
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:210","message":"Login endpoint called","data":{"body_keys":list(body.keys()) if body else None,"email":body.get("email") if body else None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except:
-        pass
-    # #endregion
+    
     
     # Password field completely removed - create UserLogin without password
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:245","message":"Creating UserLogin model","data":{"email":body.get("email")},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"C"})+"\n")
-    except:
-        pass
-    # #endregion
+    
     try:
         # Password field completely removed
         credentials = UserLogin(
             email=body.get("email")
         )
     except ValidationError as ve:
-        # #region agent log
-        try:
-            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                    f.write(json.dumps({"location":"main.py:257","message":"UserLogin ValidationError","data":{"errors":ve.errors(),"email":body.get("email") if body else None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"D"})+"\n")
-        except:
-            pass
-        # #endregion
+        
         # Format Pydantic validation errors
         error_messages = []
         for error in ve.errors():
@@ -464,13 +278,7 @@ async def login(request: Request, db=Depends(get_db)):
             error_messages.append(f"{field}: {msg}")
         raise HTTPException(status_code=422, detail=", ".join(error_messages))
     except Exception as e:
-        # #region agent log
-        try:
-            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"main.py:269","message":"UserLogin model creation failed","data":{"error":str(e),"error_type":type(e).__name__,"email":body.get("email") if body else None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"D"})+"\n")
-        except:
-            pass
-        # #endregion
+        
         raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
     
     user = authenticate_user(db, credentials.email)
@@ -702,36 +510,18 @@ async def create_business(business_data: dict, db=Depends(get_db)):
 # IMPORTANT: /api/business/me routes must come BEFORE /api/business/{business_id} routes
 # to prevent FastAPI from matching "me" as a business_id parameter
 # Route order verification: This route MUST be registered before any /api/business/{business_id} routes
-# #region agent log
-try:
-    with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-        import json
-        f.write(json.dumps({"location":"main.py:570","message":"Defining route /api/business/profile/me","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"C"})+"\n")
-except: pass
-# #endregion
+
 @app.get("/api/business/profile/me", name="get_my_business_profile")
 async def get_my_business_profile(
     email: str = Query(..., description="User email address"),
     db=Depends(get_db)
 ):
     """Get current user's business profile"""
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            import json
-            f.write(json.dumps({"id":"log_"+str(int(time.time()))+"_get_business","timestamp":int(time.time()*1000),"location":"main.py:530","message":"Get business profile entry","data":{"email":email},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except: pass
-    # #endregion
+    
     # Get user by email
     user = get_user_by_email(db, email)
     if not user:
-        # #region agent log
-        try:
-            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                import json
-                f.write(json.dumps({"id":"log_"+str(int(time.time()))+"_no_user_get","timestamp":int(time.time()*1000),"location":"main.py:539","message":"User not found in GET","data":{"email":email},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-        except: pass
-        # #endregion
+        
         raise HTTPException(status_code=404, detail="User not found")
     
     if user.user_type != "business":
@@ -741,23 +531,11 @@ async def get_my_business_profile(
     if user.business_profile_id:
         business = db.query(BusinessProfile).filter(BusinessProfile.id == user.business_profile_id).first()
         if business:
-            # #region agent log
-            try:
-                with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                    import json
-                    f.write(json.dumps({"id":"log_"+str(int(time.time()))+"_found","timestamp":int(time.time()*1000),"location":"main.py:550","message":"Business profile found","data":{"businessId":business.id},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-            except: pass
-            # #endregion
+            
             return business
     
     # Return null if no profile exists
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            import json
-            f.write(json.dumps({"id":"log_"+str(int(time.time()))+"_no_profile","timestamp":int(time.time()*1000),"location":"main.py:555","message":"No business profile exists","data":{"email":email,"hasProfileId":bool(user.business_profile_id)},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except: pass
-    # #endregion
+    
     return None
 
 
@@ -768,43 +546,19 @@ async def update_my_business_profile(
     db=Depends(get_db)
 ):
     """Update current user's business profile"""
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            import json
-            f.write(json.dumps({"id":"log_"+str(int(time.time()))+"_put_business","timestamp":int(time.time()*1000),"location":"main.py:554","message":"Update business profile entry","data":{"email":email},"sessionId":"debug-session","runId":"run1","hypothesisId":"C"})+"\n")
-    except: pass
-    # #endregion
+    
     # Parse request body
     try:
         profile_data = await request.json()
-        # #region agent log
-        try:
-            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                import json
-                f.write(json.dumps({"id":"log_"+str(int(time.time()))+"_parsed","timestamp":int(time.time()*1000),"location":"main.py:562","message":"Request body parsed","data":{"profileDataKeys":list(profile_data.keys()) if isinstance(profile_data,dict) else "not_dict","profileData":profile_data},"sessionId":"debug-session","runId":"run1","hypothesisId":"C"})+"\n")
-        except: pass
-        # #endregion
+        
     except Exception as e:
-        # #region agent log
-        try:
-            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                import json
-                f.write(json.dumps({"id":"log_"+str(int(time.time()))+"_parse_err","timestamp":int(time.time()*1000),"location":"main.py:567","message":"JSON parse error","data":{"error":str(e)},"sessionId":"debug-session","runId":"run1","hypothesisId":"C"})+"\n")
-        except: pass
-        # #endregion
+        
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
     
     # Get user by email
     user = get_user_by_email(db, email)
     if not user:
-        # #region agent log
-        try:
-            with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                import json
-                f.write(json.dumps({"id":"log_"+str(int(time.time()))+"_no_user","timestamp":int(time.time()*1000),"location":"main.py:575","message":"User not found","data":{"email":email},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-        except: pass
-        # #endregion
+        
         raise HTTPException(status_code=404, detail="User not found")
     
     if user.user_type != "business":
@@ -833,13 +587,7 @@ async def update_my_business_profile(
     
     db.commit()
     db.refresh(business)
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            import json
-            f.write(json.dumps({"id":"log_"+str(int(time.time()))+"_success","timestamp":int(time.time()*1000),"location":"main.py:600","message":"Update business profile success","data":{"businessId":business.id if business else None},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except: pass
-    # #endregion
+    
     return {"success": True, "business": business}
 
 
@@ -969,13 +717,7 @@ async def get_public_jobs(
     db=Depends(get_db)
 ):
     """Get published jobs (public endpoint)"""
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:673","message":"get_public_jobs endpoint called","data":{"location":location,"keyword":keyword,"skip":skip,"limit":limit},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except:
-        pass
-    # #endregion
+    
     query = db.query(Job).filter(
         Job.status == "published",
         Job.is_active == True
@@ -995,13 +737,7 @@ async def get_public_jobs(
         )
     
     jobs = query.offset(skip).limit(limit).all()
-    # #region agent log
-    try:
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:702","message":"get_public_jobs returning results","data":{"job_count":len(jobs)},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    except:
-        pass
-    # #endregion
+    
     return {"jobs": jobs, "count": len(jobs)}
 
 
@@ -1595,26 +1331,7 @@ async def upload_talent_bank_files(
             )
         except Exception as e:
             db.rollback()
-            # #region agent log
-            try:
-                with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-                    import json, time as _time
-                    f.write(json.dumps({
-                        "location": "main.py:talent_bank_upload_error",
-                        "message": "Talent Bank upload failed",
-                        "data": {
-                            "filename": getattr(file, "filename", None),
-                            "error": str(e),
-                            "error_type": type(e).__name__
-                        },
-                        "timestamp": int(_time.time() * 1000),
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "TB1"
-                    }) + "\n")
-            except:
-                pass
-            # #endregion
+            
             raise HTTPException(status_code=500, detail=f"Failed to upload file '{file.filename}': {str(e)}")
 
     return {"items": created_items, "count": len(created_items)}
@@ -1873,14 +1590,8 @@ async def delete_account(request: Request):
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", 8000))
-    # #region agent log
-    with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-        f.write(json.dumps({"location":"main.py:407","message":"Server startup configuration","data":{"host":host,"port":port,"env_host":os.getenv("HOST"),"env_port":os.getenv("PORT")},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+"\n")
-    # #endregion
-    # #region agent log
-    with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-        f.write(json.dumps({"location":"main.py:411","message":"Starting uvicorn server","data":{"host":host,"port":port},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-    # #endregion
+    
+    
     try:
         # Use app directly instead of string import to avoid module caching issues
         uvicorn.run(
@@ -1890,10 +1601,7 @@ if __name__ == "__main__":
             reload=False  # Disable reload to ensure routes are registered correctly
         )
     except Exception as e:
-        # #region agent log
-        with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"main.py:420","message":"Server startup failed","data":{"error":str(e),"type":type(e).__name__},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-        # #endregion
+        
         raise
 
 

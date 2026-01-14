@@ -3,10 +3,10 @@ nixPkgs = ["python312"]
 
 [phases.install]
 cmds = [
-  "python -m ensurepip --upgrade",
-  "python -m pip install --upgrade pip",
-  "python -m pip install -r backend/requirements.txt"
+  "python -m venv /opt/venv",
+  "/opt/venv/bin/pip install --upgrade pip",
+  "/opt/venv/bin/pip install -r backend/requirements.txt"
 ]
 
 [start]
-cmd = "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port $PORT"
+cmd = "cd backend && /opt/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port $PORT"

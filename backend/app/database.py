@@ -5,7 +5,7 @@ Supports both PostgreSQL (including Supabase) and SQLite
 """
 
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
 from contextlib import contextmanager
@@ -56,8 +56,8 @@ def get_db():
     """Dependency for getting database session"""
     db = SessionLocal()
     try:
-        # Test connection
-        db.execute("SELECT 1")
+        # Test connection (SQLAlchemy 2.0 syntax)
+        db.execute(text("SELECT 1"))
         yield db
     except Exception as e:
         db.rollback()

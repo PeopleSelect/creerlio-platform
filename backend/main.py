@@ -16,11 +16,7 @@ from typing import List, Optional
 from dotenv import load_dotenv
 
 # #region agent log
-try:
-    with open(r'c:\Users\simon\Projects2025\Creerlio_V2\creerlio-platform\.cursor\debug.log', 'a') as f:
-        f.write(json.dumps({"location":"main.py:20","message":"Module imports starting","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+"\n")
-except:
-    pass
+# Debug logging disabled in production (hardcoded paths removed for Railway compatibility)
 # #endregion
 
 from app.models import (

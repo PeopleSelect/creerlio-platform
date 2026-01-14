@@ -117,20 +117,9 @@ async def root():
 
 
 @app.get("/health")
-async def health_check(request: Request):
-    
-    # MANUAL CORS HEADERS - WORKAROUND TO FIX CORS BLOCKING
-    from fastapi.responses import Response
-    response = Response(
-        content='{"status":"healthy","service":"creerlio-platform"}',
-        media_type="application/json",
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-        }
-    )
-    return response
+async def health_check():
+    """Health check endpoint - simple and fast"""
+    return {"status": "healthy", "service": "creerlio-platform"}
 
 
 # ==================== Authentication & User Management ====================

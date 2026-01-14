@@ -82,12 +82,16 @@ async def lifespan(app: FastAPI):
     # Initialize database (non-blocking - won't crash app if it fails)
     try:
         init_db()
+        print("Database initialization completed")
     except Exception as e:
         print(f"Warning: Database initialization failed during startup: {e}")
+        import traceback
+        print(traceback.format_exc())
     
+    print("Application startup complete")
     yield
     # Cleanup if needed
-    pass
+    print("Application shutdown")
 
 
 app = FastAPI(

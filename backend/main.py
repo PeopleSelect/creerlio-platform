@@ -98,15 +98,7 @@ app = FastAPI(
 )
 
 
-# Request logging middleware to debug route matching
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    
-    response = await call_next(request)
-    
-    return response
-
-# CORS MIDDLEWARE REMOVED - Using custom middleware below instead to fix CORS blocking
+# CORS middleware handles all requests
 
 
 # Health Check

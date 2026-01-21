@@ -1623,7 +1623,7 @@ function PortfolioViewPageInner() {
       )}
 
       <header className="sticky top-0 z-40 backdrop-blur bg-slate-950/70 border-b border-white/10">
-        <div className="max-w-6xl mx-auto px-8 py-4 flex items-center justify-between">
+        <div className="w-full px-6 sm:px-8 py-4 flex items-center justify-between">
           {viewTalentId ? (
             <>
               <Link href="/dashboard/business?tab=connections" className="text-slate-300 hover:text-blue-400">
@@ -1738,7 +1738,7 @@ function PortfolioViewPageInner() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-8 py-10">
+      <main className="w-full px-0 py-10">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />

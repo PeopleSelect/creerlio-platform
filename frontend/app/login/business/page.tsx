@@ -174,7 +174,6 @@ function BusinessLoginPageInner() {
             </Link>
 
             <nav className="hidden lg:flex items-center gap-x-8 text-sm text-white">
-              <Link href="/about" className="hover:text-[#20C997] transition-colors">About</Link>
               <Link href="/#talent" className="hover:text-[#20C997] transition-colors">Talent</Link>
               <Link href="/#business" className="hover:text-[#20C997] transition-colors">Business</Link>
               <Link href="/search" className="hover:text-[#20C997] transition-colors">Search</Link>

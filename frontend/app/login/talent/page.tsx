@@ -312,38 +312,39 @@ function TalentLoginPageInner() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-gray-900">
+    <div className="min-h-screen bg-white">
       {/* Public Header */}
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
+      <header className="sticky top-0 z-50 bg-black border-0">
         <div className="max-w-7xl mx-auto px-8 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-gray-900 hover:text-blue-600 transition-colors">
+            <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-white hover:text-[#20C997] transition-colors">
               Creerlio
             </Link>
 
-            <nav className="hidden lg:flex items-center gap-x-8 text-sm text-gray-600">
-              <Link href="/#talent" className="hover:text-blue-600 transition-colors">Talent</Link>
-              <Link href="/#business" className="hover:text-blue-600 transition-colors">Business</Link>
-              <Link href="/search" className="hover:text-blue-600 transition-colors">Search</Link>
-              <Link href="/jobs" className="hover:text-blue-600 transition-colors">Jobs</Link>
+            <nav className="hidden lg:flex items-center gap-x-8 text-sm text-white">
+              <Link href="/about" className="hover:text-[#20C997] transition-colors">About</Link>
+              <Link href="/#talent" className="hover:text-[#20C997] transition-colors">Talent</Link>
+              <Link href="/#business" className="hover:text-[#20C997] transition-colors">Business</Link>
+              <Link href="/search" className="hover:text-[#20C997] transition-colors">Search</Link>
+              <Link href="/jobs" className="hover:text-[#20C997] transition-colors">Jobs</Link>
             </nav>
 
             <div className="flex gap-3">
               <Link
                 href="/login/talent?mode=signup&redirect=/dashboard/talent"
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+                className="px-4 py-2 rounded-lg bg-[#20C997] hover:bg-[#1DB886] font-semibold text-sm text-white transition-colors"
               >
                 Create Talent Account
               </Link>
               <Link
                 href="/login/business?mode=signup&redirect=/dashboard/business"
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+                className="px-4 py-2 rounded-lg bg-[#20C997] hover:bg-[#1DB886] font-semibold text-sm text-white transition-colors"
               >
                 Create Business Account
               </Link>
               <Link
                 href="/login/talent?mode=signin&redirect=/dashboard/talent"
-                className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+                className="px-5 py-2 rounded-lg bg-[#20C997] hover:bg-[#1DB886] font-semibold text-sm text-white transition-colors"
               >
                 Sign In
               </Link>
@@ -353,17 +354,17 @@ function TalentLoginPageInner() {
       </header>
 
       {/* Login Form Section */}
-      <div className="min-h-[calc(100vh-80px)] bg-white flex items-center justify-center px-6 py-8">
-        <div className="w-full max-w-4xl rounded-xl p-8 border border-gray-200 bg-white shadow-sm">
+      <div className="min-h-[calc(100vh-80px)] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center px-6 py-8">
+        <div className="w-full max-w-4xl dashboard-card rounded-xl p-8 border border-white/10">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-xl font-bold text-gray-900">Create Talent Account</h1>
-            <Link href="/login/business" className="text-gray-600 hover:text-blue-600 transition-colors text-sm">
+            <h1 className="text-xl font-bold text-white">Create Talent Account</h1>
+            <Link href="/login/business" className="text-slate-300 hover:text-green-400 transition-colors text-sm">
               I'm a Business →
             </Link>
           </div>
 
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">{mode === 'signin' ? 'Talent sign in' : 'Create Talent account'}</h1>
-        <p className="text-gray-600 text-sm mb-6">Talent can sign in with email/password or supported providers.</p>
+        <h1 className="text-2xl font-bold text-white mb-2">{mode === 'signin' ? 'Talent sign in' : 'Create Talent account'}</h1>
+        <p className="text-gray-400 text-sm mb-6">Talent can sign in with email/password or supported providers.</p>
         <p className="text-[11px] text-gray-500 mb-4">UI: {UI_VERSION}</p>
 
         {error && (
@@ -375,7 +376,7 @@ function TalentLoginPageInner() {
             type="button"
             disabled={busy}
             onClick={() => oauth('google')}
-            className="px-4 py-2 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold disabled:opacity-60"
+            className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-slate-200 text-sm font-semibold disabled:opacity-60"
           >
             Continue with Google
           </button>
@@ -383,7 +384,7 @@ function TalentLoginPageInner() {
             type="button"
             disabled={busy}
             onClick={() => oauth('apple')}
-            className="px-4 py-2 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold disabled:opacity-60"
+            className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-slate-200 text-sm font-semibold disabled:opacity-60"
           >
             Continue with Apple
           </button>
@@ -398,7 +399,7 @@ function TalentLoginPageInner() {
               setError(null)
             }}
             className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              mode === 'signin' ? 'bg-blue-600 text-white border-blue-600' : 'bg-transparent text-gray-600 border-gray-200 hover:bg-gray-50'
+              mode === 'signin' ? 'bg-blue-500 text-white border-blue-500' : 'bg-transparent text-slate-300 border-white/10 hover:bg-white/5'
             }`}
           >
             Sign in
@@ -411,7 +412,7 @@ function TalentLoginPageInner() {
               setError(null)
             }}
             className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              mode === 'signup' ? 'bg-blue-600 text-white border-blue-600' : 'bg-transparent text-gray-600 border-gray-200 hover:bg-gray-50'
+              mode === 'signup' ? 'bg-blue-500 text-white border-blue-500' : 'bg-transparent text-slate-300 border-white/10 hover:bg-white/5'
             }`}
           >
             Create account
@@ -426,7 +427,7 @@ function TalentLoginPageInner() {
                 type="email"
                 value={resetEmail}
                 onChange={(e) => setResetEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                 style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
                 placeholder="you@example.com"
                 autoComplete="email"
@@ -461,7 +462,7 @@ function TalentLoginPageInner() {
                     type="text"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                     style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
                     placeholder="John"
                     autoComplete="given-name"
@@ -474,7 +475,7 @@ function TalentLoginPageInner() {
                     type="text"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                     style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
                     placeholder="Doe"
                     autoComplete="family-name"
@@ -487,7 +488,7 @@ function TalentLoginPageInner() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                     style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
                     placeholder="you@example.com"
                     autoComplete="email"
@@ -500,7 +501,7 @@ function TalentLoginPageInner() {
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                     style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
                     placeholder="+1 234 567 8900"
                     autoComplete="tel"
@@ -512,7 +513,7 @@ function TalentLoginPageInner() {
                       type="checkbox"
                       checked={enable2FA}
                       onChange={(e) => setEnable2FA(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-200 bg-white text-blue-500 focus:ring-2 focus:ring-blue-500/40"
+                      className="w-4 h-4 rounded border-white/10 bg-slate-900 text-blue-500 focus:ring-2 focus:ring-blue-500/40"
                     />
                     <span className="text-sm font-medium text-gray-300">Enable Two-Factor Authentication</span>
                   </label>
@@ -521,7 +522,7 @@ function TalentLoginPageInner() {
                       type="tel"
                       value={mobile}
                       onChange={(e) => setMobile(e.target.value)}
-                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 mt-2"
+                      className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 mt-2"
                       style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
                       placeholder="Mobile number for 2FA"
                       autoComplete="tel"
@@ -535,7 +536,7 @@ function TalentLoginPageInner() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                     style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
                     placeholder="At least 8 characters"
                     autoComplete="new-password"
@@ -548,7 +549,7 @@ function TalentLoginPageInner() {
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                     style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
                     placeholder="Confirm your password"
                     autoComplete="new-password"
@@ -564,7 +565,7 @@ function TalentLoginPageInner() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                     style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
                     placeholder="you@example.com"
                     autoComplete="email"
@@ -577,7 +578,7 @@ function TalentLoginPageInner() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                     style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
                     placeholder="••••••••"
                     autoComplete="current-password"

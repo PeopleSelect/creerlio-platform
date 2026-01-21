@@ -4,8 +4,7 @@
       "Bash(curl:*)",
       "Bash(netstat:*)",
       "Bash(findstr:*)",
-      "Bash(taskkill:*)",
-      "Bash(npx tsc:*)"
+      "Bash(taskkill:*)"
     ]
   }
 }

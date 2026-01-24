@@ -1,11 +1,12 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import VideoChat from '@/components/VideoChat'
 import dynamic from 'next/dynamic'
+import BusinessDiscoveryMap, {type BusinessFeature, type RouteState, type BusinessDiscoveryMapHandle } from '@/components/BusinessDiscoveryMap'
 
 const SearchMap = dynamic(() => import('@/components/SearchMap'), { ssr: false })
 
@@ -76,6 +77,7 @@ export function TalentDashboardShell({
   const [isLoading, setIsLoading] = useState(true)
   const [talentProfile, setTalentProfile] = useState<any>(null)
   const [applications, setApplications] = useState<any[]>([])
+  const [withdrawingAppId, setWithdrawingAppId] = useState<string | number | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>(forcedTab ?? 'overview')
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>(forcedConnectionMode ?? 'career')
   const [userType, setUserType] = useState<string>('talent')
@@ -172,6 +174,7 @@ export function TalentDashboardShell({
   const [bizResults, setBizResults] = useState<any[]>([])
   const [selectedBusiness, setSelectedBusiness] = useState<any | null>(null)
   const bizSearchTimerRef = useRef<number | null>(null)
+  const mapRef = useRef<BusinessDiscoveryMapHandle>(null)
 
   const [bizConnectionsLoading, setBizConnectionsLoading] = useState(false)
   const [bizConnectionsError, setBizConnectionsError] = useState<string | null>(null)
@@ -193,9 +196,410 @@ export function TalentDashboardShell({
   const [portfolioAvatarUrl, setPortfolioAvatarUrl] = useState<string | null>(null)
 
   const [calendarItems, setCalendarItems] = useState<Array<{ id: string; title: string; dateLabel: string; businessId?: string | null }>>([])
-  const [overviewMarkers, setOverviewMarkers] = useState<Array<{ id: string; lat: number; lng: number; title: string; description?: string; type: 'business' | 'job' }>>([])
-  const [discoverableMarkers, setDiscoverableMarkers] = useState<Array<{ id: string; lat: number; lng: number; title: string; description?: string; type: 'business' | 'job' }>>([])
-  const [overviewCenter, setOverviewCenter] = useState<{ lat: number; lng: number } | null>(null)
+  const [calendarCollapsed, setCalendarCollapsed] = useState(false)
+  
+  // Talent Map state
+  const [talentMapLoading, setTalentMapLoading] = useState(true)
+  const [talentMapActiveStyle, setTalentMapActiveStyle] = useState<'dark' | 'light' | 'satellite' | 'streets'>('dark')
+  const [talentMapFiltersCollapsed, setTalentMapFiltersCollapsed] = useState(false)
+  const [talentMapPanelsCollapsed, setTalentMapPanelsCollapsed] = useState(false)
+  const [talentMapResultsCollapsed, setTalentMapResultsCollapsed] = useState(false)
+  const [talentMapLocQuery, setTalentMapLocQuery] = useState('')
+  const [talentMapLocSuggestions, setTalentMapLocSuggestions] = useState<Array<{ id: string; label: string; lng: number; lat: number }>>([])
+  const [talentMapLocOpen, setTalentMapLocOpen] = useState(false)
+  const [talentMapLocActiveIdx, setTalentMapLocActiveIdx] = useState(0)
+  const [talentMapRadiusKm, setTalentMapRadiusKm] = useState<number>(5)
+  const [talentMapFlyTo, setTalentMapFlyTo] = useState<{ lng: number; lat: number; zoom?: number } | null>(null)
+  const [talentMapSearchCenter, setTalentMapSearchCenter] = useState<{ lng: number; lat: number; label?: string } | null>(null)
+  // Restore search state from sessionStorage on mount
+  const [talentMapShowAllBusinesses, setTalentMapShowAllBusinesses] = useState<boolean>(true)
+  const [talentMapShowAllJobs, setTalentMapShowAllJobs] = useState<boolean>(false)
+  const [talentMapRadiusSearchType, setTalentMapRadiusSearchType] = useState<'jobs' | 'business'>('business') // New: controls what the radius filter searches for
+  const [talentMapResults, setTalentMapResults] = useState<BusinessFeature[]>([])
+  const [talentMapJobResults, setTalentMapJobResults] = useState<any[]>([])
+  
+  // Restore search state from sessionStorage when component mounts
+  useEffect(() => {
+    try {
+      const savedState = sessionStorage.getItem('talentMapSearchState')
+      if (savedState) {
+        const state = JSON.parse(savedState)
+        console.log('[TalentDashboard] Restoring search state:', state)
+        
+        if (state.showAllBusinesses !== undefined) setTalentMapShowAllBusinesses(state.showAllBusinesses)
+        if (state.showAllJobs !== undefined) setTalentMapShowAllJobs(state.showAllJobs)
+        if (state.radiusSearchType) setTalentMapRadiusSearchType(state.radiusSearchType)
+        if (state.radiusKm) setTalentMapRadiusKm(state.radiusKm)
+        if (state.searchCenter) setTalentMapSearchCenter(state.searchCenter)
+        if (state.searchLocation) setTalentMapLocQuery(state.searchLocation)
+        if (state.jobResults && Array.isArray(state.jobResults)) setTalentMapJobResults(state.jobResults)
+        if (state.businessResults && Array.isArray(state.businessResults)) setTalentMapResults(state.businessResults)
+        
+        // Clear the saved state after restoring
+        sessionStorage.removeItem('talentMapSearchState')
+      }
+    } catch (error) {
+      console.error('[TalentDashboard] Error restoring search state:', error)
+    }
+  }, []) // Only run on mount
+  const [talentMapSelectedBusinessId, setTalentMapSelectedBusinessId] = useState<string | null>(null)
+  const [talentMapSelectBusinessId, setTalentMapSelectBusinessId] = useState<string | null>(null)
+  const [talentMapSearchType, setTalentMapSearchType] = useState<'jobs' | 'business'>('jobs')
+  const [talentMapSearchQuery, setTalentMapSearchQuery] = useState('')
+  const [talentMapSearchLocation, setTalentMapSearchLocation] = useState('')
+  const [talentMapSelectedBusiness, setTalentMapSelectedBusiness] = useState<BusinessFeature | null>(null)
+  const [talentMapRouteState, setTalentMapRouteState] = useState<RouteState | null>(null)
+  const [talentMapRouteQuery, setTalentMapRouteQuery] = useState('')
+  const [talentMapCommittedRouteQuery, setTalentMapCommittedRouteQuery] = useState('')
+  const [talentMapRouteSuggestions, setTalentMapRouteSuggestions] = useState<Array<{ id: string; label: string; lng: number; lat: number }>>([])
+  const [talentMapRouteSuggestionsOpen, setTalentMapRouteSuggestionsOpen] = useState(false)
+  const [talentMapRouteActiveIdx, setTalentMapRouteActiveIdx] = useState(0)
+  const talentMapRouteAbortRef = useRef<AbortController | null>(null)
+  
+  // Debounce route query
+  const [talentMapRouteQueryDebounced, setTalentMapRouteQueryDebounced] = useState('')
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setTalentMapRouteQueryDebounced(talentMapRouteQuery)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [talentMapRouteQuery])
+  const [talentMapToggles, setTalentMapToggles] = useState({
+    businesses: true,
+    context: false,
+    schools: false,
+    commute: false,
+    transport: false,
+    shopping: false,
+    property: false,
+  })
+  const [talentMapMapResizeTrigger, setTalentMapMapResizeTrigger] = useState(0)
+  const [talentMapMapFitBounds, setTalentMapMapFitBounds] = useState<[[number, number], [number, number]] | null>(null)
+  const talentMapLocAbortRef = useRef<AbortController | null>(null)
+
+  // Calculate zoom level from radius in km
+  // At zoom ~14, about 1km visible; each zoom level halves visible area
+  const getZoomFromRadius = useCallback((radiusKm: number): number => {
+    // Formula: zoom = 14 - log2(radius)
+    // This gives: 1km→14, 2km→13, 5km→~11.7, 10km→~10.7, 20km→~9.7, 50km→~8.4
+    const zoom = 14 - Math.log2(radiusKm)
+    // Clamp between reasonable bounds
+    return Math.max(7, Math.min(16, zoom))
+  }, [])
+
+  // Re-zoom when radius changes and there's a selected location
+  useEffect(() => {
+    if (talentMapSearchCenter && talentMapSearchCenter.lat && talentMapSearchCenter.lng) {
+      const newZoom = getZoomFromRadius(talentMapRadiusKm)
+      setTalentMapFlyTo({ lng: talentMapSearchCenter.lng, lat: talentMapSearchCenter.lat, zoom: newZoom })
+    }
+  }, [talentMapRadiusKm, talentMapSearchCenter, getZoomFromRadius])
+
+  // Debounce location query
+  const [talentMapLocDebouncedValue, setTalentMapLocDebouncedValue] = useState('')
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setTalentMapLocDebouncedValue(talentMapLocQuery)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [talentMapLocQuery])
+
+  // Fetch location suggestions for Talent Map
+  useEffect(() => {
+    const fetchTalentMapLocSuggestions = async (q: string) => {
+      const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
+      const qq = q.trim()
+      if (!qq || qq.length < 1) {
+        setTalentMapLocSuggestions([])
+        setTalentMapLocActiveIdx(0)
+        return
+      }
+      if (!token) return
+      talentMapLocAbortRef.current?.abort()
+      const ac = new AbortController()
+      talentMapLocAbortRef.current = ac
+      try {
+        let feats: any[] = []
+        if (token) {
+          const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(qq)}.json`)
+          u.searchParams.set('access_token', token)
+          u.searchParams.set('limit', '6')
+          u.searchParams.set('types', 'place,locality,neighborhood,postcode,region')
+          u.searchParams.set('country', 'AU')
+          const res = await fetch(u.toString(), { signal: ac.signal })
+          const json: any = await res.json().catch(() => null)
+          feats = Array.isArray(json?.features) ? json.features : []
+        } else {
+          const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}`, { signal: ac.signal })
+          const json: any = await res.json().catch(() => null)
+          feats = Array.isArray(json?.features) ? json.features : []
+        }
+
+        if (!feats.length) {
+          const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}`, { signal: ac.signal })
+          const json: any = await res.json().catch(() => null)
+          feats = Array.isArray(json?.features) ? json.features : []
+        }
+        const next = feats
+          .map((f: any) => {
+            const id = String(f?.id || '')
+            const label = String(f?.place_name || '').trim()
+            const center = f?.center
+            const lng = Array.isArray(center) ? center[0] : null
+            const lat = Array.isArray(center) ? center[1] : null
+            if (!id || !label || typeof lng !== 'number' || typeof lat !== 'number') return null
+            return { id, label, lng, lat }
+          })
+          .filter(Boolean)
+          .slice(0, 6) as any
+        setTalentMapLocSuggestions(next)
+        setTalentMapLocActiveIdx(0)
+        if (next.length > 0) {
+          setTalentMapLocOpen(true)
+        }
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Error fetching location suggestions:', err)
+        }
+      }
+    }
+
+    if (talentMapLocDebouncedValue.trim().length > 0) {
+      fetchTalentMapLocSuggestions(talentMapLocDebouncedValue)
+    } else {
+      setTalentMapLocSuggestions([])
+    }
+  }, [talentMapLocDebouncedValue])
+
+  // Initialize Talent Map - load user location on mount
+  useEffect(() => {
+    const initTalentMap = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const uid = sessionData?.session?.user?.id
+        if (!uid) return
+
+        const { data: profileData } = await supabase
+          .from('talent_profiles')
+          .select('location, city, state, country, latitude, longitude')
+          .eq('user_id', uid)
+          .maybeSingle()
+
+        if (profileData && profileData.latitude && profileData.longitude) {
+          const locationParts = [profileData.city, profileData.state, profileData.country].filter(Boolean)
+          const locationLabel = locationParts.length > 0 
+            ? locationParts.join(', ')
+            : profileData.location || 'Your location'
+          
+          setTalentMapSearchCenter({
+            lng: profileData.longitude,
+            lat: profileData.latitude,
+            label: locationLabel
+          })
+          // Don't auto-populate location query - let user search manually
+          setTalentMapFlyTo({
+            lng: profileData.longitude,
+            lat: profileData.latitude,
+            zoom: 11
+          })
+        }
+        setTalentMapLoading(false)
+      } catch (err) {
+        console.error('Error initializing Talent Map:', err)
+        setTalentMapLoading(false)
+      }
+    }
+
+    if (activeTab === 'overview') {
+      initTalentMap()
+    }
+  }, [activeTab])
+
+  // Update map resize trigger when panels collapse/expand
+  useEffect(() => {
+    setTalentMapMapResizeTrigger(prev => prev + 1)
+  }, [talentMapPanelsCollapsed])
+
+  // Memoize onResults callback to prevent unnecessary re-renders
+  const handleTalentMapResults = useCallback((items: BusinessFeature[]) => {
+    setTalentMapResults(items)
+  }, [])
+
+  // Fetch jobs when filters change
+  useEffect(() => {
+    const fetchJobs = async () => {
+      // Fetch jobs only when "Show all jobs" is checked
+      const shouldFetchJobs = talentMapShowAllJobs
+      
+      if (!shouldFetchJobs) {
+        setTalentMapJobResults([])
+        return
+      }
+      
+      console.log('[TalentDashboard] Fetching jobs:', {
+        showAllJobs: talentMapShowAllJobs,
+        radiusSearchType: talentMapRadiusSearchType,
+        hasSearchCenter: !!talentMapSearchCenter
+      })
+
+      try {
+        const params = new URLSearchParams()
+        const useRadius = talentMapRadiusSearchType === 'jobs' && !!talentMapSearchCenter
+        if (useRadius && talentMapSearchCenter) {
+          params.set('lat', String(talentMapSearchCenter.lat))
+          params.set('lng', String(talentMapSearchCenter.lng))
+          params.set('radius', String(talentMapRadiusKm))
+        } else {
+          params.set('show_all', '1')
+        }
+
+        const response = await fetch(`/api/map/jobs?${params.toString()}`, {
+          cache: 'no-store',
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          console.error('[TalentDashboard] Failed to fetch jobs:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData,
+            errorMessage: errorData.error,
+            errorCode: errorData.code,
+            errorDetails: errorData.details,
+            errorHint: errorData.hint,
+            fullError: JSON.stringify(errorData, null, 2)
+          })
+          throw new Error(errorData.error || errorData.message || 'Failed to fetch jobs')
+        }
+
+        const data = await response.json()
+        const jobsList = Array.isArray(data?.jobs) ? data.jobs : []
+        console.log('[TalentDashboard] Fetched jobs:', {
+          count: jobsList.length,
+          showAll: talentMapShowAllJobs,
+          hasLocation: !!talentMapSearchCenter,
+          jobs: jobsList.map((j: any) => ({
+            id: j.id,
+            title: j.title,
+            business_name: j.business_name,
+            hasCoords: !!(j.lat && j.lng),
+            lat: j.lat,
+            lng: j.lng,
+            city: j.city,
+            country: j.country,
+            location: j.location
+          })),
+          firstJob: jobsList[0] || null,
+          allJobs: jobsList,
+          rawResponse: data
+        })
+        
+        if (jobsList.length > 0) {
+          console.log('[TalentDashboard] Setting job results, count:', jobsList.length)
+        } else {
+          console.warn('[TalentDashboard] No jobs in jobsList, check API response')
+        }
+        
+        setTalentMapJobResults(jobsList)
+      } catch (error: any) {
+        console.error('[TalentDashboard] Failed to fetch jobs:', {
+          message: error.message,
+          stack: error.stack
+        })
+        setTalentMapJobResults([])
+      }
+    }
+
+    fetchJobs()
+  }, [talentMapShowAllJobs, talentMapSearchCenter, talentMapRadiusKm, talentMapRadiusSearchType])
+
+  // Memoize stable filters object to prevent infinite re-renders
+  const talentMapFilters = useMemo(() => ({ q: '', industries: [] as string[], work: '' }), [])
+
+  // Memoize callback props to prevent re-renders
+  const handleTalentMapToggle = useCallback((next: Partial<typeof talentMapToggles>) => {
+    setTalentMapToggles(prev => ({ ...prev, ...next }))
+  }, [])
+
+  const handleTalentMapSelectedBusinessId = useCallback((id: string | null) => {
+    setTalentMapSelectedBusinessId(id)
+  }, [])
+
+  // Handle search
+  const handleTalentMapSearch = useCallback(() => {
+    // Navigate to search page with query params
+    const params = new URLSearchParams()
+    if (talentMapSearchQuery) params.set('searchQuery', talentMapSearchQuery)
+    if (talentMapSearchLocation) params.set('location', talentMapSearchLocation)
+    params.set('searchType', talentMapSearchType)
+    router.push(`/search?${params.toString()}`)
+  }, [talentMapSearchQuery, talentMapSearchLocation, talentMapSearchType, router])
+
+  // Australia bounds constant
+  const AU_BOUNDS: [[number, number], [number, number]] = [
+    [113.0, -44.0], // Southwest corner
+    [154.0, -10.0]  // Northeast corner
+  ]
+
+  // Set map fit bounds when show all businesses is enabled
+  useEffect(() => {
+    if (talentMapShowAllBusinesses && !talentMapSearchCenter) {
+      setTalentMapMapFitBounds(AU_BOUNDS)
+    } else {
+      setTalentMapMapFitBounds(null)
+    }
+  }, [talentMapShowAllBusinesses, talentMapSearchCenter])
+
+  // Fetch route suggestions
+  useEffect(() => {
+    const fetchTalentMapRouteSuggestions = async (q: string) => {
+      const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
+      const qq = q.trim()
+      if (!qq || qq.length < 2) {
+        setTalentMapRouteSuggestions([])
+        setTalentMapRouteActiveIdx(0)
+        return
+      }
+      if (!token) return
+      talentMapRouteAbortRef.current?.abort()
+      const ac = new AbortController()
+      talentMapRouteAbortRef.current = ac
+      try {
+        const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(qq)}.json`)
+        u.searchParams.set('access_token', token)
+        u.searchParams.set('limit', '6')
+        u.searchParams.set('types', 'address,place,locality,neighborhood,postcode,region')
+        u.searchParams.set('country', 'AU')
+        const res = await fetch(u.toString(), { signal: ac.signal })
+        const json: any = await res.json().catch(() => null)
+        const feats = Array.isArray(json?.features) ? json.features : []
+        const next = feats
+          .map((f: any) => {
+            const id = String(f?.id || '')
+            const label = String(f?.place_name || '').trim()
+            const center = f?.center
+            const lng = Array.isArray(center) ? center[0] : null
+            const lat = Array.isArray(center) ? center[1] : null
+            if (!id || !label || typeof lng !== 'number' || typeof lat !== 'number') return null
+            return { id, label, lng, lat }
+          })
+          .filter(Boolean)
+          .slice(0, 6) as any
+        setTalentMapRouteSuggestions(next)
+        setTalentMapRouteActiveIdx(0)
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Error fetching route suggestions:', err)
+        }
+      }
+    }
+
+    if (talentMapRouteSuggestionsOpen && talentMapRouteQueryDebounced.trim().length >= 2) {
+      fetchTalentMapRouteSuggestions(talentMapRouteQueryDebounced)
+    } else {
+      setTalentMapRouteSuggestions([])
+    }
+  }, [talentMapRouteQueryDebounced, talentMapRouteSuggestionsOpen])
 
   const isCommercialRequest = (r: any) => !Array.isArray(r?.selected_sections) || r.selected_sections.length === 0
   const careerRequests = connRequests.filter((r) => !isCommercialRequest(r))
@@ -310,8 +714,104 @@ export function TalentDashboardShell({
           }
         }
 
-        // Legacy "applications" are optional; keep empty unless table exists and user has rows.
-        setApplications([])
+        // Fetch job applications for this user
+        try {
+          // Get talent profile ID - applications table uses talent_profile_id, not user_id
+          const talentProfileId = tpRes.data?.id
+          if (!talentProfileId) {
+            console.log('[TalentDashboard] No talent profile ID, skipping applications fetch')
+            setApplications([])
+          } else {
+            // Fetch applications first, then fetch jobs separately to avoid relationship ambiguity
+            const { data: appsData, error: appsError } = await supabase
+              .from('applications')
+              .select('id, job_id, status, cover_letter, created_at')
+              .eq('talent_profile_id', talentProfileId)
+              .order('created_at', { ascending: false })
+            
+            if (!appsError && appsData && appsData.length > 0) {
+                // Fetch jobs separately to avoid relationship ambiguity
+                const jobIds = appsData.map((app: any) => app.job_id).filter(Boolean)
+                
+                if (jobIds.length > 0) {
+                  const { data: jobsData } = await supabase
+                    .from('jobs')
+                    .select('id, title, description, location, city, country, employment_type, business_profile_id')
+                    .in('id', jobIds)
+                  
+                  // Create a map of job data
+                  const jobMap = new Map()
+                  if (jobsData) {
+                    jobsData.forEach((job: any) => {
+                      jobMap.set(String(job.id), job)
+                    })
+                  }
+                  
+                  // Fetch business profiles for the jobs
+                  const businessIds = new Set<string>()
+                  jobsData?.forEach((job: any) => {
+                    if (job.business_profile_id) {
+                      businessIds.add(String(job.business_profile_id))
+                    }
+                  })
+                  
+                  let businessMap = new Map()
+                  if (businessIds.size > 0) {
+                    const { data: businesses } = await supabase
+                      .from('business_profiles')
+                      .select('id, name, business_name')
+                      .in('id', Array.from(businessIds))
+                    
+                    if (businesses) {
+                      businesses.forEach((b: any) => {
+                        businessMap.set(String(b.id), b)
+                      })
+                    }
+                  }
+                  
+                  // Combine applications with job and business data
+                  const appsWithDetails = appsData.map((app: any) => {
+                    const job = jobMap.get(String(app.job_id))
+                    const business = job?.business_profile_id ? businessMap.get(String(job.business_profile_id)) : null
+                    
+                    return {
+                      ...app,
+                      jobs: job ? {
+                        ...job,
+                        business_profiles: business || null
+                      } : null
+                    }
+                  })
+                  
+                  setApplications(appsWithDetails)
+                } else {
+                  setApplications(appsData)
+                }
+            } else if (appsError) {
+              // Table might not exist or RLS might block - try simpler query
+              console.log('[TalentDashboard] Could not fetch applications with joins:', appsError.message)
+              
+              // Fallback: try without joins
+              const { data: simpleData, error: simpleError } = await supabase
+                .from('applications')
+                .select('id, job_id, status, cover_letter, created_at')
+                .eq('talent_profile_id', talentProfileId)
+                .order('created_at', { ascending: false })
+              
+              if (!simpleError && simpleData) {
+                setApplications(simpleData)
+              } else {
+                console.log('[TalentDashboard] Could not fetch applications:', simpleError?.message || 'Unknown error')
+                setApplications([])
+              }
+            } else {
+              setApplications([])
+            }
+          }
+        } catch (appsErr: any) {
+          console.log('[TalentDashboard] Error fetching applications:', appsErr)
+          setApplications([])
+        }
       } finally {
         if (!cancelled) setIsLoading(false)
       }
@@ -323,6 +823,106 @@ export function TalentDashboardShell({
       cancelled = true
     }
   }, [router])
+
+  // Fetch applications when Applications tab is active
+  useEffect(() => {
+    if (activeTab === 'applications' && talentProfile?.id) {
+      const fetchApplications = async () => {
+        try {
+          // Fetch applications first, then fetch jobs separately to avoid relationship ambiguity
+          const { data: appsData, error: appsError } = await supabase
+            .from('applications')
+            .select('id, job_id, status, cover_letter, created_at')
+            .eq('talent_profile_id', talentProfile.id)
+            .order('created_at', { ascending: false })
+          
+          if (!appsError && appsData && appsData.length > 0) {
+            // Fetch jobs separately to avoid relationship ambiguity
+            const jobIds = appsData.map((app: any) => app.job_id).filter(Boolean)
+            
+            if (jobIds.length > 0) {
+              const { data: jobsData } = await supabase
+                .from('jobs')
+                .select('id, title, description, location, city, country, employment_type, business_profile_id')
+                .in('id', jobIds)
+              
+              // Create a map of job data
+              const jobMap = new Map()
+              if (jobsData) {
+                jobsData.forEach((job: any) => {
+                  jobMap.set(String(job.id), job)
+                })
+              }
+              
+              // Fetch business profiles for the jobs
+              const businessIds = new Set<string>()
+              jobsData?.forEach((job: any) => {
+                if (job.business_profile_id) {
+                  businessIds.add(String(job.business_profile_id))
+                }
+              })
+              
+              let businessMap = new Map()
+              if (businessIds.size > 0) {
+                const { data: businesses } = await supabase
+                  .from('business_profiles')
+                  .select('id, name, business_name')
+                  .in('id', Array.from(businessIds))
+                
+                if (businesses) {
+                  businesses.forEach((b: any) => {
+                    businessMap.set(String(b.id), b)
+                  })
+                }
+              }
+              
+              // Combine applications with job and business data
+              const appsWithDetails = appsData.map((app: any) => {
+                const job = jobMap.get(String(app.job_id))
+                const business = job?.business_profile_id ? businessMap.get(String(job.business_profile_id)) : null
+                
+                return {
+                  ...app,
+                  jobs: job ? {
+                    ...job,
+                    business_profiles: business || null
+                  } : null
+                }
+              })
+              
+              setApplications(appsWithDetails)
+            } else {
+              setApplications(appsData)
+            }
+          } else if (appsError) {
+            // Table might not exist or RLS might block - try simpler query
+            console.log('[TalentDashboard] Could not fetch applications with joins:', appsError.message)
+            
+            // Fallback: try without joins
+            const { data: simpleData, error: simpleError } = await supabase
+              .from('applications')
+              .select('id, job_id, status, cover_letter, created_at')
+              .eq('talent_profile_id', talentProfile.id)
+              .order('created_at', { ascending: false })
+            
+            if (!simpleError && simpleData) {
+              setApplications(simpleData)
+            } else {
+              console.log('[TalentDashboard] Could not fetch applications:', simpleError?.message || 'Unknown error')
+              setApplications([])
+            }
+          } else {
+            setApplications([])
+          }
+        } catch (appsErr: any) {
+          console.log('[TalentDashboard] Error fetching applications:', appsErr)
+          setApplications([])
+        }
+      }
+      
+      fetchApplications()
+    }
+  }, [activeTab, talentProfile?.id])
 
   useEffect(() => {
     if (!user?.id || !talentProfile?.id || intentLoaded) return
@@ -565,89 +1165,7 @@ export function TalentDashboardShell({
     }
   }
 
-  useEffect(() => {
-    if (activeTab !== 'overview') return
-    if (!connAccepted.length) {
-      setOverviewMarkers([])
-      return
-    }
-    let cancelled = false
-    ;(async () => {
-      try {
-        const businessIds = connAccepted.map((r) => r.business_id).filter(Boolean)
-        if (!businessIds.length) return
-        const res = await supabase
-          .from('business_profiles')
-          .select('id,business_name,name,latitude,longitude,city,state')
-          .in('id', businessIds)
-        if (res.error || !res.data) return
 
-        const connectedMarkers = res.data
-          .filter((b: any) => b.latitude != null && b.longitude != null)
-          .map((b: any) => ({
-            id: String(b.id),
-            lat: Number(b.latitude),
-            lng: Number(b.longitude),
-            title: b.business_name || b.name || 'Business',
-            description: [b.city, b.state].filter(Boolean).join(', ') || 'Connected business',
-            type: 'job' as const,
-          }))
-
-        if (!cancelled) {
-          setOverviewMarkers(connectedMarkers)
-          if (connectedMarkers.length) {
-            setOverviewCenter({ lat: connectedMarkers[0].lat, lng: connectedMarkers[0].lng })
-          }
-        }
-      } catch {
-        // silent
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [activeTab, connAccepted])
-
-  useEffect(() => {
-    if (activeTab !== 'overview') return
-    let cancelled = false
-    ;(async () => {
-      try {
-        const center = overviewCenter || (talentProfile?.latitude && talentProfile?.longitude
-          ? { lat: talentProfile.latitude, lng: talentProfile.longitude }
-          : null)
-        if (!center) return
-        const params = new URLSearchParams()
-        params.set('show_all', '1')
-        params.set('lat', String(center.lat))
-        params.set('lng', String(center.lng))
-        params.set('radius', '25')
-        const res = await fetch(`/api/map/businesses?${params.toString()}`)
-        const json = await res.json().catch(() => ({}))
-        const businesses = Array.isArray(json?.businesses) ? json.businesses : []
-        const connectedIds = new Set(overviewMarkers.map((m) => m.id))
-        const nearby = businesses
-          .filter((b: any) => b?.lat != null && b?.lng != null && !connectedIds.has(String(b.id)))
-          .slice(0, 40)
-          .map((b: any) => ({
-            id: String(b.id),
-            lat: Number(b.lat),
-            lng: Number(b.lng),
-            title: b.name || 'Business',
-            description: [b.city, b.state].filter(Boolean).join(', ') || 'Discoverable business',
-            type: 'business' as const,
-          }))
-        if (!cancelled) {
-          setDiscoverableMarkers(nearby)
-        }
-      } catch {
-        // silent
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [activeTab, overviewCenter, overviewMarkers, talentProfile])
 
   async function cancelConnectionRequest(requestId: string) {
     if (!confirm('Are you sure you want to cancel this connection request? This action cannot be undone.')) {
@@ -1742,12 +2260,13 @@ export function TalentDashboardShell({
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="container mx-auto px-6 py-4 flex items-center justify-between border-b border-gray-200">
+      <header className="container mx-auto px-6 py-3 flex items-center justify-between border-b border-gray-200">
         <Link href="/" className="flex items-center space-x-2">
           <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-xl">C</span>
           </div>
           <span className="text-gray-900 text-2xl font-bold">Creerlio</span>
+          <span className="text-gray-900 text-lg font-semibold ml-10">Talent Dashboard</span>
         </Link>
         
         <div className="flex items-center space-x-4">
@@ -1768,11 +2287,7 @@ export function TalentDashboardShell({
       </header>
 
       {/* Dashboard Content */}
-      <div className="container mx-auto px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Talent Dashboard</h1>
-          <p className="text-gray-600">Manage your profile, portfolio, and job applications</p>
-        </div>
+      <div className="container mx-auto px-6 py-6">
 
         {/* Tabs */}
         <div className="mb-8 border-b border-gray-200">
@@ -1807,16 +2322,22 @@ export function TalentDashboardShell({
               </button>
             ))}
             <Link
+              href="/search"
+              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
+            >
+              Search ↗
+            </Link>
+            <Link
+              href="/dashboard/talent/calendar"
+              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
+            >
+              Calendar ↗
+            </Link>
+            <Link
               href="/dashboard/talent/bank"
               className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
             >
               Talent Bank ↗
-            </Link>
-            <Link
-              href="/talent-map"
-              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
-            >
-              Talent Map ↗
             </Link>
             <Link
               href="/portfolio/templates"
@@ -1840,212 +2361,757 @@ export function TalentDashboardShell({
         {/* Tab Content */}
         {activeTab === 'overview' && (
           <>
-            <div className="grid md:grid-cols-3 gap-6 mb-8">
-              {/* Calendar Card */}
-              <div className="dashboard-card rounded-xl p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Calendar</h2>
-                {calendarItems.length ? (
-                  <div className="space-y-3">
-                    {calendarItems.map((item) => (
+            {/* Talent Map */}
+            <div className="mb-8">
+              <div className="flex h-[calc(100vh-12rem)] gap-4 relative">
+                {/* LEFT SIDEBAR: Filters */}
+                <aside className={`${talentMapFiltersCollapsed ? 'w-16' : 'w-80'} flex-shrink-0 overflow-y-auto z-20 transition-all duration-300`}>
+                  <div className="rounded-xl p-4 border border-gray-200 bg-white h-full relative">
+                    {/* Collapse/Expand Button */}
                       <button
-                        key={item.id}
                         type="button"
-                        onClick={() => {
-                          setActiveTab('connections')
-                          setConnectionMode('business')
-                          const match = connAccepted.find((r) => String(r.id) === String(item.id))
-                          if (match) setSelectedRequest(match)
-                          emitDebugLog({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H13',location:'dashboard/talent/page.tsx:calendar',message:'calendar item click',data:{id:item.id},timestamp:Date.now()})
-                        }}
-                        className="w-full text-left border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="text-sm font-semibold text-gray-900">{item.title}</div>
-                        <div className="text-xs text-gray-600">{item.dateLabel}</div>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-sm text-gray-600">
-                    No confirmed bookings yet. Interactions will appear here once confirmed.
-                  </div>
-                )}
-              </div>
-
-              {/* Quick Actions */}
-              <div className="dashboard-card rounded-xl p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
-                <div className="space-y-3">
-                  <Link
-                    href="/resume/upload"
-                    className="block px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-600 hover:bg-blue-100 transition-colors"
-                  >
-                    Upload Resume
-                  </Link>
-                  <Link
-                    href="/dashboard/talent/bank"
-                    className="block px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-600 hover:bg-blue-100 transition-colors"
-                  >
-                    Talent Bank
-                  </Link>
-                  <Link
-                    href="/portfolio"
-                    className="block px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-600 hover:bg-blue-100 transition-colors"
-                  >
-                    Edit Portfolio
-                  </Link>
-                  <Link
-                    href="/portfolio/view"
-                    className="block px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
-                  >
-                    View Portfolio
-                  </Link>
-                  <Link
-                    href="/search"
-                    className="block px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-600 hover:bg-blue-100 transition-colors"
-                  >
-                    Search Businesses & Jobs
-                  </Link>
-                </div>
-              </div>
-
-              {/* Map */}
-              <div className="dashboard-card rounded-xl p-0 overflow-hidden" style={{ height: '320px' }}>
-                {typeof window !== 'undefined' && (overviewMarkers.length || discoverableMarkers.length) ? (
-                  <SearchMap
-                    markers={[...overviewMarkers, ...discoverableMarkers]}
-                    center={overviewCenter ?? undefined}
-                    zoom={11}
-                    className="w-full h-full"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-500">
-                    <div className="text-center">
-                      <p className="text-sm">Map loading…</p>
-                      <p className="text-xs">Connected and nearby businesses will appear here.</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Talent Profile Section */}
-            {talentProfile ? (
-              <div className="dashboard-card rounded-xl p-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Talent Profile</h2>
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Skills</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {talentProfile.skills?.map((skill: string, idx: number) => (
-                        <span key={idx} className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm border border-blue-200">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Location</h3>
-                    <p className="text-gray-700">{talentProfile.location || 'Not set'}</p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-            <div className="space-y-6">
-              <div className="dashboard-card rounded-xl p-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Create Your Talent Profile</h2>
-                <p className="text-gray-600 mb-4">Complete your profile to start matching with opportunities</p>
-                <Link
-                  href="/portfolio"
-                  className="inline-block px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                >
-                  Create Profile
-                </Link>
-              </div>
-            </div>
-            )}
-
-            {/* Saved Templates Section */}
-            <div className="dashboard-card rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">Saved Templates</h2>
-                <Link
-                  href="/portfolio/templates"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                >
-                  Browse Templates
-                </Link>
-              </div>
-              {savedTemplatesLoading ? (
-                <p className="text-gray-600">Loading saved templates...</p>
-              ) : savedTemplates.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-600 mb-4">No saved template configurations yet.</p>
-                  <p className="text-gray-500 text-sm mb-4">
-                    Edit a template and save it with a name to access it quickly here.
-                  </p>
-                  <Link
-                    href="/portfolio/templates"
-                    className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Go to Templates
-                  </Link>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {savedTemplates.map((template) => (
-                    <div
-                      key={template.id}
-                      className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                      onClick={() => setTalentMapFiltersCollapsed(!talentMapFiltersCollapsed)}
+                      className="absolute top-4 right-4 p-2 rounded-lg bg-gray-100 border border-gray-200 text-gray-600 hover:bg-gray-200 transition-colors z-10"
+                      title={talentMapFiltersCollapsed ? 'Expand filters' : 'Collapse filters'}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <h3 className="text-gray-900 font-semibold">{template.name}</h3>
-                          <p className="text-gray-600 text-sm mt-1">
-                            Template: {template.template_id}
-                          </p>
-                          <p className="text-gray-500 text-xs mt-1">
-                            Updated: {new Date(template.updated_at).toLocaleDateString()}
-                          </p>
+                      <svg
+                        className={`w-4 h-4 transition-transform duration-300 ${talentMapFiltersCollapsed ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                      </button>
+
+                    {talentMapFiltersCollapsed && (
+                      <div className="flex flex-col items-center justify-center h-full">
+                        <div className="text-gray-900 font-semibold text-sm whitespace-nowrap" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                          FILTERS
+                  </div>
+                  </div>
+                )}
+
+                    {!talentMapFiltersCollapsed && (
+                      <>
+                        <div className="mb-1">
+                          <div className="text-gray-900 font-semibold text-sm">Filters</div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Link
-                            href={`/portfolio/template/${template.template_id}?load=${template.id}`}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                          >
-                            Load
-                          </Link>
+                        <div className="text-xs text-gray-500 mb-5">Filters update the map in real time. No page reloads.</div>
+
+                        <div className="space-y-2">
+                          <div className="rounded-xl border border-gray-200 bg-gray-50 p-2">
+                            <label className="flex items-start gap-3 text-sm text-gray-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5 accent-blue-500"
+                                checked={talentMapShowAllBusinesses}
+                                onChange={(e) => {
+                                  const nextChecked = e.target.checked
+                                  setTalentMapShowAllBusinesses(nextChecked)
+                                  if (nextChecked) {
+                                    setTalentMapMapFitBounds(AU_BOUNDS)
+                                  } else if (!talentMapShowAllJobs) {
+                                    // Clear business results if neither checkbox is checked
+                                    setTalentMapResults([])
+                                  }
+                                }}
+                              />
+                              <span className="leading-snug">
+                                <span className="font-semibold text-gray-900">Show all businesses in Creerlio</span>
+                              </span>
+                            </label>
+                          </div>
+                          <div className="rounded-xl border border-gray-200 bg-gray-50 p-2">
+                            <label className="flex items-start gap-3 text-sm text-gray-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5 accent-blue-500"
+                                checked={talentMapShowAllJobs}
+                                onChange={(e) => {
+                                  const nextChecked = e.target.checked
+                                  setTalentMapShowAllJobs(nextChecked)
+                                  if (nextChecked) {
+                                    setTalentMapMapFitBounds(AU_BOUNDS)
+                                  } else if (!talentMapShowAllBusinesses) {
+                                    // Clear job results if neither checkbox is checked
+                                    setTalentMapJobResults([])
+                                  }
+                                }}
+                              />
+                              <span className="leading-snug">
+                                <span className="font-semibold text-gray-900">Show all jobs in Creerlio</span>
+                              </span>
+                            </label>
+                          </div>
+                          
+                          {/* Show Jobs or Show Business filter for radius search */}
+                          <div className="rounded-xl border border-gray-200 bg-gray-50 p-2">
+                            <div className="text-sm font-medium text-gray-700 mb-1">Search within radius:</div>
+                            <div className="space-y-1">
+                              <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="radiusSearchType"
+                                  className="accent-blue-500"
+                                  checked={talentMapRadiusSearchType === 'business'}
+                                  onChange={() => setTalentMapRadiusSearchType('business')}
+                                />
+                                <span className="leading-snug">
+                                  <span className="font-semibold text-gray-900">Show Business</span>
+                                </span>
+                              </label>
+                              <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="radiusSearchType"
+                                  className="accent-blue-500"
+                                  checked={talentMapRadiusSearchType === 'jobs'}
+                                  onChange={() => setTalentMapRadiusSearchType('jobs')}
+                                />
+                                <span className="leading-snug">
+                                  <span className="font-semibold text-gray-900">Show Jobs</span>
+                                </span>
+                              </label>
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-0">
+                              Within
+                              <input
+                                type="range"
+                                min="1"
+                                max="100"
+                                value={talentMapRadiusKm}
+                                onChange={(e) => setTalentMapRadiusKm(Number(e.target.value))}
+                                className="mx-2 w-24 align-middle"
+                              />
+                              <span className="font-semibold text-gray-900">{talentMapRadiusKm} km</span> of…
+                            </label>
+                            <div className="relative">
+                              <input
+                                value={talentMapLocQuery}
+                                onChange={(e) => {
+                                  const newValue = e.target.value
+                                  setTalentMapLocQuery(newValue)
+                                  if (newValue.trim().length > 0) {
+                                    setTalentMapLocOpen(true)
+                                  } else {
+                                    setTalentMapLocOpen(false)
+                                    setTalentMapLocSuggestions([])
+                                  }
+                                }}
+                                onFocus={() => {
+                                  if (talentMapLocQuery.trim().length > 0 && talentMapLocSuggestions.length > 0) {
+                                    setTalentMapLocOpen(true)
+                                  }
+                                }}
+                                onBlur={() => setTimeout(() => setTalentMapLocOpen(false), 200)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape') {
+                                    setTalentMapLocOpen(false)
+                                    return
+                                  }
+                                  if (!talentMapLocOpen || !talentMapLocSuggestions.length) return
+                                  if (e.key === 'ArrowDown') {
+                                    e.preventDefault()
+                                    setTalentMapLocActiveIdx((i) => Math.min(talentMapLocSuggestions.length - 1, i + 1))
+                                    return
+                                  }
+                                  if (e.key === 'ArrowUp') {
+                                    e.preventDefault()
+                                    setTalentMapLocActiveIdx((i) => Math.max(0, i - 1))
+                                    return
+                                  }
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    const pick = talentMapLocSuggestions[talentMapLocActiveIdx]
+                                    if (pick) {
+                                      setTalentMapLocQuery(pick.label)
+                                      setTalentMapSearchCenter({ lng: pick.lng, lat: pick.lat, label: pick.label })
+                                      setTalentMapLocOpen(false)
+                                      setTalentMapFlyTo({ lng: pick.lng, lat: pick.lat, zoom: getZoomFromRadius(talentMapRadiusKm) })
+                                    }
+                                  }
+                                }}
+                                placeholder="Search location..."
+                                className="w-full px-3 py-2 pr-8 bg-white text-gray-900 rounded-lg text-sm border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                role="combobox"
+                                aria-autocomplete="list"
+                                aria-expanded={talentMapLocOpen}
+                              />
+                              {talentMapLocQuery && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setTalentMapLocQuery('')
+                                    setTalentMapSearchCenter(null)
+                                    setTalentMapLocOpen(false)
+                                    setTalentMapLocSuggestions([])
+                                  }}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                                  title="Clear"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              )}
+                              {talentMapLocOpen && talentMapLocSuggestions.length > 0 && (
+                                <div className="absolute left-0 right-0 mt-1.5 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden z-20">
+                                  {talentMapLocSuggestions.map((s, idx) => (
+                                    <button
+                                      key={s.id}
+                                      type="button"
+                                      className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                                        idx === talentMapLocActiveIdx ? 'bg-blue-50 text-blue-900' : 'bg-white text-gray-900 hover:bg-gray-50'
+                                      }`}
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={() => {
+                                        setTalentMapLocQuery(s.label)
+                                        setTalentMapSearchCenter({ lng: s.lng, lat: s.lat, label: s.label })
+                                        setTalentMapLocOpen(false)
+                                        setTalentMapFlyTo({ lng: s.lng, lat: s.lat, zoom: getZoomFromRadius(talentMapRadiusKm) })
+                                      }}
+                                      role="option"
+                                      aria-selected={idx === talentMapLocActiveIdx}
+                                    >
+                                      {s.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                  {/* Results Section */}
+                  <div className="mt-6 pt-6 border-t border-gray-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-gray-900 font-semibold text-sm">Results</div>
+                      <div className="text-xs text-gray-500">
+                        {talentMapShowAllJobs && !talentMapShowAllBusinesses 
+                          ? talentMapJobResults.length 
+                          : !talentMapShowAllJobs && talentMapShowAllBusinesses
+                          ? talentMapResults.length
+                          : talentMapResults.length + talentMapJobResults.length
+                        } found
+                      </div>
+                    </div>
+                    {(() => {
+                      // Show only jobs if "Show all jobs" is checked and "Show all businesses" is not
+                      const showOnlyJobs = talentMapShowAllJobs && !talentMapShowAllBusinesses
+                      // Show only businesses if "Show all businesses" is checked and "Show all jobs" is not
+                      const showOnlyBusinesses = talentMapShowAllBusinesses && !talentMapShowAllJobs
+                      // Show both if both are checked
+                      const showBoth = talentMapShowAllJobs && talentMapShowAllBusinesses
+                      const showNone = !talentMapShowAllJobs && !talentMapShowAllBusinesses
+                      
+                      const hasResults = showNone
+                        ? false
+                        : showOnlyJobs 
+                        ? talentMapJobResults.length > 0
+                        : showOnlyBusinesses
+                        ? talentMapResults.length > 0
+                        : talentMapResults.length > 0 || talentMapJobResults.length > 0
+                      
+                      if (!hasResults) {
+                        return (
+                          <div className="text-center py-4 text-gray-400 text-xs">
+                            No results found
+                          </div>
+                        )
+                      }
+                      
+                      return (
+                        <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                          {/* Businesses - only show if not showing only jobs */}
+                          {!showOnlyJobs && talentMapResults.map((business: BusinessFeature, idx: number) => {
+                          const bizId = business?.properties?.id || business?.id || `biz-${idx}`
+                          
+                          // Debug: Log the business data structure (only log first business once)
+                          if (idx === 0) {
+                            const debugKey = '__talent_dashboard_business_debug_logged'
+                            if (!(window as any)[debugKey]) {
+                              (window as any)[debugKey] = true
+                              console.log('[TalentDashboard] First business in results:', {
+                                id: bizId,
+                                hasProperties: !!business?.properties,
+                                name: business?.properties?.name,
+                                nameValue: String(business?.properties?.name || 'MISSING'),
+                                propertiesKeys: business?.properties ? Object.keys(business.properties) : [],
+                                fullProperties: business?.properties
+                              })
+                            }
+                          }
+                          
+                          // Try multiple ways to get the business name - check all possible locations
+                          let bizName = 'Unknown Business'
+                          if (business?.properties?.name) {
+                            const trimmed = String(business.properties.name).trim()
+                            if (trimmed) bizName = trimmed
+                          } else if (business?.name) {
+                            const trimmed = String(business.name).trim()
+                            if (trimmed) bizName = trimmed
+                          } else if (business?.properties?.business_name) {
+                            const trimmed = String(business.properties.business_name).trim()
+                            if (trimmed) bizName = trimmed
+                          } else if (business?.business_name) {
+                            const trimmed = String(business.business_name).trim()
+                            if (trimmed) bizName = trimmed
+                          }
+                          const industries = business?.properties?.industries || business?.industries
+                          const industry = Array.isArray(industries) && industries.length > 0 ? industries[0] : null
+                          const intentStatus = business?.properties?.intentStatus || business?.intent_status
+                          const intentVisible = business?.properties?.intentVisible || business?.intent_visibility
+                          
+                          // Format: "Business Name • Industry" (like map marker)
+                          const displayText = industry 
+                            ? `${bizName} • ${industry}`
+                            : bizName
+
+                          return (
+                            <button
+                              key={bizId}
+                              type="button"
+                              onClick={() => {
+                                setTalentMapSelectedBusinessId(business.properties?.id || null)
+                                setTalentMapSelectBusinessId(business.properties?.id || null)
+                                setTalentMapSelectedBusiness(business)
+                                // Zoom to business location and open popup
+                                if (business.properties?.id) {
+                                  const zoom = getZoomFromRadius(talentMapRadiusKm)
+                                  mapRef.current?.zoomToMarkerAndOpenPopup('business', business.properties.id, zoom)
+                                }
+                              }}
+                              className={`w-full text-left p-2 rounded border transition-all ${
+                                talentMapSelectedBusinessId === business.properties?.id
+                                  ? 'bg-blue-50 border-blue-500'
+                                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                {intentVisible && intentStatus ? (
+                                  <span
+                                    className={`inline-flex h-2 w-2 rounded-full flex-shrink-0 ${
+                                      intentStatus === 'actively_building_talent' ? 'bg-emerald-400' :
+                                      intentStatus === 'future_planning' ? 'bg-blue-400' :
+                                      'bg-gray-400'
+                                    }`}
+                                    title={`Intent: ${intentStatus.replace(/_/g, ' ')}`}
+                                  />
+                                ) : null}
+                                <div className="font-medium text-gray-900 text-sm truncate">{displayText}</div>
+                              </div>
+                            </button>
+                          )
+                          })}
+                          {/* Jobs - only show if not showing only businesses */}
+                          {!showOnlyBusinesses && talentMapJobResults.map((job: any, idx: number) => {
+                            const jobId = `job-${job.id || idx}`
+                            const businessName = job.business_name || 'Unknown Company'
+                            const jobTitle = job.title || 'Untitled Job'
+                            // Format: "Company Name Job Title" (e.g., "Nova Solutions Receptionist")
+                            const displayText = `${businessName} ${jobTitle}`
+                            const locationText =
+                              job.location ||
+                              [job.city, job.state, job.country].filter(Boolean).join(', ')
+
+                          return (
+                            <button
+                              key={jobId}
+                              type="button"
+                              onClick={() => {
+                                const businessId = job.business_profile_id || null
+                                if (businessId) {
+                                  const businessIdString = String(businessId)
+                                  setTalentMapSelectedBusinessId(businessIdString)
+                                  setTalentMapSelectBusinessId(businessIdString)
+                                  const fromResults = talentMapResults.find(
+                                    (biz) => String(biz?.properties?.id) === businessIdString
+                                  )
+                                  if (fromResults) {
+                                    setTalentMapSelectedBusiness(fromResults)
+                                  } else {
+                                    setTalentMapSelectedBusiness({
+                                      id: businessIdString,
+                                      type: 'Feature',
+                                      geometry: {
+                                        type: 'Point',
+                                        coordinates: [job.lng ?? 0, job.lat ?? 0]
+                                      },
+                                      properties: {
+                                        id: businessIdString,
+                                        name: job.business_name || 'Business',
+                                        slug: '',
+                                        industries: [],
+                                        lat: job.lat ?? 0,
+                                        lng: job.lng ?? 0
+                                      }
+                                    })
+                                  }
+                                }
+                                // Zoom to job location and open popup
+                                if (job.id && (job.lat != null && job.lng != null)) {
+                                  const zoom = getZoomFromRadius(talentMapRadiusKm)
+                                  mapRef.current?.zoomToMarkerAndOpenPopup('job', job.id, zoom)
+                                } else {
+                                  // If no coordinates, navigate to job details page
+                                  const searchState = {
+                                    showAllBusinesses: talentMapShowAllBusinesses,
+                                    showAllJobs: talentMapShowAllJobs,
+                                    radiusSearchType: talentMapRadiusSearchType,
+                                    radiusKm: talentMapRadiusKm,
+                                    searchCenter: talentMapSearchCenter,
+                                    searchLocation: talentMapLocQuery,
+                                    jobResults: talentMapJobResults,
+                                    businessResults: talentMapResults
+                                  }
+                                  sessionStorage.setItem('talentMapSearchState', JSON.stringify(searchState))
+                                  router.push(`/jobs/${job.id}?fromMap=true&returnTo=/dashboard/talent`)
+                                }
+                              }}
+                              className="w-full text-left p-2 rounded border transition-all bg-purple-50 border-purple-200 hover:bg-purple-100 hover:border-purple-300"
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className="inline-flex h-2 w-2 rounded-full flex-shrink-0 bg-purple-400" title="Job" />
+                                <div className="font-medium text-gray-900 text-sm truncate">{displayText}</div>
+                              </div>
+                              {locationText && (
+                                <div className="text-xs text-gray-600 mt-1 truncate">{locationText}</div>
+                              )}
+                            </button>
+                          )
+                          })}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                  </div>
+                </aside>
+
+                {/* RIGHT SIDE: Horizontal layout with Route Intelligence and Map */}
+                <div className="flex-1 flex gap-4">
+                  {/* Route Intelligence Panel */}
+                {talentMapPanelsCollapsed ? (
+                  <div className="flex-shrink-0 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTalentMapPanelsCollapsed(false)}
+                      className="h-full px-2 py-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors flex flex-col items-center justify-center gap-2"
+                      title="Expand Route Intelligence"
+                    >
+                      <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                      <div className="text-gray-900 font-semibold text-xs whitespace-nowrap" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                        {talentMapRouteState?.drivingMins ? `${talentMapRouteState.drivingMins}m drive` : 'Route Intelligence'}
+                      </div>
+                    </button>
+                    <div className="flex flex-col gap-1 px-2">
+                      <button
+                        type="button"
+                        onClick={() => setTalentMapActiveStyle('streets')}
+                        className={`px-2 py-1 text-xs rounded transition-colors ${
+                          talentMapActiveStyle === 'streets'
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                        title="Street view"
+                      >
+                        Street
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTalentMapActiveStyle('satellite')}
+                        className={`px-2 py-1 text-xs rounded transition-colors ${
+                          talentMapActiveStyle === 'satellite'
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                        title="Satellite view"
+                      >
+                        Satellite
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-72 flex-shrink-0 rounded-xl p-4 border border-gray-200 bg-white overflow-y-auto relative">
+                    <button
+                      type="button"
+                      onClick={() => setTalentMapPanelsCollapsed(true)}
+                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-gray-100 border border-gray-200 text-gray-600 hover:bg-gray-200 transition-colors z-10"
+                      title="Collapse Route Intelligence"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <div className="font-semibold text-gray-900 mb-3 text-sm">Route Intelligence</div>
+                    {!talentMapSelectedBusiness ? (
+                      <div className="text-center py-6 text-gray-400 text-sm">
+                        Select a business from the Results panel to calculate routes and commute times.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="text-xs text-gray-500 mb-3">
+                          Point A: {talentMapSelectedBusiness.properties.name} • Point B: your chosen living location
+                        </div>
+                        <div className="flex gap-2 mb-3">
+                          <div className="relative flex-1">
+                            <input
+                              value={talentMapRouteQuery}
+                              onChange={(e) => {
+                                setTalentMapRouteQuery(e.target.value)
+                                setTalentMapRouteSuggestionsOpen(true)
+                              }}
+                              onFocus={() => setTalentMapRouteSuggestionsOpen(true)}
+                              onBlur={() => setTimeout(() => setTalentMapRouteSuggestionsOpen(false), 120)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') {
+                                  setTalentMapRouteSuggestionsOpen(false)
+                                  return
+                                }
+                                if (!talentMapRouteSuggestionsOpen || !talentMapRouteSuggestions.length) {
+                                  if (e.key === 'Enter' && talentMapRouteQuery.trim()) {
+                                    setTalentMapCommittedRouteQuery(talentMapRouteQuery.trim())
+                                    setTalentMapPanelsCollapsed(true)
+                                  }
+                                  return
+                                }
+                                if (e.key === 'ArrowDown') {
+                                  e.preventDefault()
+                                  setTalentMapRouteActiveIdx((i) => Math.min(talentMapRouteSuggestions.length - 1, i + 1))
+                                  return
+                                }
+                                if (e.key === 'ArrowUp') {
+                                  e.preventDefault()
+                                  setTalentMapRouteActiveIdx((i) => Math.max(0, i - 1))
+                                  return
+                                }
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  const pick = talentMapRouteSuggestions[talentMapRouteActiveIdx]
+                                  if (pick) {
+                                    setTalentMapRouteQuery(pick.label)
+                                    setTalentMapRouteSuggestionsOpen(false)
+                                    setTalentMapCommittedRouteQuery(pick.label)
+                                    setTalentMapPanelsCollapsed(true)
+                                  }
+                                  return
+                                }
+                              }}
+                              placeholder="Set living location…"
+                              className="w-full px-3 py-2 pr-8 bg-white text-gray-900 rounded-lg text-sm border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              role="combobox"
+                              aria-autocomplete="list"
+                              aria-expanded={talentMapRouteSuggestionsOpen}
+                              aria-controls="talent-map-route-suggestions"
+                            />
+                            {/* Clear button */}
+                            {talentMapRouteQuery && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTalentMapRouteQuery('')
+                                  setTalentMapCommittedRouteQuery('')
+                                  setTalentMapRouteSuggestions([])
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                                title="Clear"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                            {/* Route suggestions dropdown */}
+                            {talentMapRouteSuggestionsOpen && talentMapRouteSuggestions.length > 0 && (
+                              <div
+                                id="talent-map-route-suggestions"
+                                role="listbox"
+                                className="absolute left-0 right-0 mt-1.5 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden z-20"
+                              >
+                                {talentMapRouteSuggestions.map((s, idx) => (
+                                  <button
+                                    key={s.id}
+                                    type="button"
+                                    className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                                      idx === talentMapRouteActiveIdx ? 'bg-blue-50 text-blue-900' : 'bg-white text-gray-900 hover:bg-gray-50'
+                                    }`}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => {
+                                      setTalentMapRouteQuery(s.label)
+                                      setTalentMapRouteSuggestionsOpen(false)
+                                      setTalentMapCommittedRouteQuery(s.label)
+                                      setTalentMapPanelsCollapsed(true)
+                                    }}
+                                    role="option"
+                                    aria-selected={idx === talentMapRouteActiveIdx}
+                                  >
+                                    {s.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                           <button
-                            onClick={async () => {
-                              if (!confirm(`Delete "${template.name}"? This action cannot be undone.`)) {
-                                return
-                              }
-                              try {
-                                const { data: { session } } = await supabase.auth.getSession()
-                                if (!session?.user?.id) return
-                                
-                                const { error } = await supabase
-                                  .from('saved_templates')
-                                  .delete()
-                                  .eq('id', template.id)
-                                  .eq('user_id', session.user.id)
-                                
-                                if (error) throw error
-                                await loadSavedTemplates()
-                              } catch (err: any) {
-                                console.error('Error deleting saved template:', err)
-                                alert(err.message || 'Failed to delete saved template')
+                            type="button"
+                            onClick={() => {
+                              if (talentMapRouteQuery.trim()) {
+                                setTalentMapCommittedRouteQuery(talentMapRouteQuery.trim())
+                                setTalentMapPanelsCollapsed(true)
                               }
                             }}
-                            className="px-4 py-2 bg-red-50 border border-red-200 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm"
+                            disabled={!talentMapRouteQuery.trim()}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                           >
-                            Delete
+                            {talentMapRouteState?.busy ? '…' : 'Set'}
+                          </button>
+                        </div>
+                        {talentMapRouteState?.to && (
+                          <div className="text-xs text-gray-600 mb-3">
+                            Living location: {talentMapRouteState.to.label}
+                      </div>
+                        )}
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="p-2 rounded border border-gray-200 bg-gray-50 text-center">
+                            <div className="text-xs text-gray-500 mb-1">Car</div>
+                            {talentMapRouteState?.drivingKm ? (
+                              <>
+                                <div className="text-gray-900 font-medium text-sm">{talentMapRouteState.drivingKm} km</div>
+                                <div className="text-gray-500 text-xs">{talentMapRouteState.drivingMins} min</div>
+                              </>
+                            ) : (
+                              <div className="text-gray-900 font-medium text-sm">—</div>
+                            )}
+                    </div>
+                          <div className="p-2 rounded border border-gray-200 bg-gray-50 text-center">
+                            <div className="text-xs text-gray-500 mb-1">Public</div>
+                            <div className="text-gray-900 font-medium text-sm">N/A</div>
+                </div>
+                          <div className="p-2 rounded border border-gray-200 bg-gray-50 text-center">
+                            <div className="text-xs text-gray-500 mb-1">Bike</div>
+                            {talentMapRouteState?.cyclingKm ? (
+                              <>
+                                <div className="text-gray-900 font-medium text-sm">{talentMapRouteState.cyclingKm} km</div>
+                                <div className="text-gray-500 text-xs">{talentMapRouteState.cyclingMins} min</div>
+                              </>
+                            ) : (
+                              <div className="text-gray-900 font-medium text-sm">—</div>
+                            )}
+                          </div>
+                        </div>
+                        {/* Map View Buttons */}
+                        <div className="flex items-center gap-1 pt-2 border-t border-gray-200">
+                          <button
+                            type="button"
+                            onClick={() => setTalentMapActiveStyle('streets')}
+                            className={`px-2 py-1 text-xs rounded transition-colors ${
+                              talentMapActiveStyle === 'streets'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                            title="Street view"
+                          >
+                            Street
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTalentMapActiveStyle('satellite')}
+                            className={`px-2 py-1 text-xs rounded transition-colors ${
+                              talentMapActiveStyle === 'satellite'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                            title="Satellite view"
+                          >
+                            Satellite
                           </button>
                         </div>
                       </div>
+                    )}
+                  </div>
+                )}
+                  {/* Map Container */}
+                  <div className="flex-1 min-w-0">
+                    <div className="rounded-xl border border-gray-200 bg-white h-full relative overflow-hidden">
+                      {talentMapLoading ? (
+                        <div className="h-full flex items-center justify-center">
+                          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      ) : (
+                        <BusinessDiscoveryMap
+                          ref={mapRef}
+                          filters={talentMapFilters}
+                          toggles={talentMapToggles}
+                          onToggle={handleTalentMapToggle}
+                          flyTo={talentMapFlyTo}
+                          searchCenter={talentMapSearchCenter}
+                          radiusKm={talentMapRadiusKm}
+                          showAllBusinesses={talentMapShowAllBusinesses}
+                          radiusBusinessesActive={!!talentMapSearchCenter && talentMapRadiusSearchType === 'business'}
+                          onResults={handleTalentMapResults}
+                          selectedBusinessId={talentMapSelectedBusinessId}
+                          onSelectedBusinessId={handleTalentMapSelectedBusinessId}
+                          selectBusinessId={talentMapSelectBusinessId}
+                          hideLegend={true}
+                          activeStyle={talentMapActiveStyle}
+                          onStyleChange={setTalentMapActiveStyle}
+                          onSelectedBusinessChange={setTalentMapSelectedBusiness}
+                          onRouteStateChange={setTalentMapRouteState}
+                          onRouteQueryChange={setTalentMapRouteQuery}
+                          externalRouteQuery={talentMapCommittedRouteQuery}
+                          triggerResize={talentMapMapResizeTrigger}
+                          intentStatus=""
+                          intentCompatibility={false}
+                          fitBounds={talentMapMapFitBounds}
+                          jobs={(() => {
+                            // Pass jobs to map only when "Show all jobs" is checked
+                            const shouldShowJobs = talentMapShowAllJobs && talentMapJobResults.length > 0
+                            
+                            if (talentMapJobResults.length > 0) {
+                              console.log('[TalentDashboard] Job results available:', {
+                                count: talentMapJobResults.length,
+                                showAllJobs: talentMapShowAllJobs,
+                                radiusSearchType: talentMapRadiusSearchType,
+                                hasSearchCenter: !!talentMapSearchCenter,
+                                shouldShowJobs,
+                                jobs: talentMapJobResults.slice(0, 3).map((j: any) => ({
+                                  id: j.id,
+                                  title: j.title,
+                                  lat: j.lat,
+                                  lng: j.lng,
+                                  hasCoords: !!(j.lat && j.lng)
+                                }))
+                              })
+                            }
+                            
+                            if (!shouldShowJobs) return []
+
+                            const useRadius = talentMapRadiusSearchType === 'jobs' && !!talentMapSearchCenter
+
+                            return talentMapJobResults.map((job: any) => {
+                              if (job?.lat != null && job?.lng != null) return job
+                              if (useRadius && talentMapSearchCenter) {
+                                return { ...job, lat: talentMapSearchCenter.lat, lng: talentMapSearchCenter.lng }
+                              }
+                              // Default to center of Australia for global "show all jobs"
+                              return { ...job, lat: -25.2744, lng: 133.7751 }
+                            })
+                          })()}
+                        />
+                      )}
+                      <div className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur-sm border border-gray-200 text-gray-900 text-sm font-medium shadow-lg z-10">
+                        {talentMapResults.length + talentMapJobResults.length} {talentMapResults.length + talentMapJobResults.length === 1 ? 'result' : 'results'}
+                      </div>
                     </div>
-                  ))}
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           </>
         )}
@@ -2305,32 +3371,163 @@ export function TalentDashboardShell({
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Job Applications</h2>
             {applications.length > 0 ? (
               <div className="space-y-4">
-                {applications.map((app) => (
-                  <div key={app.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">{app.job_title || 'Job'}</h3>
-                        {app.job_location && (
-                          <p className="text-gray-600 text-sm mb-2">📍 {app.job_location}</p>
-                        )}
-                        <p className="text-gray-500 text-sm">
-                          Applied: {new Date(app.created_at).toLocaleDateString()}
-                        </p>
+                {applications.map((app: any) => {
+                  const job = app.jobs || {}
+                  const business = job.business_profiles || {}
+                  
+                  // Get job title - ensure we have a proper title
+                  let jobTitle = 'Job'
+                  if (job.title && job.title.trim() && job.title !== 'Job') {
+                    jobTitle = job.title.trim()
+                  } else if (app.job_id) {
+                    // If no title, show a reference to the job ID
+                    const jobIdStr = String(app.job_id)
+                    jobTitle = jobIdStr.length > 8 ? `Job #${jobIdStr.slice(0, 8)}...` : `Job #${jobIdStr}`
+                  }
+                  
+                  // Get business name - ensure we have a proper name
+                  let businessName: string | null = null
+                  if (business.name && business.name.trim() && business.name !== 'Business') {
+                    businessName = business.name.trim()
+                  } else if (business.business_name && business.business_name.trim() && business.business_name !== 'Business') {
+                    businessName = business.business_name.trim()
+                  }
+                  
+                  const jobLocation = job.location || job.city || job.country || null
+                  const employmentType = job.employment_type || null
+                  const jobDescription = job.description || null
+                  const appliedDate = new Date(app.created_at)
+                  const status = app.status || 'applied'
+                  
+                  const handleWithdraw = async () => {
+                    if (!confirm(`Are you sure you want to withdraw your application for "${jobTitle}"? This action cannot be undone.`)) {
+                      return
+                    }
+                    
+                    setWithdrawingAppId(app.id)
+                    try {
+                      const { error } = await supabase
+                        .from('applications')
+                        .delete()
+                        .eq('id', app.id)
+                        .eq('user_id', user?.id)
+                      
+                      if (error) {
+                        throw error
+                      }
+                      
+                      // Remove from local state
+                      setApplications((prev) => prev.filter((a: any) => a.id !== app.id))
+                      alert('Application withdrawn successfully.')
+                    } catch (error: any) {
+                      console.error('Error withdrawing application:', error)
+                      alert(error.message || 'Failed to withdraw application. Please try again.')
+                    } finally {
+                      setWithdrawingAppId(null)
+                    }
+                  }
+                  
+                  return (
+                    <div key={app.id} className="border border-gray-200 rounded-lg p-5 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-start gap-3 mb-3">
+                            <div className="flex-1">
+                              {/* Business Name - prominently displayed at top */}
+                              {businessName ? (
+                                <p className="text-gray-800 text-lg font-semibold mb-2">{businessName}</p>
+                              ) : job.business_profile_id ? (
+                                <p className="text-gray-500 text-sm italic mb-2">Loading business details...</p>
+                              ) : null}
+                              
+                              {/* Job Title - prominently displayed */}
+                              <h3 className="text-2xl font-bold text-gray-900 mb-3">{jobTitle}</h3>
+                              
+                              {/* Link to view full job details - always show if we have job_id */}
+                              {app.job_id && (
+                                <Link
+                                  href={`/jobs/${app.job_id}?fromApplications=true`}
+                                  className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium mb-3 group"
+                                >
+                                  <span>View Full Job Details</span>
+                                  <svg className="w-4 h-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </Link>
+                              )}
+                            </div>
+                            <div className="flex-shrink-0">
+                              <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+                                status === 'applied' ? 'bg-blue-50 text-blue-700 border border-blue-300' :
+                                status === 'shortlisted' ? 'bg-green-50 text-green-700 border border-green-300' :
+                                status === 'rejected' ? 'bg-red-50 text-red-700 border border-red-300' :
+                                status === 'hired' ? 'bg-purple-50 text-purple-700 border border-purple-300' :
+                                'bg-gray-50 text-gray-700 border border-gray-300'
+                              }`}>
+                                {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2 mb-4">
+                            {jobLocation && (
+                              <p className="text-gray-600 text-sm flex items-center gap-1">
+                                <span>📍</span> {jobLocation}
+                              </p>
+                            )}
+                            {employmentType && (
+                              <p className="text-gray-600 text-sm">
+                                <span className="font-medium">Employment Type:</span> {employmentType.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                              </p>
+                            )}
+                            <p className="text-gray-500 text-sm">
+                              <span className="font-medium">Applied:</span> {appliedDate.toLocaleDateString('en-AU', { 
+                                year: 'numeric', 
+                                month: 'long', 
+                                day: 'numeric' 
+                              })}
+                            </p>
+                            {app.updated_at && app.updated_at !== app.created_at && (
+                              <p className="text-gray-500 text-sm">
+                                <span className="font-medium">Last Updated:</span> {new Date(app.updated_at).toLocaleDateString('en-AU', { 
+                                  year: 'numeric', 
+                                  month: 'long', 
+                                  day: 'numeric' 
+                                })}
+                              </p>
+                            )}
+                          </div>
+                          
+                          {jobDescription && (
+                            <div className="mb-4">
+                              <p className="text-gray-700 text-sm line-clamp-3">{jobDescription}</p>
+                            </div>
+                          )}
+                          
+                          {app.cover_letter && (
+                            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                              <p className="text-xs font-medium text-gray-600 mb-1">Your Cover Letter:</p>
+                              <p className="text-gray-700 text-sm line-clamp-2">{app.cover_letter}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="ml-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          app.status === 'applied' ? 'bg-blue-50 text-blue-600 border border-blue-200' :
-                          app.status === 'shortlisted' ? 'bg-green-50 text-green-600 border border-green-200' :
-                          app.status === 'rejected' ? 'bg-red-50 text-red-600 border border-red-200' :
-                          app.status === 'hired' ? 'bg-purple-50 text-purple-600 border border-purple-200' :
-                          'bg-gray-50 text-gray-600 border border-gray-200'
-                        }`}>
-                          {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
-                        </span>
+                      
+                      <div className="flex items-center justify-between pt-4 border-t border-gray-200 mt-4">
+                        <div className="text-xs text-gray-500">
+                          Application ID: {app.id}
+                        </div>
+                        <button
+                          onClick={handleWithdraw}
+                          disabled={withdrawingAppId === app.id || status === 'hired' || status === 'rejected'}
+                          className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {withdrawingAppId === app.id ? 'Withdrawing...' : 'Withdraw Application'}
+                        </button>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <div className="text-center py-12">
@@ -2996,6 +4193,14 @@ export function TalentDashboardShell({
                               {videoChatLoading ? 'Starting...' : 'Video Chat'}
                             </button>
                             <button
+                              onClick={() => {
+                                router.push(`/dashboard/talent/calendar?schedule_meeting=true&business_id=${r.business_id}&connection_id=${r.id}`)
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-semibold transition-colors"
+                            >
+                              Meeting
+                            </button>
+                            <button
                               onClick={handleDiscontinue}
                               className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold transition-colors"
                             >
@@ -3595,7 +4800,6 @@ export function TalentDashboardShell({
             )}
           </div>
         )}
-      </div>
       
       {/* Video Chat Modal */}
       {videoChatSession && (
@@ -3821,6 +5025,7 @@ export function TalentDashboardShell({
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

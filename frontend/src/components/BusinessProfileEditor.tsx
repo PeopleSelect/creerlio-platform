@@ -63,6 +63,7 @@ function CollapsibleTextarea({
   defaultRows = 5,
   expanded,
   onToggle,
+  showVoiceButtons = false,
 }: {
   value: string
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
@@ -73,30 +74,232 @@ function CollapsibleTextarea({
   defaultRows?: number
   expanded: boolean
   onToggle: (key: string) => void
+  showVoiceButtons?: boolean
 }) {
-  const lineCount = String(value || '').split('\n').length
-  const needsExpansion = lineCount > defaultRows || String(value || '').length > 200
+  const [isListening, setIsListening] = useState(false)
+  const [isPolishing, setIsPolishing] = useState(false)
+  const recognitionRef = useRef<any>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [interimText, setInterimText] = useState('')
+  const baseValueRef = useRef<string>('')
+  const finalTranscriptRef = useRef<string>('')
+  const shouldContinueListeningRef = useRef<boolean>(false)
+  const lineCount = String((value || '') + interimText).split('\n').length
+  const needsExpansion = lineCount > defaultRows || String((value || '') + interimText).length > 200
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!showVoiceButtons) return
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      console.warn('Speech recognition not supported in this browser')
+      return
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
+
+    recognition.onresult = (event: any) => {
+      let interimTranscript = ''
+      let finalTranscript = ''
+
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const transcript = event.results[i][0].transcript
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' '
+        } else {
+          interimTranscript += transcript
+        }
+      }
+
+      if (finalTranscript) {
+        finalTranscriptRef.current += finalTranscript
+        const newValue = baseValueRef.current + finalTranscriptRef.current
+        baseValueRef.current = newValue
+        finalTranscriptRef.current = ''
+        onChange({ target: { value: newValue } } as React.ChangeEvent<HTMLTextAreaElement>)
+      }
+
+      setInterimText(interimTranscript)
+    }
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error)
+      setIsListening(false)
+      shouldContinueListeningRef.current = false
+      if (event.error === 'not-allowed') {
+        alert('Microphone access denied. Please enable microphone permissions in your browser settings.')
+      }
+    }
+
+    recognition.onend = () => {
+      if (shouldContinueListeningRef.current) {
+        try {
+          recognition.start()
+        } catch (error: any) {
+          if (error.name !== 'InvalidStateError') {
+            console.error('Error restarting speech recognition:', error)
+            setIsListening(false)
+            shouldContinueListeningRef.current = false
+          }
+        }
+      } else {
+        setIsListening(false)
+      }
+    }
+
+    recognitionRef.current = recognition
+
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop()
+        } catch {}
+      }
+    }
+  }, [value, onChange, showVoiceButtons])
+
+  useEffect(() => {
+    if (!isListening) {
+      baseValueRef.current = value || ''
+      finalTranscriptRef.current = ''
+    }
+  }, [value, isListening])
+
+  const startListening = () => {
+    if (!recognitionRef.current) {
+      alert('Speech recognition is not available in your browser. Please use Chrome, Edge, or Safari.')
+      return
+    }
+
+    try {
+      baseValueRef.current = value || ''
+      finalTranscriptRef.current = ''
+      setInterimText('')
+      shouldContinueListeningRef.current = true
+      recognitionRef.current.start()
+      setIsListening(true)
+    } catch (error: any) {
+      console.error('Error starting speech recognition:', error)
+      shouldContinueListeningRef.current = false
+      if (error.name === 'InvalidStateError') {
+        setIsListening(false)
+      } else {
+        alert('Error starting speech recognition. Please try again.')
+      }
+    }
+  }
+
+  const stopListening = () => {
+    shouldContinueListeningRef.current = false
+    setIsListening(false)
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop()
+      } catch (error) {
+        console.error('Error stopping speech recognition:', error)
+      }
+    }
+    setInterimText('')
+  }
+
+  const handlePolishText = async () => {
+    if (!value || !value.trim()) {
+      alert('Please enter some text to polish.')
+      return
+    }
+
+    setIsPolishing(true)
+    try {
+      const response = await fetch('/api/ai/polish-text', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: value }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || 'Failed to polish text')
+      }
+
+      const data = await response.json()
+      if (data.success && data.polished_text) {
+        onChange({ target: { value: data.polished_text } } as React.ChangeEvent<HTMLTextAreaElement>)
+      } else {
+        throw new Error('Invalid response from server')
+      }
+    } catch (error: any) {
+      console.error('Error polishing text:', error)
+      const msg = String(error?.message || 'Failed to polish text. Please check your OpenAI API key is configured.')
+      const safeMsg = msg.replace(/sk-[a-zA-Z0-9_-]+/g, 'sk-***')
+      alert(safeMsg)
+    } finally {
+      setIsPolishing(false)
+    }
+  }
+
+  const displayValue = (value || '') + (interimText || '')
 
   return (
     <div className="relative">
       <textarea
+        ref={textareaRef}
         placeholder={placeholder}
-        value={value}
+        value={displayValue}
         onChange={onChange}
         disabled={disabled}
         className={className}
         rows={expanded ? Math.max(defaultRows, lineCount) : defaultRows}
       />
-      {needsExpansion && (
-        <button
-          type="button"
-          onClick={() => onToggle(expandKey)}
-          className="mt-2 px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded disabled:opacity-50 transition-colors"
-          disabled={disabled}
-        >
-          {expanded ? '▲ Show Less' : '▼ Show More'}
-        </button>
-      )}
+      <div className="flex items-center gap-2 mt-2 flex-wrap">
+        {showVoiceButtons && !disabled && (
+          <>
+            {!isListening ? (
+              <button
+                type="button"
+                onClick={startListening}
+                className="px-3 py-1 text-xs bg-green-600 hover:bg-green-500 text-white rounded disabled:opacity-50 transition-colors flex items-center gap-1"
+                title="Start voice input (Talk to TXT)"
+              >
+                🎤 Talk to TXT
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={stopListening}
+                className="px-3 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded disabled:opacity-50 transition-colors flex items-center gap-1"
+                title="Stop voice input"
+              >
+                ⏹ Stop
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handlePolishText}
+              disabled={isPolishing || !value || !value.trim()}
+              className="px-3 py-1 text-xs bg-purple-600 hover:bg-purple-500 text-white rounded disabled:opacity-50 transition-colors flex items-center gap-1"
+              title="AI Polish - Fix grammar, spelling, and improve style"
+            >
+              {isPolishing ? '⏳ Polishing...' : '✨ AI Polish'}
+            </button>
+          </>
+        )}
+        {needsExpansion && (
+          <button
+            type="button"
+            onClick={() => onToggle(expandKey)}
+            className="px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded disabled:opacity-50 transition-colors"
+            disabled={disabled}
+          >
+            {expanded ? '▲ Show Less' : '▼ Show More'}
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -114,6 +317,10 @@ interface BusinessProfileData {
     url: string
   }>
   skills: string[]
+  cultureDecisions: string
+  cultureFeedback: string
+  cultureConflict: string
+  cultureSuccess: string
   experience: Array<{
     company: string
     title: string
@@ -165,6 +372,88 @@ interface BusinessBankItem {
   created_at?: string
 }
 
+type ImportTab = 'upload' | 'link' | 'bank'
+
+interface LocalImportItem {
+  id: string
+  source: 'upload' | 'link'
+  title: string
+  item_type: string
+  file_path?: string | null
+  file_type?: string | null
+  url?: string | null
+  previewUrl?: string | null
+  status: 'ready' | 'uploading' | 'error'
+  error?: string | null
+  created_at?: string
+  savedToBank?: boolean
+  attachmentId?: number
+}
+
+type BusinessProductsOverview = {
+  id?: number
+  short_headline: string
+  summary: string
+  primary_industries: string[]
+  business_model: string
+  is_public: boolean
+}
+
+type BusinessProductMedia = {
+  id?: number
+  media_type: string
+  title: string
+  file_path?: string | null
+  file_url?: string | null
+  file_type?: string | null
+  order_index: number
+}
+
+type BusinessProductImpact = {
+  who_it_helps: string
+  what_it_improves: string
+  real_world_outcomes: string
+}
+
+type BusinessProductSignals = {
+  we_are_hiring_for_this: boolean
+  open_to_partnerships: boolean
+  in_research_and_development: boolean
+  currently_scaling: boolean
+}
+
+type BusinessProductCard = {
+  id?: number
+  name: string
+  category: string
+  short_description: string
+  who_it_is_for: string
+  problem_it_solves: string
+  logo_or_icon: string
+  explainer_video_url: string
+  external_link: string
+  lifecycle_stage: string
+  order_index: number
+  is_published: boolean
+  visibility_level: string
+  roles: string[]
+  skills: string[]
+  teams: string[]
+  growth_areas: string[]
+  media: BusinessProductMedia[]
+  impact: BusinessProductImpact
+  signals: BusinessProductSignals
+}
+
+type BusinessProductRoadmap = {
+  id?: number
+  upcoming_products: string[]
+  roadmap_ideas: string
+  expansion_plans: string
+  new_markets: string
+  is_public: boolean
+}
+
 export default function BusinessProfileEditor() {
   const router = useRouter()
   const DEFAULT_SECTION_ORDER = ['intro', 'social', 'skills', 'experience', 'education', 'referees', 'projects', 'attachments'] as const
@@ -191,6 +480,10 @@ export default function BusinessProfileEditor() {
     introVideoId: null,
     socialLinks: [],
     skills: [],
+    cultureDecisions: '',
+    cultureFeedback: '',
+    cultureConflict: '',
+    cultureSuccess: '',
     experience: [],
     education: [],
     referees: [],
@@ -212,6 +505,7 @@ export default function BusinessProfileEditor() {
     basic: true,
     social: true,
     skills: true,
+    products_services: true,
     experience: true,
     education: true,
     referees: true,
@@ -243,7 +537,20 @@ export default function BusinessProfileEditor() {
   const [isImporting, setIsImporting] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [availableItems, setAvailableItems] = useState<BusinessBankItem[]>([])
-  const [selectedIds, setSelectedIds] = useState<Record<number, boolean>>({})
+  const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({})
+  const [importTab, setImportTab] = useState<ImportTab>('upload')
+  const [localImportItems, setLocalImportItems] = useState<LocalImportItem[]>([])
+  const [importDragActive, setImportDragActive] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
+  const [linkInput, setLinkInput] = useState('')
+  const [linkBusy, setLinkBusy] = useState(false)
+  const [linkError, setLinkError] = useState<string | null>(null)
+  const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null)
+  const tempAttachmentIdRef = useRef(-1)
+  const imageUploadRef = useRef<HTMLInputElement | null>(null)
+  const videoUploadRef = useRef<HTMLInputElement | null>(null)
+  const docUploadRef = useRef<HTMLInputElement | null>(null)
+  const replaceUploadRef = useRef<HTMLInputElement | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const [projectImportOpen, setProjectImportOpen] = useState(false)
   const [activeProjectIndex, setActiveProjectIndex] = useState<number | null>(null)
@@ -277,6 +584,7 @@ export default function BusinessProfileEditor() {
   const [introItems, setIntroItems] = useState<BusinessBankItem[]>([])
   const [introPickId, setIntroPickId] = useState<number | null>(null)
   const [introPreviewUrl, setIntroPreviewUrl] = useState<string | null>(null)
+  const introPreviewVideoIdRef = useRef<number | null>(null) // Track which video ID the preview URL is for
 
   // Share configuration and template selection state
   const [shareConfig, setShareConfig] = useState<ShareConfig | null>(null)
@@ -292,6 +600,28 @@ export default function BusinessProfileEditor() {
   const [intentCollapsed, setIntentCollapsed] = useState(true)
   const [intentRecordId, setIntentRecordId] = useState<string | null>(null)
   const intentOriginalRef = useRef<any>(null)
+
+  const [productsOverview, setProductsOverview] = useState<BusinessProductsOverview>({
+    short_headline: '',
+    summary: '',
+    primary_industries: [],
+    business_model: 'Other',
+    is_public: true,
+  })
+  const [productsRoadmap, setProductsRoadmap] = useState<BusinessProductRoadmap>({
+    upcoming_products: [],
+    roadmap_ideas: '',
+    expansion_plans: '',
+    new_markets: '',
+    is_public: true,
+  })
+  const [productCards, setProductCards] = useState<BusinessProductCard[]>([])
+  const [productLoading, setProductLoading] = useState(false)
+  const [productSaving, setProductSaving] = useState(false)
+  const [productError, setProductError] = useState<string | null>(null)
+  const [deletedProductIds, setDeletedProductIds] = useState<number[]>([])
+  const [productDragIndex, setProductDragIndex] = useState<number | null>(null)
+  const [productInputs, setProductInputs] = useState<Record<string, string>>({})
 
   useEffect(() => {
     // Load existing saved profile (if present)
@@ -352,6 +682,12 @@ export default function BusinessProfileEditor() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!businessProfileId || !userId) return
+    loadProductsServices()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessProfileId, userId])
 
   useEffect(() => {
     if (!userId || !businessProfileId || intentLoaded) return
@@ -465,10 +801,18 @@ export default function BusinessProfileEditor() {
     async function loadIntroPreview() {
       const id = typeof profile.introVideoId === 'number' ? profile.introVideoId : null
       if (!id) {
-        if (!cancelled) setIntroPreviewUrl(null)
+        if (!cancelled) {
+          setIntroPreviewUrl(null)
+          introPreviewVideoIdRef.current = null
+        }
         return
       }
-      if (introPreviewUrl) return
+      
+      // If we already have a preview URL for this video ID, don't reload
+      if (introPreviewUrl && introPreviewVideoIdRef.current === id) {
+        return
+      }
+      
       const uid = await getUserId()
       if (!uid) return
       const row = await supabase
@@ -478,16 +822,33 @@ export default function BusinessProfileEditor() {
         .eq('id', id)
         .maybeSingle()
       const item = row.data as any
-      if (!item) return
+      if (!item) {
+        if (!cancelled) {
+          setIntroPreviewUrl(null)
+          introPreviewVideoIdRef.current = null
+        }
+        return
+      }
       
       // For uploaded/recorded videos, use file_path to get signed URL
       if (item.file_path) {
         const { data: urlData } = await supabase.storage.from('business-bank').createSignedUrl(item.file_path, 60 * 30)
-        if (!cancelled) setIntroPreviewUrl(urlData?.signedUrl ?? null)
+        if (!cancelled) {
+          setIntroPreviewUrl(urlData?.signedUrl ?? null)
+          introPreviewVideoIdRef.current = id
+        }
       }
       // For linked videos, use file_url directly
       else if (item.file_url) {
-        if (!cancelled) setIntroPreviewUrl(item.file_url)
+        if (!cancelled) {
+          setIntroPreviewUrl(item.file_url)
+          introPreviewVideoIdRef.current = id
+        }
+      } else {
+        if (!cancelled) {
+          setIntroPreviewUrl(null)
+          introPreviewVideoIdRef.current = null
+        }
       }
     }
     loadIntroPreview().catch(() => {})
@@ -1062,6 +1423,9 @@ export default function BusinessProfileEditor() {
   }
 
   const anySectionEditing = useMemo(() => Object.values(sectionEdit).some(Boolean), [sectionEdit])
+  const localUploadItems = useMemo(() => localImportItems.filter((item) => item.source === 'upload'), [localImportItems])
+  const localLinkItems = useMemo(() => localImportItems.filter((item) => item.source === 'link'), [localImportItems])
+  const hasSelectedImportItems = useMemo(() => Object.values(selectedIds).some(Boolean), [selectedIds])
 
   async function ensureUsersRow(userId: string): Promise<boolean> {
     // Business Bank schema FK requires public.users(id) exist with a non-null role.
@@ -1154,6 +1518,254 @@ export default function BusinessProfileEditor() {
   function fileExt(title: string) {
     const m = title.toLowerCase().match(/\.([a-z0-9]+)$/)
     return m?.[1] ?? ''
+  }
+
+  const bankKey = (id: number) => `bank-${id}`
+  const localKey = (id: string) => `local-${id}`
+
+  const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+  const ALLOWED_VIDEO_TYPES = new Set(['video/mp4', 'video/webm'])
+  const ALLOWED_DOC_TYPES = new Set([
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ])
+  const ALLOWED_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'mp4', 'webm', 'pdf', 'doc', 'docx'])
+  const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
+  function allowedFileCategory(file: File) {
+    if (ALLOWED_IMAGE_TYPES.has(file.type)) return 'image'
+    if (ALLOWED_VIDEO_TYPES.has(file.type)) return 'video'
+    if (ALLOWED_DOC_TYPES.has(file.type)) return 'doc'
+    const ext = fileExt(file.name)
+    if (ALLOWED_EXTENSIONS.has(ext)) {
+      if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return 'image'
+      if (['mp4', 'webm'].includes(ext)) return 'video'
+      if (['pdf', 'doc', 'docx'].includes(ext)) return 'doc'
+    }
+    return null
+  }
+
+  function normalizeUrl(input: string) {
+    const raw = String(input || '').trim()
+    if (!raw) return ''
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw
+    return `https://${raw}`
+  }
+
+  function isImageUrl(url: string) {
+    return /\.(png|jpe?g|webp)(\?.*)?$/i.test(url)
+  }
+
+  function isVideoUrl(url: string) {
+    return /\.(mp4|webm)(\?.*)?$/i.test(url)
+  }
+
+  const BUSINESS_MODEL_OPTIONS = ['B2B', 'B2C', 'SaaS', 'Retail', 'Marketplace', 'Agency', 'Other']
+  const PRODUCT_CATEGORY_OPTIONS = ['Product', 'Service', 'Platform', 'Offering']
+  const LIFECYCLE_OPTIONS = ['Idea', 'Beta', 'Live', 'Scaling']
+  const VISIBILITY_OPTIONS = [
+    { value: 'public_summary', label: 'Public summary' },
+    { value: 'gated_detail', label: 'Gated detail' },
+    { value: 'nda_only', label: 'NDA-only' },
+    { value: 'confidential', label: 'Confidential' },
+  ]
+
+  const emptyImpact: BusinessProductImpact = {
+    who_it_helps: '',
+    what_it_improves: '',
+    real_world_outcomes: '',
+  }
+
+  const emptySignals: BusinessProductSignals = {
+    we_are_hiring_for_this: false,
+    open_to_partnerships: false,
+    in_research_and_development: false,
+    currently_scaling: false,
+  }
+
+  function blankProductCard(orderIndex: number): BusinessProductCard {
+    return {
+      name: '',
+      category: 'Product',
+      short_description: '',
+      who_it_is_for: '',
+      problem_it_solves: '',
+      logo_or_icon: '',
+      explainer_video_url: '',
+      external_link: '',
+      lifecycle_stage: '',
+      order_index: orderIndex,
+      is_published: true,
+      visibility_level: 'public_summary',
+      roles: [],
+      skills: [],
+      teams: [],
+      growth_areas: [],
+      media: [],
+      impact: { ...emptyImpact },
+      signals: { ...emptySignals },
+    }
+  }
+
+  function updateProductCard(index: number, patch: Partial<BusinessProductCard>) {
+    setProductCards((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)))
+  }
+
+  function updateProductListField(index: number, key: 'roles' | 'skills' | 'teams' | 'growth_areas', next: string[]) {
+    updateProductCard(index, { [key]: next } as any)
+  }
+
+  function addProductCard() {
+    setProductCards((prev) => [...prev, blankProductCard(prev.length)])
+  }
+
+  function removeProductCard(index: number) {
+    setProductCards((prev) => {
+      const next = [...prev]
+      const removed = next.splice(index, 1)[0]
+      if (removed?.id) setDeletedProductIds((ids) => [...ids, removed.id as number])
+      return next.map((c, i) => ({ ...c, order_index: i }))
+    })
+  }
+
+  function moveProductCard(from: number, to: number) {
+    setProductCards((prev) => {
+      if (from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next.map((c, i) => ({ ...c, order_index: i }))
+    })
+  }
+
+  function pushTag(list: string[], value: string) {
+    const trimmed = value.trim()
+    if (!trimmed) return list
+    if (list.includes(trimmed)) return list
+    return [...list, trimmed]
+  }
+
+  function removeTag(list: string[], value: string) {
+    return list.filter((v) => v !== value)
+  }
+
+  async function uploadProductMedia(index: number, files: File[]) {
+    setProductError(null)
+    const uid = await getUserId()
+    if (!uid) {
+      setProductError('Please sign in to upload product media.')
+      return
+    }
+    if (!files.length) return
+    const nextMedia: BusinessProductMedia[] = []
+
+    for (const file of files) {
+      const category = allowedFileCategory(file)
+      if (!category) {
+        setProductError(`Unsupported file type: ${file.name}`)
+        continue
+      }
+      const path = `business/${uid}/product-${crypto.randomUUID()}-${file.name}`
+      const { error } = await supabase.storage.from('business-bank').upload(path, file, {
+        upsert: true,
+        contentType: file.type || undefined,
+      })
+      if (error) {
+        setProductError((error as any)?.message ?? 'Upload failed')
+        continue
+      }
+      const { data } = await supabase.storage.from('business-bank').createSignedUrl(path, 60 * 30)
+      const fileUrl = data?.signedUrl ?? null
+      nextMedia.push({
+        media_type: category === 'doc' ? 'document' : category,
+        title: file.name,
+        file_path: path,
+        file_url: fileUrl,
+        file_type: file.type || null,
+        order_index: 0,
+      })
+    }
+
+    if (nextMedia.length) {
+      setProductCards((prev) =>
+        prev.map((c, i) =>
+          i === index
+            ? { ...c, media: [...c.media, ...nextMedia].map((m, idx) => ({ ...m, order_index: idx })) }
+            : c
+        )
+      )
+    }
+  }
+
+  async function uploadProductLogo(index: number, file: File) {
+    setProductError(null)
+    const uid = await getUserId()
+    if (!uid) {
+      setProductError('Please sign in to upload a logo.')
+      return
+    }
+    const category = allowedFileCategory(file)
+    if (category !== 'image') {
+      setProductError('Logo must be an image file.')
+      return
+    }
+    const path = `business/${uid}/product-logo-${crypto.randomUUID()}-${file.name}`
+    const { error } = await supabase.storage.from('business-bank').upload(path, file, {
+      upsert: true,
+      contentType: file.type || undefined,
+    })
+    if (error) {
+      setProductError((error as any)?.message ?? 'Upload failed')
+      return
+    }
+    await ensureSignedUrl(path)
+    updateProductCard(index, { logo_or_icon: path })
+  }
+
+  function addProductMediaLink(index: number, url: string) {
+    const normalized = normalizeUrl(url)
+    if (!normalized) return
+    setProductCards((prev) =>
+      prev.map((c, i) =>
+        i === index
+          ? {
+              ...c,
+              media: [
+                ...c.media,
+                {
+                  media_type: 'link',
+                  title: normalized,
+                  file_url: normalized,
+                  order_index: c.media.length,
+                },
+              ],
+            }
+          : c
+      )
+    )
+  }
+
+  function removeProductMedia(index: number, mediaIndex: number) {
+    setProductCards((prev) =>
+      prev.map((c, i) =>
+        i === index
+          ? { ...c, media: c.media.filter((_, idx) => idx !== mediaIndex).map((m, idx) => ({ ...m, order_index: idx })) }
+          : c
+      )
+    )
+  }
+
+  function setProductInput(key: string, value: string) {
+    setProductInputs((prev) => ({ ...prev, [key]: value }))
+  }
+
+  function commitProductTag(index: number, key: 'roles' | 'skills' | 'teams' | 'growth_areas', inputKey: string) {
+    const value = productInputs[inputKey] || ''
+    const current = productCards[index]?.[key] || []
+    const next = pushTag(current, value)
+    updateProductListField(index, key, next)
+    setProductInput(inputKey, '')
   }
 
   async function ensureSignedUrl(path: string) {
@@ -1433,6 +2045,58 @@ export default function BusinessProfileEditor() {
     )
   }
 
+  function renderLocalImportThumb(item: LocalImportItem) {
+    const url = item.url || item.previewUrl
+    const isImg = item.file_type?.startsWith('image') || (url ? isImageUrl(url) : false)
+    const isVid = item.file_type?.startsWith('video') || (url ? isVideoUrl(url) : false)
+    const isPdf = item.file_type?.includes('pdf') || fileExt(item.title) === 'pdf'
+    const ext = fileExt(item.title)
+    const label = isImg ? 'IMG' : isVid ? 'VID' : ext ? ext.toUpperCase().slice(0, 4) : 'FILE'
+    const base = 'w-[20mm] h-[20mm] rounded-lg border border-gray-300 overflow-hidden flex items-center justify-center shrink-0 bg-gray-50'
+
+    if (url && isImg) {
+      return (
+        <button type="button" className={base} onClick={() => setPreview({ kind: 'image', url, title: item.title })}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={item.title} className="w-full h-full object-cover" />
+        </button>
+      )
+    }
+
+    if (url && isVid) {
+      return (
+        <button type="button" className={base} onClick={() => setPreview({ kind: 'video', url, title: item.title })}>
+          <div className="relative w-full h-full">
+            <video className="w-full h-full object-cover" src={url} muted playsInline preload="metadata" />
+            <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold bg-black/30 text-white">▶</div>
+          </div>
+        </button>
+      )
+    }
+
+    if (url && isPdf) {
+      return <PdfThumb url={url} title={item.title} onClick={() => window.open(url, '_blank')} />
+    }
+
+    if (item.source === 'link') {
+      return (
+        <div className={base}>
+          <div className="px-2 py-1 rounded border border-gray-200 bg-white text-[10px] font-semibold text-gray-700">
+            🔗 LINK
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className={base}>
+        <div className="px-2 py-1 rounded border border-gray-200 bg-white text-[10px] font-semibold text-gray-700">
+          {label}
+        </div>
+      </div>
+    )
+  }
+
   function ProjectAttachmentChip({ id, onRemove }: { id: number; onRemove: () => void }) {
     const item = tbItemCache[id]
 
@@ -1674,6 +2338,380 @@ export default function BusinessProfileEditor() {
     }
   }
 
+  async function loadProductsServices() {
+    if (!businessProfileId || !userId) return
+    setProductLoading(true)
+    setProductError(null)
+    try {
+      const [overviewRes, roadmapRes, productsRes] = await Promise.all([
+        supabase
+          .from('business_products_services_overview')
+          .select('id, short_headline, summary, primary_industries, business_model, is_public')
+          .eq('business_id', businessProfileId)
+          .maybeSingle(),
+        supabase
+          .from('business_product_roadmap')
+          .select('id, upcoming_products, roadmap_ideas, expansion_plans, new_markets, is_public')
+          .eq('business_id', businessProfileId)
+          .maybeSingle(),
+        supabase
+          .from('business_products_services')
+          .select('id, name, category, short_description, who_it_is_for, problem_it_solves, logo_or_icon, explainer_video_url, external_link, lifecycle_stage, order_index, is_published')
+          .eq('business_id', businessProfileId)
+          .order('order_index', { ascending: true }),
+      ])
+
+      if (overviewRes.data) {
+        setProductsOverview({
+          id: overviewRes.data.id,
+          short_headline: overviewRes.data.short_headline || '',
+          summary: overviewRes.data.summary || '',
+          primary_industries: Array.isArray(overviewRes.data.primary_industries) ? overviewRes.data.primary_industries : [],
+          business_model: overviewRes.data.business_model || 'Other',
+          is_public: overviewRes.data.is_public ?? true,
+        })
+      }
+
+      if (roadmapRes.data) {
+        setProductsRoadmap({
+          id: roadmapRes.data.id,
+          upcoming_products: Array.isArray(roadmapRes.data.upcoming_products) ? roadmapRes.data.upcoming_products : [],
+          roadmap_ideas: roadmapRes.data.roadmap_ideas || '',
+          expansion_plans: roadmapRes.data.expansion_plans || '',
+          new_markets: roadmapRes.data.new_markets || '',
+          is_public: roadmapRes.data.is_public ?? true,
+        })
+      }
+
+      const products = Array.isArray(productsRes.data) ? productsRes.data : []
+      const productIds = products.map((p) => p.id)
+
+      if (!productIds.length) {
+        setProductCards([])
+        return
+      }
+
+      const [
+        rolesRes,
+        skillsRes,
+        teamsRes,
+        growthRes,
+        mediaRes,
+        impactRes,
+        signalsRes,
+        permissionsRes,
+      ] = await Promise.all([
+        supabase.from('business_product_roles').select('product_id, role_name, order_index').in('product_id', productIds),
+        supabase.from('business_product_skills').select('product_id, skill_name').in('product_id', productIds),
+        supabase.from('business_product_teams').select('product_id, team_name').in('product_id', productIds),
+        supabase.from('business_product_growth_areas').select('product_id, growth_area').in('product_id', productIds),
+        supabase.from('business_product_media').select('product_id, media_type, title, file_path, file_url, file_type, order_index').in('product_id', productIds),
+        supabase.from('business_product_impact').select('product_id, who_it_helps, what_it_improves, real_world_outcomes').in('product_id', productIds),
+        supabase.from('business_product_signals').select('product_id, we_are_hiring_for_this, open_to_partnerships, in_research_and_development, currently_scaling').in('product_id', productIds),
+        supabase.from('business_product_permissions').select('product_id, visibility_level').in('product_id', productIds),
+      ])
+
+      const rolesMap = new Map<number, string[]>()
+      const skillsMap = new Map<number, string[]>()
+      const teamsMap = new Map<number, string[]>()
+      const growthMap = new Map<number, string[]>()
+      const mediaMap = new Map<number, BusinessProductMedia[]>()
+      const impactMap = new Map<number, BusinessProductImpact>()
+      const signalsMap = new Map<number, BusinessProductSignals>()
+      const permMap = new Map<number, string>()
+
+      for (const r of rolesRes.data ?? []) {
+        const arr = rolesMap.get(r.product_id) ?? []
+        arr.push(String(r.role_name || ''))
+        rolesMap.set(r.product_id, arr)
+      }
+      for (const s of skillsRes.data ?? []) {
+        const arr = skillsMap.get(s.product_id) ?? []
+        arr.push(String(s.skill_name || ''))
+        skillsMap.set(s.product_id, arr)
+      }
+      for (const t of teamsRes.data ?? []) {
+        const arr = teamsMap.get(t.product_id) ?? []
+        arr.push(String(t.team_name || ''))
+        teamsMap.set(t.product_id, arr)
+      }
+      for (const g of growthRes.data ?? []) {
+        const arr = growthMap.get(g.product_id) ?? []
+        arr.push(String(g.growth_area || ''))
+        growthMap.set(g.product_id, arr)
+      }
+      for (const m of mediaRes.data ?? []) {
+        const arr = mediaMap.get(m.product_id) ?? []
+        arr.push({
+          media_type: String(m.media_type || 'document'),
+          title: String(m.title || ''),
+          file_path: m.file_path ?? null,
+          file_url: m.file_url ?? null,
+          file_type: m.file_type ?? null,
+          order_index: typeof m.order_index === 'number' ? m.order_index : 0,
+        })
+        mediaMap.set(m.product_id, arr)
+      }
+      for (const imp of impactRes.data ?? []) {
+        impactMap.set(imp.product_id, {
+          who_it_helps: imp.who_it_helps || '',
+          what_it_improves: imp.what_it_improves || '',
+          real_world_outcomes: imp.real_world_outcomes || '',
+        })
+      }
+      for (const s of signalsRes.data ?? []) {
+        signalsMap.set(s.product_id, {
+          we_are_hiring_for_this: !!s.we_are_hiring_for_this,
+          open_to_partnerships: !!s.open_to_partnerships,
+          in_research_and_development: !!s.in_research_and_development,
+          currently_scaling: !!s.currently_scaling,
+        })
+      }
+      for (const p of permissionsRes.data ?? []) {
+        permMap.set(p.product_id, String(p.visibility_level || 'public_summary'))
+      }
+
+      setProductCards(
+        products.map((p) => ({
+          id: p.id,
+          name: p.name || '',
+          category: p.category || 'Product',
+          short_description: p.short_description || '',
+          who_it_is_for: p.who_it_is_for || '',
+          problem_it_solves: p.problem_it_solves || '',
+          logo_or_icon: p.logo_or_icon || '',
+          explainer_video_url: p.explainer_video_url || '',
+          external_link: p.external_link || '',
+          lifecycle_stage: p.lifecycle_stage || '',
+          order_index: typeof p.order_index === 'number' ? p.order_index : 0,
+          is_published: p.is_published ?? true,
+          visibility_level: permMap.get(p.id) || 'public_summary',
+          roles: rolesMap.get(p.id) ?? [],
+          skills: skillsMap.get(p.id) ?? [],
+          teams: teamsMap.get(p.id) ?? [],
+          growth_areas: growthMap.get(p.id) ?? [],
+          media: (mediaMap.get(p.id) ?? []).sort((a, b) => a.order_index - b.order_index),
+          impact: impactMap.get(p.id) ?? { ...emptyImpact },
+          signals: signalsMap.get(p.id) ?? { ...emptySignals },
+        }))
+      )
+    } catch (err: any) {
+      console.error('Failed to load Products & Services:', err)
+      setProductError(err?.message || 'Failed to load Products & Services.')
+    } finally {
+      setProductLoading(false)
+    }
+  }
+
+  async function saveProductsServices() {
+    if (!businessProfileId || !userId) {
+      setProductError('Please sign in to save Products & Services.')
+      return
+    }
+    if (!productsOverview.short_headline.trim() || !productsOverview.summary.trim()) {
+      setProductError('Overview headline and summary are required before saving.')
+      return
+    }
+    const invalidCard = productCards.find(
+      (c) =>
+        !c.name.trim() ||
+        !c.category.trim() ||
+        !c.short_description.trim() ||
+        !c.who_it_is_for.trim() ||
+        !c.problem_it_solves.trim()
+    )
+    if (invalidCard) {
+      setProductError('Each product/service card needs all required fields before saving.')
+      return
+    }
+    setProductSaving(true)
+    setProductError(null)
+    try {
+      const assertOk = (result: { error?: any }, label: string) => {
+        if (result?.error) {
+          throw new Error(result.error?.message || `Failed to save ${label}`)
+        }
+      }
+      const overviewPayload = {
+        business_id: businessProfileId,
+        user_id: userId,
+        short_headline: productsOverview.short_headline.trim(),
+        summary: productsOverview.summary.trim(),
+        primary_industries: productsOverview.primary_industries,
+        business_model: productsOverview.business_model || 'Other',
+        is_public: productsOverview.is_public,
+      }
+      const overviewRes = await supabase
+        .from('business_products_services_overview')
+        .upsert(overviewPayload, { onConflict: 'business_id' })
+      assertOk(overviewRes, 'overview')
+
+      const roadmapPayload = {
+        business_id: businessProfileId,
+        user_id: userId,
+        upcoming_products: productsRoadmap.upcoming_products,
+        roadmap_ideas: productsRoadmap.roadmap_ideas,
+        expansion_plans: productsRoadmap.expansion_plans,
+        new_markets: productsRoadmap.new_markets,
+        is_public: productsRoadmap.is_public,
+      }
+      const roadmapRes = await supabase.from('business_product_roadmap').upsert(roadmapPayload, { onConflict: 'business_id' })
+      assertOk(roadmapRes, 'roadmap')
+
+      if (deletedProductIds.length) {
+        const deleteRes = await supabase.from('business_products_services').delete().in('id', deletedProductIds)
+        assertOk(deleteRes, 'deleted products')
+        setDeletedProductIds([])
+      }
+
+      for (const card of productCards) {
+        const cardPayload = {
+          business_id: businessProfileId,
+          user_id: userId,
+          name: card.name.trim(),
+          category: card.category,
+          short_description: card.short_description.trim(),
+          who_it_is_for: card.who_it_is_for.trim(),
+          problem_it_solves: card.problem_it_solves.trim(),
+          logo_or_icon: card.logo_or_icon || null,
+          explainer_video_url: card.explainer_video_url || null,
+          external_link: card.external_link || null,
+          lifecycle_stage: card.lifecycle_stage || null,
+          order_index: card.order_index,
+          is_published: card.is_published,
+          is_active: true,
+        }
+
+        let productId = card.id
+        if (productId) {
+          const updateRes = await supabase.from('business_products_services').update(cardPayload).eq('id', productId)
+          assertOk(updateRes, 'product card')
+        } else {
+          const insertRes = await supabase.from('business_products_services').insert(cardPayload).select('id').single()
+          assertOk(insertRes, 'product card')
+          const { data } = insertRes as any
+          productId = data?.id
+        }
+
+        if (!productId) continue
+
+        const permRes = await supabase.from('business_product_permissions').upsert(
+          {
+            product_id: productId,
+            business_id: businessProfileId,
+            user_id: userId,
+            visibility_level: card.visibility_level || 'public_summary',
+          },
+          { onConflict: 'product_id' }
+        )
+        assertOk(permRes, 'permissions')
+
+        const signalsRes = await supabase.from('business_product_signals').upsert(
+          {
+            product_id: productId,
+            business_id: businessProfileId,
+            user_id: userId,
+            ...card.signals,
+          },
+          { onConflict: 'product_id' }
+        )
+        assertOk(signalsRes, 'signals')
+
+        const impactRes = await supabase.from('business_product_impact').upsert(
+          {
+            product_id: productId,
+            business_id: businessProfileId,
+            user_id: userId,
+            ...card.impact,
+          },
+          { onConflict: 'product_id' }
+        )
+        assertOk(impactRes, 'impact')
+
+        const removeExisting = async (table: string) => {
+          const res = await supabase.from(table).delete().eq('product_id', productId)
+          assertOk(res, table)
+        }
+
+        await removeExisting('business_product_roles')
+        if (card.roles.length) {
+          const rolesRes = await supabase.from('business_product_roles').insert(
+            card.roles.map((r, idx) => ({
+              product_id: productId,
+              business_id: businessProfileId,
+              user_id: userId,
+              role_name: r,
+              order_index: idx,
+            }))
+          )
+          assertOk(rolesRes, 'roles')
+        }
+
+        await removeExisting('business_product_skills')
+        if (card.skills.length) {
+          const skillsRes = await supabase.from('business_product_skills').insert(
+            card.skills.map((s) => ({
+              product_id: productId,
+              business_id: businessProfileId,
+              user_id: userId,
+              skill_name: s,
+            }))
+          )
+          assertOk(skillsRes, 'skills')
+        }
+
+        await removeExisting('business_product_teams')
+        if (card.teams.length) {
+          const teamsRes = await supabase.from('business_product_teams').insert(
+            card.teams.map((t) => ({
+              product_id: productId,
+              business_id: businessProfileId,
+              user_id: userId,
+              team_name: t,
+            }))
+          )
+          assertOk(teamsRes, 'teams')
+        }
+
+        await removeExisting('business_product_growth_areas')
+        if (card.growth_areas.length) {
+          const growthRes = await supabase.from('business_product_growth_areas').insert(
+            card.growth_areas.map((g) => ({
+              product_id: productId,
+              business_id: businessProfileId,
+              user_id: userId,
+              growth_area: g,
+            }))
+          )
+          assertOk(growthRes, 'growth areas')
+        }
+
+        await removeExisting('business_product_media')
+        if (card.media.length) {
+          const mediaRes = await supabase.from('business_product_media').insert(
+            card.media.map((m, idx) => ({
+              product_id: productId,
+              business_id: businessProfileId,
+              user_id: userId,
+              media_type: m.media_type,
+              title: m.title || null,
+              file_path: m.file_path ?? null,
+              file_url: m.file_url ?? null,
+              file_type: m.file_type ?? null,
+              order_index: idx,
+            }))
+          )
+          assertOk(mediaRes, 'media')
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to save Products & Services:', err)
+      setProductError(err?.message || 'Failed to save Products & Services.')
+    } finally {
+      setProductSaving(false)
+    }
+  }
+
   async function uploadPortfolioImage(kind: 'avatar' | 'banner', file: File) {
     const uid = await getUserId()
     await log('uploadPortfolioImage start', 'P_MEDIA', { kind, hasUser: !!uid, fileType: file.type, fileSize: file.size })
@@ -1707,10 +2745,247 @@ export default function BusinessProfileEditor() {
     await ensureMediaUrl(kind, path)
   }
 
+  function nextTempAttachmentId() {
+    tempAttachmentIdRef.current -= 1
+    return tempAttachmentIdRef.current
+  }
+
+  function updateLocalItem(id: string, patch: Partial<LocalImportItem>) {
+    setLocalImportItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)))
+  }
+
+  function removeLocalItem(id: string) {
+    setLocalImportItems((prev) => {
+      const target = prev.find((item) => item.id === id)
+      if (target?.previewUrl) {
+        try {
+          URL.revokeObjectURL(target.previewUrl)
+        } catch {}
+      }
+      return prev.filter((item) => item.id !== id)
+    })
+    setSelectedIds((prev) => {
+      const next = { ...prev }
+      delete next[localKey(id)]
+      return next
+    })
+  }
+
+  async function uploadImportFiles(files: File[], replaceId?: string, forceCategory?: 'image' | 'video' | 'doc') {
+    setImportError(null)
+    if (!files.length) return
+    const uid = await getUserId()
+    if (!uid) {
+      setImportError('Please sign in to upload files.')
+      return
+    }
+
+    for (const file of files) {
+      const category = allowedFileCategory(file)
+      if (!category) {
+        setImportError(`Unsupported file type: ${file.name}`)
+        continue
+      }
+      if (forceCategory && category !== forceCategory) {
+        setImportError(`Please choose a ${forceCategory === 'doc' ? 'document' : forceCategory} file.`)
+        continue
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        setImportError(`File is too large (max ${Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))}MB).`)
+        continue
+      }
+
+      const targetId = replaceId ?? `tmp-${crypto.randomUUID()}`
+      const previewUrl = URL.createObjectURL(file)
+      const attachmentId =
+        replaceId
+          ? localImportItems.find((item) => item.id === replaceId)?.attachmentId ?? nextTempAttachmentId()
+          : nextTempAttachmentId()
+
+      if (replaceId) {
+        updateLocalItem(replaceId, {
+          title: file.name,
+          item_type: category === 'doc' ? 'document' : category,
+          file_type: file.type || null,
+          previewUrl,
+          status: 'uploading',
+          error: null,
+          savedToBank: false,
+          attachmentId,
+        })
+      } else {
+        setLocalImportItems((prev) => [
+          {
+            id: targetId,
+            source: 'upload',
+            title: file.name,
+            item_type: category === 'doc' ? 'document' : category,
+            file_type: file.type || null,
+            previewUrl,
+            status: 'uploading',
+            error: null,
+            created_at: new Date().toISOString(),
+            attachmentId,
+          },
+          ...prev,
+        ])
+      }
+
+      setUploadProgress((prev) => ({ ...prev, [targetId]: 10 }))
+
+      const path = `business/${uid}/attach-${crypto.randomUUID()}-${file.name}`
+      const { error } = await supabase.storage.from('business-bank').upload(path, file, {
+        upsert: true,
+        contentType: file.type || undefined,
+      })
+
+      if (error) {
+        updateLocalItem(targetId, { status: 'error', error: (error as any)?.message ?? 'Upload failed' })
+        setUploadProgress((prev) => ({ ...prev, [targetId]: 0 }))
+        continue
+      }
+
+      const { data } = await supabase.storage.from('business-bank').createSignedUrl(path, 60 * 30)
+      const signedUrl = data?.signedUrl ?? null
+      updateLocalItem(targetId, {
+        status: 'ready',
+        file_path: path,
+        url: signedUrl,
+        file_type: file.type || null,
+        error: null,
+      })
+      setUploadProgress((prev) => ({ ...prev, [targetId]: 100 }))
+    }
+  }
+
+  async function fetchLinkMeta(url: string) {
+    let title = url
+    let previewUrl: string | null = isImageUrl(url) ? url : null
+    try {
+      const res = await fetch(url)
+      const contentType = res.headers.get('content-type') || ''
+      if (res.ok && contentType.includes('text/html')) {
+        const html = await res.text()
+        const doc = new DOMParser().parseFromString(html, 'text/html')
+        const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content')
+        const pageTitle = doc.querySelector('title')?.textContent
+        title = String(ogTitle || pageTitle || title).trim()
+        if (!previewUrl) {
+          previewUrl = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || null
+        }
+      }
+    } catch {}
+    return { title, previewUrl }
+  }
+
+  async function addLinkItem() {
+    setLinkError(null)
+    const normalized = normalizeUrl(linkInput)
+    if (!normalized) {
+      setLinkError('Please enter a URL.')
+      return
+    }
+    try {
+      new URL(normalized)
+    } catch {
+      setLinkError('Please enter a valid URL.')
+      return
+    }
+
+    setLinkBusy(true)
+    try {
+      const { title, previewUrl } = await fetchLinkMeta(normalized)
+      const id = `link-${crypto.randomUUID()}`
+      setLocalImportItems((prev) => [
+        {
+          id,
+          source: 'link',
+          title: title || normalized,
+          item_type: 'link',
+          url: normalized,
+          previewUrl,
+          status: 'ready',
+          created_at: new Date().toISOString(),
+          attachmentId: nextTempAttachmentId(),
+        },
+        ...prev,
+      ])
+      setLinkInput('')
+    } finally {
+      setLinkBusy(false)
+    }
+  }
+
+  async function replaceLinkItem(item: LocalImportItem) {
+    const nextUrl = window.prompt('Enter the new URL', item.url || '')
+    if (!nextUrl) return
+    const normalized = normalizeUrl(nextUrl)
+    try {
+      new URL(normalized)
+    } catch {
+      setLinkError('Please enter a valid URL.')
+      return
+    }
+    const { title, previewUrl } = await fetchLinkMeta(normalized)
+    updateLocalItem(item.id, {
+      url: normalized,
+      title: title || normalized,
+      previewUrl,
+    })
+  }
+
+  async function saveLocalItemToBusinessBank(item: LocalImportItem) {
+    if (item.savedToBank) return
+    const uid = await getUserId()
+    if (!uid) {
+      setImportError('Please sign in to save items to Business Bank.')
+      return
+    }
+    const ok = await ensureUsersRow(uid)
+    if (!ok) {
+      setImportError('Please sign in again before saving to Business Bank.')
+      return
+    }
+
+    let itemType = 'text'
+    if (item.source === 'link') {
+      itemType = 'link'
+    } else if (item.file_type?.startsWith('image')) {
+      itemType = 'image'
+    } else if (item.file_type?.startsWith('video')) {
+      itemType = 'video'
+    }
+
+    const { data, error } = await supabase
+      .from('business_bank_items')
+      .insert({
+        user_id: uid,
+        item_type: itemType,
+        title: item.title,
+        file_path: item.file_path ?? null,
+        file_type: item.file_type ?? null,
+        file_url: item.url ?? null,
+        metadata: item.source === 'link' ? { url: item.url } : null,
+      })
+      .select('id,item_type,title,metadata,file_path,file_type,created_at')
+      .single()
+
+    if (error) {
+      setImportError((error as any)?.message ?? 'Failed to save to Business Bank.')
+      return
+    }
+    updateLocalItem(item.id, { savedToBank: true })
+    if (data) {
+      setAvailableItems((prev) => [data, ...prev])
+    }
+  }
+
   async function openImportModal() {
     setImportOpen(true)
-      setIsImporting(true)
+    setIsImporting(true)
     setImportError(null)
+    setLinkError(null)
+    setImportTab('upload')
     try {
       const uid = await getUserId()
       await log('import modal open', 'P_IMPORT', { hasUser: !!uid })
@@ -1745,16 +3020,18 @@ export default function BusinessProfileEditor() {
 
   async function applyImport() {
     try {
-      const selected = availableItems.filter((i) => selectedIds[i.id])
-      await log('apply import', 'P_IMPORT_APPLY', { selectedCount: selected.length })
-      if (!selected.length) {
+      const selectedBank = availableItems.filter((i) => selectedIds[bankKey(i.id)])
+      const selectedLocal = localImportItems.filter((i) => selectedIds[localKey(i.id)])
+      const selectedCount = selectedBank.length + selectedLocal.length
+      await log('apply import', 'P_IMPORT_APPLY', { selectedCount })
+      if (!selectedCount) {
         setImportOpen(false)
         return
       }
 
       // Build attachments (for any item that has a file_path)
       const attachmentsToAdd: BusinessProfileData['attachments'] = []
-      for (const item of selected) {
+      for (const item of selectedBank) {
         if (!item.file_path) continue
         const { data, error } = await supabase.storage.from('business-bank').createSignedUrl(item.file_path, 60 * 30)
         await log('createSignedUrl for attachment', 'P_IMPORT', {
@@ -1774,7 +3051,23 @@ export default function BusinessProfileEditor() {
         })
       }
 
-      const mappedExperience = selected
+      for (const item of selectedLocal) {
+        let url = item.url ?? item.previewUrl ?? null
+        if (!url && item.file_path) {
+          const { data } = await supabase.storage.from('business-bank').createSignedUrl(item.file_path, 60 * 30)
+          url = data?.signedUrl ?? null
+        }
+        attachmentsToAdd.push({
+          id: item.attachmentId ?? nextTempAttachmentId(),
+          title: item.title,
+          item_type: item.item_type,
+          file_path: item.file_path ?? null,
+          file_type: item.file_type ?? null,
+          url,
+        })
+      }
+
+      const mappedExperience = selectedBank
         .filter((i) => i.item_type === 'experience')
         .map((item) => ({
         company: item.metadata?.company || item.title,
@@ -1784,7 +3077,7 @@ export default function BusinessProfileEditor() {
           description: item.metadata?.description || item.metadata?.summary || '',
       }))
 
-      const mappedEducation = selected
+      const mappedEducation = selectedBank
         .filter((i) => i.item_type === 'education')
         .map((item) => ({
         institution: item.metadata?.institution || item.title,
@@ -1797,7 +3090,7 @@ export default function BusinessProfileEditor() {
             '',
       }))
 
-      const mappedProjects = selected
+      const mappedProjects = selectedBank
         .filter((i) => i.item_type === 'project')
         .map((item) => ({
           name: String(item.metadata?.name || item.title || '').trim() || 'Project',
@@ -1808,7 +3101,7 @@ export default function BusinessProfileEditor() {
         .filter((p) => p.name)
 
       // Map selected items to skills (Products and Services) - use titles from all selected items
-      const mappedSkills = selected
+      const mappedSkills = selectedBank
         .map((item) => String(item.title || '').trim())
         .filter((title) => title.length > 0)
         .filter((title, index, self) => self.indexOf(title) === index) // Remove duplicates
@@ -2207,11 +3500,15 @@ export default function BusinessProfileEditor() {
           // For uploaded/recorded videos, use file_path to get signed URL
           if (found.file_path) {
             const { data: urlData } = await supabase.storage.from('business-bank').createSignedUrl(found.file_path, 60 * 30)
-            if (urlData?.signedUrl) setIntroPreviewUrl(urlData.signedUrl)
+            if (urlData?.signedUrl) {
+              setIntroPreviewUrl(urlData.signedUrl)
+              introPreviewVideoIdRef.current = current
+            }
           }
           // For linked videos, use file_url directly
           else if (found.file_url) {
             setIntroPreviewUrl(found.file_url)
+            introPreviewVideoIdRef.current = current
           }
         }
       }
@@ -2221,7 +3518,34 @@ export default function BusinessProfileEditor() {
   }
 
   async function applyIntroVideo() {
-    console.log('[BusinessProfileEditor] Applying intro video:', { introVideoId: introPickId })
+    console.log('[BusinessProfileEditor] Applying intro video:', { introVideoId: introPickId, hasPreviewUrl: !!introPreviewUrl })
+    
+    // Ensure preview URL is set if we have a video ID but no preview URL yet
+    if (introPickId && (!introPreviewUrl || introPreviewVideoIdRef.current !== introPickId)) {
+      const uid = await getUserId()
+      if (uid) {
+        const { data: item } = await supabase
+          .from('business_bank_items')
+          .select('id,file_path,file_url')
+          .eq('user_id', uid)
+          .eq('id', introPickId)
+          .maybeSingle()
+        
+        if (item) {
+          if (item.file_path) {
+            const { data: urlData } = await supabase.storage.from('business-bank').createSignedUrl(item.file_path, 60 * 30)
+            if (urlData?.signedUrl) {
+              setIntroPreviewUrl(urlData.signedUrl)
+              introPreviewVideoIdRef.current = introPickId
+            }
+          } else if (item.file_url) {
+            setIntroPreviewUrl(item.file_url)
+            introPreviewVideoIdRef.current = introPickId
+          }
+        }
+      }
+    }
+    
     setProfile((prev) => {
       const updated = { ...prev, introVideoId: introPickId }
       console.log('[BusinessProfileEditor] Updated profile with introVideoId:', { introVideoId: updated.introVideoId })
@@ -2229,6 +3553,8 @@ export default function BusinessProfileEditor() {
     })
     await log('intro video applied', 'P_LAYOUT', { introVideoId: introPickId })
     setIntroModalOpen(false)
+    // Save the profile after applying the video
+    await savePortfolio({ redirect: false, source: 'intro-video-apply' })
   }
 
   async function applyProjectImport() {
@@ -2379,7 +3705,7 @@ export default function BusinessProfileEditor() {
     }
   }
 
-  const savePortfolio = async (opts?: { redirect?: boolean; source?: string }) => {
+  const savePortfolio = async (opts?: { redirect?: boolean; source?: string; sectionVisibilityOverride?: typeof sectionVisibility }) => {
     try {
       const uid = await getUserId()
       await log('savePortfolio start', 'P_SAVE', { hasUser: !!uid, redirect: !!opts?.redirect, source: opts?.source ?? null })
@@ -2457,10 +3783,12 @@ export default function BusinessProfileEditor() {
       
       // Explicitly preserve attachmentIds for education, projects, and referees
       // Explicitly ensure skills array is included
+      // Use override if provided (for immediate state updates), otherwise use current state
+      const visibilityToSave = opts?.sectionVisibilityOverride ?? sectionVisibility
       const payloadMeta = {
         ...profile,
         profileSelections: keepSelections,
-        sectionVisibility: sectionVisibility, // Save section visibility settings
+        sectionVisibility: visibilityToSave, // Save section visibility settings
         itemVisibility: itemVisibility, // Save individual item visibility settings
         skills: Array.isArray(profile.skills) ? profile.skills : [],
         education: Array.isArray(profile.education)
@@ -2574,7 +3902,14 @@ export default function BusinessProfileEditor() {
         console.log('[BusinessProfileEditor] Portfolio updated successfully. Saved education entries with attachments:', savedEducationWithAttachments.length)
         
         // Reload profile from database to ensure UI reflects saved state
-        await loadSavedPortfolio()
+        // Skip reload for visibility-only and intro video saves since we already have the correct state
+        const isVisibilityOnlySave = opts?.source?.startsWith('visibility:')
+        const isIntroVideoSave = opts?.source?.startsWith('intro-video')
+        if (!isVisibilityOnlySave && !isIntroVideoSave) {
+          await loadSavedPortfolio()
+        } else {
+          console.log('[BusinessProfileEditor] Skipping reload for', isVisibilityOnlySave ? 'visibility-only' : 'intro-video', 'save')
+        }
       } else {
         // Log what we're about to insert
         const educationWithAttachments = Array.isArray(payloadMeta.education) 
@@ -2639,7 +3974,14 @@ export default function BusinessProfileEditor() {
         console.log('[BusinessProfileEditor] Portfolio inserted successfully. Saved education entries with attachments:', savedEducationWithAttachments.length)
         
         // Reload profile from database to ensure UI reflects saved state
-        await loadSavedPortfolio()
+        // Skip reload for visibility-only and intro video saves since we already have the correct state
+        const isVisibilityOnlySave = opts?.source?.startsWith('visibility:')
+        const isIntroVideoSave = opts?.source?.startsWith('intro-video')
+        if (!isVisibilityOnlySave && !isIntroVideoSave) {
+          await loadSavedPortfolio()
+        } else {
+          console.log('[BusinessProfileEditor] Skipping reload for', isVisibilityOnlySave ? 'visibility-only' : 'intro-video', 'save')
+        }
       }
 
       if (opts?.redirect) {
@@ -2719,12 +4061,6 @@ export default function BusinessProfileEditor() {
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
           <Link href="/dashboard/business" className="text-slate-300 hover:text-blue-400">← Back</Link>
           <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard/business/edit/templates"
-              className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 border border-purple-500/50 font-semibold"
-            >
-              Choose Template
-            </Link>
             <Link href="/dashboard/business/view" className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 border border-purple-500/50 font-semibold">
               View Profile
             </Link>
@@ -2739,6 +4075,44 @@ export default function BusinessProfileEditor() {
             </button>
           </div>
         </div>
+        {/* Section Navigation Menu */}
+        <div className="max-w-7xl mx-auto px-8 py-3 border-t border-white/10 bg-slate-950/90">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+            <span className="text-xs text-slate-400 font-medium whitespace-nowrap mr-2">Jump to:</span>
+            {[
+              { id: 'section-basic', label: 'Basic Information' },
+              { id: 'section-intro', label: 'Introduction Video' },
+              { id: 'section-social', label: 'Social' },
+              { id: 'section-products', label: 'Products & Services' },
+              { id: 'section-culture', label: 'Culture & Values' },
+              { id: 'section-education', label: 'Education' },
+              { id: 'section-referees', label: 'Referees' },
+              { id: 'section-attachments', label: 'Attachments' },
+              { id: 'section-projects', label: 'Projects' },
+              { id: 'section-layout', label: 'Layout' },
+            ].map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => {
+                  const element = document.getElementById(section.id)
+                  if (element) {
+                    const headerOffset = 120 // Account for sticky header
+                    const elementPosition = element.getBoundingClientRect().top
+                    const offsetPosition = elementPosition + window.pageYOffset - headerOffset
+                    window.scrollTo({
+                      top: offsetPosition,
+                      behavior: 'smooth'
+                    })
+                  }
+                }}
+                className="px-3 py-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 border border-white/10 text-xs text-slate-300 hover:text-white whitespace-nowrap transition-colors"
+              >
+                {section.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </header>
 
 
@@ -2751,7 +4125,7 @@ export default function BusinessProfileEditor() {
         </div>
 
         {/* Basic Information */}
-        <section className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
+        <section id="section-basic" className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-semibold">Basic Information</h2>
@@ -2817,7 +4191,7 @@ export default function BusinessProfileEditor() {
 
             <div className="border border-white/10 rounded-xl overflow-hidden bg-slate-900/40">
               <div className="p-3 flex items-center gap-4">
-                <div className="w-20 h-20 rounded-full border border-white/10 bg-slate-900 overflow-hidden flex items-center justify-center">
+                <div className="w-40 h-40 rounded-full border border-white/10 bg-slate-900 overflow-hidden flex items-center justify-center">
                   {avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
@@ -2826,8 +4200,7 @@ export default function BusinessProfileEditor() {
                   )}
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm text-slate-200 font-medium">Avatar</div>
-                  <div className="text-xs text-slate-400">Square headshot works best</div>
+                  <div className="text-sm text-slate-200 font-medium">Company Logo</div>
                 </div>
                 <label className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm cursor-pointer">
                   Upload
@@ -2850,7 +4223,7 @@ export default function BusinessProfileEditor() {
           <div className="space-y-4">
             <input
               type="text"
-              placeholder="Full Name"
+              placeholder="Company Name"
               value={profile.name}
               onChange={(e) => setProfile((prev) => ({ ...prev, name: e.target.value }))}
               disabled={!sectionEdit.basic}
@@ -2858,7 +4231,7 @@ export default function BusinessProfileEditor() {
             />
             <input
               type="text"
-              placeholder="Professional Title"
+              placeholder="Industry"
               value={profile.title}
               onChange={(e) => setProfile((prev) => ({ ...prev, title: e.target.value }))}
               disabled={!sectionEdit.basic}
@@ -2867,7 +4240,7 @@ export default function BusinessProfileEditor() {
             <CollapsibleTextarea
               value={profile.bio}
               onChange={(e) => setProfile((prev) => ({ ...prev, bio: e.target.value }))}
-              placeholder="Bio / Summary"
+              placeholder="About the Company"
               disabled={!sectionEdit.basic}
               className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
               expandKey="bio"
@@ -2878,8 +4251,131 @@ export default function BusinessProfileEditor() {
           </div>
         </section>
 
+        {/* Introduction Video */}
+        <section id="section-intro" className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold">Introduction Video</h2>
+              <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer" title="Show in public profile">
+                <input
+                  type="checkbox"
+                  checked={sectionVisibility.intro ?? true}
+                  onChange={async (e) => {
+                    const newValue = e.target.checked
+                    const updatedVisibility = { ...sectionVisibility, intro: newValue }
+                    setSectionVisibility(updatedVisibility)
+                    setTimeout(async () => {
+                      await savePortfolio({ 
+                        redirect: false, 
+                        source: 'visibility:intro',
+                        sectionVisibilityOverride: updatedVisibility
+                      })
+                    }, 100)
+                  }}
+                  className="w-4 h-4 rounded border-gray-600 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-2"
+                />
+                <span>Public</span>
+              </label>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  await openIntroVideoModal()
+                }}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium"
+              >
+                {profile.introVideoId ? 'Change Video' : 'Select Video'}
+              </button>
+            </div>
+          </div>
+
+          {profile.introVideoId ? (
+            <div className="mt-4">
+              {introPreviewUrl ? (
+                <div className="mx-auto max-w-3xl">
+                  <div className="rounded-3xl p-[1px] bg-gradient-to-br from-white/15 via-white/5 to-transparent shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+                    <div className="rounded-3xl overflow-hidden bg-slate-950/60 border border-white/10">
+                      <div className="bg-black">
+                        {(() => {
+                          // Check if it's a YouTube URL
+                          const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/
+                          const youtubeMatch = introPreviewUrl.match(youtubeRegex)
+                          if (youtubeMatch) {
+                            const videoId = youtubeMatch[1]
+                            return (
+                              <iframe
+                                src={`https://www.youtube.com/embed/${videoId}`}
+                                className="w-full aspect-video"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            )
+                          }
+                          // Check if it's a Vimeo URL
+                          const vimeoRegex = /(?:vimeo\.com\/)(\d+)/
+                          const vimeoMatch = introPreviewUrl.match(vimeoRegex)
+                          if (vimeoMatch) {
+                            const videoId = vimeoMatch[1]
+                            return (
+                              <iframe
+                                src={`https://player.vimeo.com/video/${videoId}`}
+                                className="w-full aspect-video"
+                                allow="autoplay; fullscreen; picture-in-picture"
+                                allowFullScreen
+                              />
+                            )
+                          }
+                          // Regular video URL
+                          return (
+                            <video src={introPreviewUrl} controls playsInline className="w-full aspect-video object-contain" />
+                          )
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-slate-400 text-sm py-8 text-center">
+                  Loading video preview...
+                </div>
+              )}
+              <div className="mt-4 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setProfile((prev) => ({ ...prev, introVideoId: null }))
+                    setIntroPreviewUrl(null)
+                    introPreviewVideoIdRef.current = null
+                    await savePortfolio({ redirect: false, source: 'intro-video-remove' })
+                  }}
+                  className="px-4 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-300 text-sm font-medium border border-red-500/30"
+                >
+                  Remove Video
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 p-8 border-2 border-dashed border-white/10 rounded-xl text-center">
+              <p className="text-slate-400 text-sm mb-4">No introduction video selected</p>
+              <p className="text-slate-500 text-xs mb-4">
+                Select a video from your Business Bank or upload a new one. Keep your intro under 60-90 seconds and speak to your strongest work examples.
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  await openIntroVideoModal()
+                }}
+                className="px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium"
+              >
+                Select Video from Business Bank
+              </button>
+            </div>
+          )}
+        </section>
+
         {/* Social */}
-        <section className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
+        <section id="section-social" className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-semibold">Social</h2>
@@ -2999,131 +4495,712 @@ export default function BusinessProfileEditor() {
           )}
         </section>
 
-        {/* Products and Services (formerly Skills) */}
-        <section className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-xl font-semibold">Products and Services</h2>
-                <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer" title="Show in public profile">
-                  <input
-                    type="checkbox"
-                    checked={sectionVisibility.skills ?? true}
-                    onChange={(e) => {
-                      setSectionVisibility(prev => ({ ...prev, skills: e.target.checked }))
-                      setTimeout(() => savePortfolio({ redirect: false, source: 'visibility:skills' }), 100)
-                    }}
-                    className="w-4 h-4 rounded border-gray-600 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-2"
-                  />
-                  <span>Public</span>
-                </label>
-              </div>
-              <p className="text-slate-400 text-sm mt-1">
-                Provide a detailed description of what you offer, including customer testimonials or case studies.
-              </p>
+        {/* Products & Services */}
+        <section id="section-products" className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold">Products & Services</h2>
             </div>
-            <div className="flex gap-2">
-              {!sectionEdit.skills ? (
-                <button className="text-sm underline text-blue-300" onClick={() => setSectionEdit((p) => ({ ...p, skills: true }))}>
+            <div className="flex items-center gap-3">
+              {!sectionEdit.products_services ? (
+                <button className="text-sm underline text-blue-300" onClick={() => setSectionEdit((p) => ({ ...p, products_services: true }))}>
                   Edit
                 </button>
               ) : (
                 <button
                   className="text-sm underline text-blue-300 disabled:opacity-60"
-                  disabled={savingSection === 'skills'}
-                  onClick={() => saveSection('skills')}
+                  disabled={productSaving}
+                  onClick={saveProductsServices}
                 >
-                  {savingSection === 'skills' ? 'Saving…' : 'Save'}
+                  {productSaving ? 'Saving…' : 'Save'}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={openImportModal}
-                disabled={isImporting || !sectionEdit.skills}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-60"
-              >
-                {isImporting ? 'Importing…' : 'Import from Business Bank'}
-              </button>
             </div>
           </div>
-          {sectionEdit.skills && (
+
+          {productError ? <div className="mb-4 text-sm text-red-400">{productError}</div> : null}
+
+          {/* Overview Editor */}
+          <div className="border border-white/10 rounded-xl p-4 bg-slate-900/30 mb-6">
+            <div className="text-sm text-slate-300 font-semibold mb-3">Overview</div>
+            <div className="grid gap-3">
+              <input
+                type="text"
+                placeholder="Short headline"
+                value={productsOverview.short_headline}
+                onChange={(e) => setProductsOverview((prev) => ({ ...prev, short_headline: e.target.value }))}
+                disabled={!sectionEdit.products_services}
+                className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+              />
+              <CollapsibleTextarea
+                value={productsOverview.summary}
+                onChange={(e) => setProductsOverview((prev) => ({ ...prev, summary: e.target.value }))}
+                placeholder="Summary (2–3 sentences)"
+                disabled={!sectionEdit.products_services}
+                className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                expandKey="products-summary"
+                expanded={!!expandedTextareas['products-summary']}
+                onToggle={toggleTextarea}
+                defaultRows={4}
+                showVoiceButtons
+              />
+              <div>
+                <div className="text-xs text-slate-400 mb-2">Primary industries</div>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    placeholder="Add industry"
+                    value={productInputs['overview-industry'] || ''}
+                    onChange={(e) => setProductInput('overview-industry', e.target.value)}
+                    disabled={!sectionEdit.products_services}
+                    className="flex-1 p-2 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                  />
+                  <button
+                    type="button"
+                    disabled={!sectionEdit.products_services}
+                    className="px-3 py-2 bg-blue-600 text-white rounded disabled:opacity-60"
+                    onClick={() =>
+                      setProductsOverview((prev) => ({
+                        ...prev,
+                        primary_industries: pushTag(prev.primary_industries, productInputs['overview-industry'] || ''),
+                      }))
+                    }
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {productsOverview.primary_industries.map((i) => (
+                    <span key={i} className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-slate-200">
+                      {i}
+                      {sectionEdit.products_services && (
+                        <button
+                          type="button"
+                          className="ml-2 text-red-400"
+                          onClick={() =>
+                            setProductsOverview((prev) => ({ ...prev, primary_industries: removeTag(prev.primary_industries, i) }))
+                          }
+                        >
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <select
+                  value={productsOverview.business_model}
+                  onChange={(e) => setProductsOverview((prev) => ({ ...prev, business_model: e.target.value }))}
+                  disabled={!sectionEdit.products_services}
+                  className="p-2 rounded bg-slate-900 border border-slate-700 text-white disabled:opacity-60"
+                >
+                  {BUSINESS_MODEL_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+                <label className="flex items-center gap-2 text-xs text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={productsOverview.is_public}
+                    onChange={(e) => setProductsOverview((prev) => ({ ...prev, is_public: e.target.checked }))}
+                    disabled={!sectionEdit.products_services}
+                  />
+                  Public overview
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Product/Service Card Manager */}
+          <div className="border border-white/10 rounded-xl p-4 bg-slate-900/30 mb-6">
             <div className="flex items-center justify-between mb-3">
+              <div className="text-sm text-slate-300 font-semibold">Product / Service Cards</div>
+              <button
+                type="button"
+                className="px-3 py-1.5 bg-green-600 text-white rounded disabled:opacity-60"
+                disabled={!sectionEdit.products_services}
+                onClick={addProductCard}
+              >
+                Add Card
+              </button>
+            </div>
+            {productLoading ? (
+              <div className="text-sm text-slate-400">Loading products…</div>
+            ) : productCards.length === 0 ? (
+              <div className="text-sm text-slate-400">No products or services added yet.</div>
+            ) : (
+              <div className="space-y-4">
+                {productCards.map((card, index) => (
+                  <div
+                    key={card.id ?? `new-${index}`}
+                    className="border border-white/10 rounded-xl p-4 bg-slate-950/40"
+                    draggable
+                    onDragStart={() => setProductDragIndex(index)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => {
+                      if (productDragIndex == null) return
+                      moveProductCard(productDragIndex, index)
+                      setProductDragIndex(null)
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-sm text-slate-400">Drag to reorder</div>
+                      <button
+                        type="button"
+                        className="text-xs text-red-300 underline"
+                        disabled={!sectionEdit.products_services}
+                        onClick={() => removeProductCard(index)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                    <div className="grid gap-3">
+                      <input
+                        type="text"
+                        placeholder="Name"
+                        value={card.name}
+                        onChange={(e) => updateProductCard(index, { name: e.target.value })}
+                        disabled={!sectionEdit.products_services}
+                        className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                      />
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <select
+                          value={card.category}
+                          onChange={(e) => updateProductCard(index, { category: e.target.value })}
+                          disabled={!sectionEdit.products_services}
+                          className="p-2 rounded bg-slate-900 border border-slate-700 text-white disabled:opacity-60"
+                        >
+                          {PRODUCT_CATEGORY_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={card.lifecycle_stage}
+                          onChange={(e) => updateProductCard(index, { lifecycle_stage: e.target.value })}
+                          disabled={!sectionEdit.products_services}
+                          className="p-2 rounded bg-slate-900 border border-slate-700 text-white disabled:opacity-60"
+                        >
+                          <option value="">Lifecycle stage</option>
+                          {LIFECYCLE_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <select
+                          value={card.visibility_level}
+                          onChange={(e) => updateProductCard(index, { visibility_level: e.target.value })}
+                          disabled={!sectionEdit.products_services}
+                          className="p-2 rounded bg-slate-900 border border-slate-700 text-white disabled:opacity-60"
+                        >
+                          {VISIBILITY_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="flex items-center gap-2 text-xs text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={card.is_published}
+                            onChange={(e) => updateProductCard(index, { is_published: e.target.checked })}
+                            disabled={!sectionEdit.products_services}
+                          />
+                          Published
+                        </label>
+                      </div>
+                      <CollapsibleTextarea
+                        value={card.short_description}
+                        onChange={(e) => updateProductCard(index, { short_description: e.target.value })}
+                        placeholder="Short description"
+                        disabled={!sectionEdit.products_services}
+                        className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                        expandKey={`product-short-${index}`}
+                        expanded={!!expandedTextareas[`product-short-${index}`]}
+                        onToggle={toggleTextarea}
+                        defaultRows={3}
+                        showVoiceButtons
+                      />
+                      <CollapsibleTextarea
+                        value={card.who_it_is_for}
+                        onChange={(e) => updateProductCard(index, { who_it_is_for: e.target.value })}
+                        placeholder="Who it is for"
+                        disabled={!sectionEdit.products_services}
+                        className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                        expandKey={`product-for-${index}`}
+                        expanded={!!expandedTextareas[`product-for-${index}`]}
+                        onToggle={toggleTextarea}
+                        defaultRows={3}
+                        showVoiceButtons
+                      />
+                      <CollapsibleTextarea
+                        value={card.problem_it_solves}
+                        onChange={(e) => updateProductCard(index, { problem_it_solves: e.target.value })}
+                        placeholder="Problem it solves"
+                        disabled={!sectionEdit.products_services}
+                        className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                        expandKey={`product-problem-${index}`}
+                        expanded={!!expandedTextareas[`product-problem-${index}`]}
+                        onToggle={toggleTextarea}
+                        defaultRows={3}
+                        showVoiceButtons
+                      />
+
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <input
+                          type="text"
+                          placeholder="Explainer video URL"
+                          value={card.explainer_video_url}
+                          onChange={(e) => updateProductCard(index, { explainer_video_url: e.target.value })}
+                          disabled={!sectionEdit.products_services}
+                          className="p-2 rounded bg-slate-900 border border-slate-700 text-white disabled:opacity-60"
+                        />
+                        <input
+                          type="text"
+                          placeholder="External link"
+                          value={card.external_link}
+                          onChange={(e) => updateProductCard(index, { external_link: e.target.value })}
+                          disabled={!sectionEdit.products_services}
+                          className="p-2 rounded bg-slate-900 border border-slate-700 text-white disabled:opacity-60"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="text-xs text-slate-400 mb-2">Logo / Icon</div>
+                        {card.logo_or_icon ? (
+                          <div className="mb-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={thumbUrls[card.logo_or_icon] || card.logo_or_icon}
+                              alt="Logo"
+                              className="h-16 w-16 rounded bg-white/5 border border-white/10 object-contain"
+                            />
+                          </div>
+                        ) : null}
+                        <div className="flex flex-wrap gap-2">
+                          <input
+                            type="text"
+                            placeholder="Logo URL or storage path"
+                            value={card.logo_or_icon}
+                            onChange={(e) => updateProductCard(index, { logo_or_icon: e.target.value })}
+                            disabled={!sectionEdit.products_services}
+                            className="flex-1 p-2 rounded bg-slate-900 border border-slate-700 text-white disabled:opacity-60"
+                          />
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={!sectionEdit.products_services}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) uploadProductLogo(index, file)
+                              e.currentTarget.value = ''
+                            }}
+                            className="text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs text-slate-400 mb-2">Media</div>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*,video/*,application/pdf"
+                            disabled={!sectionEdit.products_services}
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || [])
+                              if (files.length) uploadProductMedia(index, files)
+                              e.currentTarget.value = ''
+                            }}
+                            className="text-xs"
+                          />
+                          <button
+                            type="button"
+                            disabled={!sectionEdit.products_services}
+                            className="px-3 py-1.5 bg-slate-800 text-white rounded text-xs"
+                            onClick={() => {
+                              const link = window.prompt('Enter a media link')
+                              if (link) addProductMediaLink(index, link)
+                            }}
+                          >
+                            Add Link
+                          </button>
+                        </div>
+                        {card.media.length ? (
+                          <div className="space-y-2">
+                            {card.media.map((m, mIndex) => (
+                              <div key={`${m.media_type}-${mIndex}`} className="flex items-center justify-between gap-3 text-xs text-slate-300">
+                                <div className="truncate">{m.title || m.file_url || m.file_path || m.media_type}</div>
+                                <button
+                                  type="button"
+                                  className="text-red-300 underline"
+                                  onClick={() => removeProductMedia(index, mIndex)}
+                                  disabled={!sectionEdit.products_services}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-slate-500">No media attached.</div>
+                        )}
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <div>
+                          <div className="text-xs text-slate-400 mb-2">Teams involved</div>
+                          <div className="flex gap-2 mb-2">
+                            <input
+                              type="text"
+                              placeholder="Add team"
+                              value={productInputs[`team-${index}`] || ''}
+                              onChange={(e) => setProductInput(`team-${index}`, e.target.value)}
+                              disabled={!sectionEdit.products_services}
+                              className="flex-1 p-2 rounded bg-slate-900 border border-slate-700 text-white disabled:opacity-60"
+                            />
+                            <button
+                              type="button"
+                              disabled={!sectionEdit.products_services}
+                              className="px-2 py-1 bg-blue-600 text-white rounded text-xs"
+                              onClick={() => commitProductTag(index, 'teams', `team-${index}`)}
+                            >
+                              Add
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {card.teams.map((t) => (
+                              <span key={t} className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-xs">
+                                {t}
+                                <button
+                                  type="button"
+                                  className="ml-2 text-red-400"
+                                  onClick={() => updateProductListField(index, 'teams', removeTag(card.teams, t))}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-400 mb-2">Typical roles</div>
+                          <div className="flex gap-2 mb-2">
+                            <input
+                              type="text"
+                              placeholder="Add role"
+                              value={productInputs[`role-${index}`] || ''}
+                              onChange={(e) => setProductInput(`role-${index}`, e.target.value)}
+                              disabled={!sectionEdit.products_services}
+                              className="flex-1 p-2 rounded bg-slate-900 border border-slate-700 text-white disabled:opacity-60"
+                            />
+                            <button
+                              type="button"
+                              disabled={!sectionEdit.products_services}
+                              className="px-2 py-1 bg-blue-600 text-white rounded text-xs"
+                              onClick={() => commitProductTag(index, 'roles', `role-${index}`)}
+                            >
+                              Add
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {card.roles.map((r) => (
+                              <span key={r} className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-xs">
+                                {r}
+                                <button
+                                  type="button"
+                                  className="ml-2 text-red-400"
+                                  onClick={() => updateProductListField(index, 'roles', removeTag(card.roles, r))}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-400 mb-2">Skills used</div>
+                          <div className="flex gap-2 mb-2">
+                            <input
+                              type="text"
+                              placeholder="Add skill"
+                              value={productInputs[`skill-${index}`] || ''}
+                              onChange={(e) => setProductInput(`skill-${index}`, e.target.value)}
+                              disabled={!sectionEdit.products_services}
+                              className="flex-1 p-2 rounded bg-slate-900 border border-slate-700 text-white disabled:opacity-60"
+                            />
+                            <button
+                              type="button"
+                              disabled={!sectionEdit.products_services}
+                              className="px-2 py-1 bg-blue-600 text-white rounded text-xs"
+                              onClick={() => commitProductTag(index, 'skills', `skill-${index}`)}
+                            >
+                              Add
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {card.skills.map((s) => (
+                              <span key={s} className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-xs">
+                                {s}
+                                <button
+                                  type="button"
+                                  className="ml-2 text-red-400"
+                                  onClick={() => updateProductListField(index, 'skills', removeTag(card.skills, s))}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-400 mb-2">Growth areas</div>
+                          <div className="flex gap-2 mb-2">
+                            <input
+                              type="text"
+                              placeholder="Add growth area"
+                              value={productInputs[`growth-${index}`] || ''}
+                              onChange={(e) => setProductInput(`growth-${index}`, e.target.value)}
+                              disabled={!sectionEdit.products_services}
+                              className="flex-1 p-2 rounded bg-slate-900 border border-slate-700 text-white disabled:opacity-60"
+                            />
+                            <button
+                              type="button"
+                              disabled={!sectionEdit.products_services}
+                              className="px-2 py-1 bg-blue-600 text-white rounded text-xs"
+                              onClick={() => commitProductTag(index, 'growth_areas', `growth-${index}`)}
+                            >
+                              Add
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {card.growth_areas.map((g) => (
+                              <span key={g} className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-xs">
+                                {g}
+                                <button
+                                  type="button"
+                                  className="ml-2 text-red-400"
+                                  onClick={() => updateProductListField(index, 'growth_areas', removeTag(card.growth_areas, g))}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-3 gap-3">
+                        <CollapsibleTextarea
+                          value={card.impact.who_it_helps}
+                          onChange={(e) => updateProductCard(index, { impact: { ...card.impact, who_it_helps: e.target.value } })}
+                          placeholder="Who it helps"
+                          disabled={!sectionEdit.products_services}
+                          className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                          expandKey={`impact-helps-${index}`}
+                          expanded={!!expandedTextareas[`impact-helps-${index}`]}
+                          onToggle={toggleTextarea}
+                          defaultRows={3}
+                          showVoiceButtons
+                        />
+                        <CollapsibleTextarea
+                          value={card.impact.what_it_improves}
+                          onChange={(e) => updateProductCard(index, { impact: { ...card.impact, what_it_improves: e.target.value } })}
+                          placeholder="What it improves"
+                          disabled={!sectionEdit.products_services}
+                          className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                          expandKey={`impact-improves-${index}`}
+                          expanded={!!expandedTextareas[`impact-improves-${index}`]}
+                          onToggle={toggleTextarea}
+                          defaultRows={3}
+                          showVoiceButtons
+                        />
+                        <CollapsibleTextarea
+                          value={card.impact.real_world_outcomes}
+                          onChange={(e) => updateProductCard(index, { impact: { ...card.impact, real_world_outcomes: e.target.value } })}
+                          placeholder="Real world outcomes"
+                          disabled={!sectionEdit.products_services}
+                          className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                          expandKey={`impact-outcomes-${index}`}
+                          expanded={!!expandedTextareas[`impact-outcomes-${index}`]}
+                          onToggle={toggleTextarea}
+                          defaultRows={3}
+                          showVoiceButtons
+                        />
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <label className="flex items-center gap-2 text-xs text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={card.signals.we_are_hiring_for_this}
+                            onChange={(e) => updateProductCard(index, { signals: { ...card.signals, we_are_hiring_for_this: e.target.checked } })}
+                            disabled={!sectionEdit.products_services}
+                          />
+                          We are hiring for this
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={card.signals.open_to_partnerships}
+                            onChange={(e) => updateProductCard(index, { signals: { ...card.signals, open_to_partnerships: e.target.checked } })}
+                            disabled={!sectionEdit.products_services}
+                          />
+                          Open to partnerships
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={card.signals.in_research_and_development}
+                            onChange={(e) => updateProductCard(index, { signals: { ...card.signals, in_research_and_development: e.target.checked } })}
+                            disabled={!sectionEdit.products_services}
+                          />
+                          In research & development
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={card.signals.currently_scaling}
+                            onChange={(e) => updateProductCard(index, { signals: { ...card.signals, currently_scaling: e.target.checked } })}
+                            disabled={!sectionEdit.products_services}
+                          />
+                          Currently scaling
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Roadmap / Future Plans */}
+          <div className="border border-white/10 rounded-xl p-4 bg-slate-900/30">
+            <div className="text-sm text-slate-300 font-semibold mb-3">Roadmap / Future Plans</div>
+            <div className="grid gap-3">
+              <div>
+                <div className="text-xs text-slate-400 mb-2">Upcoming products</div>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    placeholder="Add upcoming product"
+                    value={productInputs['roadmap-upcoming'] || ''}
+                    onChange={(e) => setProductInput('roadmap-upcoming', e.target.value)}
+                    disabled={!sectionEdit.products_services}
+                    className="flex-1 p-2 rounded bg-slate-900 border border-slate-700 text-white disabled:opacity-60"
+                  />
+                  <button
+                    type="button"
+                    disabled={!sectionEdit.products_services}
+                    className="px-3 py-2 bg-blue-600 text-white rounded disabled:opacity-60"
+                    onClick={() =>
+                      setProductsRoadmap((prev) => ({
+                        ...prev,
+                        upcoming_products: pushTag(prev.upcoming_products, productInputs['roadmap-upcoming'] || ''),
+                      }))
+                    }
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {productsRoadmap.upcoming_products.map((u) => (
+                    <span key={u} className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-slate-200">
+                      {u}
+                      {sectionEdit.products_services && (
+                        <button
+                          type="button"
+                          className="ml-2 text-red-400"
+                          onClick={() =>
+                            setProductsRoadmap((prev) => ({ ...prev, upcoming_products: removeTag(prev.upcoming_products, u) }))
+                          }
+                        >
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <CollapsibleTextarea
+                value={productsRoadmap.roadmap_ideas}
+                onChange={(e) => setProductsRoadmap((prev) => ({ ...prev, roadmap_ideas: e.target.value }))}
+                placeholder="Roadmap ideas"
+                disabled={!sectionEdit.products_services}
+                className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                expandKey="roadmap-ideas"
+                expanded={!!expandedTextareas['roadmap-ideas']}
+                onToggle={toggleTextarea}
+                defaultRows={4}
+                showVoiceButtons
+              />
+              <CollapsibleTextarea
+                value={productsRoadmap.expansion_plans}
+                onChange={(e) => setProductsRoadmap((prev) => ({ ...prev, expansion_plans: e.target.value }))}
+                placeholder="Expansion plans"
+                disabled={!sectionEdit.products_services}
+                className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                expandKey="roadmap-expansion"
+                expanded={!!expandedTextareas['roadmap-expansion']}
+                onToggle={toggleTextarea}
+                defaultRows={4}
+                showVoiceButtons
+              />
+              <CollapsibleTextarea
+                value={productsRoadmap.new_markets}
+                onChange={(e) => setProductsRoadmap((prev) => ({ ...prev, new_markets: e.target.value }))}
+                placeholder="New markets"
+                disabled={!sectionEdit.products_services}
+                className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                expandKey="roadmap-markets"
+                expanded={!!expandedTextareas['roadmap-markets']}
+                onToggle={toggleTextarea}
+                defaultRows={4}
+                showVoiceButtons
+              />
               <label className="flex items-center gap-2 text-xs text-slate-300">
                 <input
                   type="checkbox"
-                  checked={bulkIsAllSelected(profile.skills.map((_, i) => String(i)), bulkSel.skills)}
-                  onChange={(e) => bulkSetAll('skills', profile.skills.map((_, i) => String(i)), e.target.checked)}
-                  disabled={profile.skills.length === 0}
+                  checked={productsRoadmap.is_public}
+                  onChange={(e) => setProductsRoadmap((prev) => ({ ...prev, is_public: e.target.checked }))}
+                  disabled={!sectionEdit.products_services}
                 />
-                Select all
+                Public roadmap
               </label>
-              <button
-                type="button"
-                disabled={bulkCount(bulkSel.skills) === 0}
-                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs disabled:opacity-50"
-                onClick={() => bulkDeleteSelected('skills')}
-              >
-                Delete selected ({bulkCount(bulkSel.skills)})
-              </button>
             </div>
-          )}
-          <div className="flex gap-2 mb-4">
-            <input
-              type="text"
-              placeholder="Add product or service (e.g., Software Development, Consulting Services)"
-              value={newSkill}
-              onChange={(e) => setNewSkill(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && addSkill()}
-              disabled={!sectionEdit.skills}
-              className="flex-1 p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-            />
-            <button
-              onClick={addSkill}
-              disabled={!sectionEdit.skills}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              Add
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {profile.skills.map((skill, index) => (
-              <span
-                key={index}
-                className="px-3 py-1 bg-blue-500/20 text-blue-200 rounded-full flex items-center gap-2 text-sm"
-              >
-                {sectionEdit.skills && (
-                  <input
-                    type="checkbox"
-                    className="accent-blue-500"
-                    checked={!!bulkSel.skills[String(index)]}
-                    onChange={(e) => bulkToggleKey('skills', String(index), e.target.checked)}
-                  />
-                )}
-                {skill}
-                <button
-                  onClick={() => removeSkill(index)}
-                  disabled={!sectionEdit.skills}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
           </div>
         </section>
 
         {/* Experience */}
-        <section className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
+        <section id="section-culture" className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <h2 className="text-xl font-semibold">Work Experience</h2>
+              <h2 className="text-xl font-semibold">Culture & Values</h2>
               <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer" title="Show in public profile">
                 <input
                   type="checkbox"
                   checked={sectionVisibility.experience ?? true}
-                  onChange={(e) => {
-                    setSectionVisibility(prev => ({ ...prev, experience: e.target.checked }))
-                    setTimeout(() => savePortfolio({ redirect: false, source: 'visibility:experience' }), 100)
+                  onChange={async (e) => {
+                    const newValue = e.target.checked
+                    // Update state immediately
+                    const updatedVisibility = { ...sectionVisibility, experience: newValue }
+                    setSectionVisibility(updatedVisibility)
+                    // Save with the new value directly to avoid race conditions
+                    setTimeout(async () => {
+                      await savePortfolio({ 
+                        redirect: false, 
+                        source: 'visibility:experience',
+                        sectionVisibilityOverride: updatedVisibility
+                      })
+                    }, 100)
                   }}
                   className="w-4 h-4 rounded border-gray-600 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-2"
                 />
@@ -3144,137 +5221,74 @@ export default function BusinessProfileEditor() {
                   {savingSection === 'experience' ? 'Saving…' : 'Save'}
                 </button>
               )}
-            <button
-              type="button"
-              onClick={addExperience}
-                disabled={!sectionEdit.experience}
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 disabled:opacity-60"
-            >
-              Add Experience
-            </button>
-            <button
-              type="button"
-                onClick={openImportModal}
-                disabled={isImporting || !sectionEdit.experience}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-60"
-              >
-                {isImporting ? 'Importing…' : 'Import from Business Bank'}
-            </button>
             </div>
           </div>
-          {sectionEdit.experience && (
-            <div className="flex items-center justify-between mb-3">
-              <label className="flex items-center gap-2 text-xs text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={bulkIsAllSelected(profile.experience.map((_, i) => String(i)), bulkSel.experience)}
-                  onChange={(e) => bulkSetAll('experience', profile.experience.map((_, i) => String(i)), e.target.checked)}
-                  disabled={profile.experience.length === 0}
-                />
-                Select all
-              </label>
-              <button
-                type="button"
-                disabled={bulkCount(bulkSel.experience) === 0}
-                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs disabled:opacity-50"
-                onClick={() => bulkDeleteSelected('experience')}
-              >
-                Delete selected ({bulkCount(bulkSel.experience)})
-              </button>
-            </div>
-          )}
-          {profile.experience.map((exp, index) => (
-            <div key={index} className="mb-4 p-4 border border-white/10 rounded-xl bg-slate-900/40">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <div className="flex items-center gap-3">
-                  {sectionEdit.experience ? (
-                    <label className="flex items-center gap-2 text-xs text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={!!bulkSel.experience[String(index)]}
-                        onChange={(e) => bulkToggleKey('experience', String(index), e.target.checked)}
-                      />
-                      Select
-                    </label>
-                  ) : (
-                    <div />
-                  )}
-                  <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer" title="Show this experience in public profile">
-                    <input
-                      type="checkbox"
-                      checked={itemVisibility.experience?.[index] ?? true}
-                      onChange={(e) => {
-                        setItemVisibility(prev => ({
-                          ...prev,
-                          experience: { ...prev.experience, [index]: e.target.checked }
-                        }))
-                        setTimeout(() => savePortfolio({ redirect: false, source: 'visibility:experience-item' }), 100)
-                      }}
-                      className="w-4 h-4 rounded border-gray-600 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-2"
-                    />
-                    <span>Public</span>
-                  </label>
-                </div>
-                <button
-                  type="button"
-                  disabled={!sectionEdit.experience}
-                  className="text-xs text-red-300 underline disabled:opacity-60"
-                  onClick={() => removeExperience(index)}
-                >
-                  Remove
-                </button>
-              </div>
-              <input
-                type="text"
-                placeholder="Company"
-                value={exp.company}
-                onChange={(e) => updateExperience(index, 'company', e.target.value)}
-                disabled={!sectionEdit.experience}
-                className="w-full mb-2 p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-              />
-              <input
-                type="text"
-                placeholder="Job Title"
-                value={exp.title}
-                onChange={(e) => updateExperience(index, 'title', e.target.value)}
-                disabled={!sectionEdit.experience}
-                className="w-full mb-2 p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-              />
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                <input
-                  type="text"
-                  placeholder="Start Date"
-                  value={exp.startDate}
-                  onChange={(e) => updateExperience(index, 'startDate', e.target.value)}
-                  disabled={!sectionEdit.experience}
-                  className="p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                />
-                <input
-                  type="text"
-                  placeholder="End Date"
-                  value={exp.endDate}
-                  onChange={(e) => updateExperience(index, 'endDate', e.target.value)}
-                  disabled={!sectionEdit.experience}
-                  className="p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                />
-              </div>
+          <div className="space-y-6">
+            <div>
+              <div className="text-sm text-slate-300 mb-2">How decisions are made</div>
               <CollapsibleTextarea
-                value={exp.description}
-                onChange={(e) => updateExperience(index, 'description', e.target.value)}
-                placeholder="Description"
+                value={profile.cultureDecisions}
+                onChange={(e) => setProfile((prev) => ({ ...prev, cultureDecisions: e.target.value }))}
+                placeholder="Describe how decisions are made"
                 disabled={!sectionEdit.experience}
                 className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                expandKey={`experience-${index}`}
-                expanded={!!expandedTextareas[`experience-${index}`]}
+                expandKey="culture-decisions"
+                expanded={!!expandedTextareas['culture-decisions']}
                 onToggle={toggleTextarea}
-                defaultRows={5}
+                defaultRows={4}
+                showVoiceButtons
               />
             </div>
-          ))}
+            <div>
+              <div className="text-sm text-slate-300 mb-2">How feedback works</div>
+              <CollapsibleTextarea
+                value={profile.cultureFeedback}
+                onChange={(e) => setProfile((prev) => ({ ...prev, cultureFeedback: e.target.value }))}
+                placeholder="Describe how feedback works"
+                disabled={!sectionEdit.experience}
+                className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                expandKey="culture-feedback"
+                expanded={!!expandedTextareas['culture-feedback']}
+                onToggle={toggleTextarea}
+                defaultRows={4}
+                showVoiceButtons
+              />
+            </div>
+            <div>
+              <div className="text-sm text-slate-300 mb-2">How conflict is handled</div>
+              <CollapsibleTextarea
+                value={profile.cultureConflict}
+                onChange={(e) => setProfile((prev) => ({ ...prev, cultureConflict: e.target.value }))}
+                placeholder="Describe how conflict is handled"
+                disabled={!sectionEdit.experience}
+                className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                expandKey="culture-conflict"
+                expanded={!!expandedTextareas['culture-conflict']}
+                onToggle={toggleTextarea}
+                defaultRows={4}
+                showVoiceButtons
+              />
+            </div>
+            <div>
+              <div className="text-sm text-slate-300 mb-2">How success is celebrated</div>
+              <CollapsibleTextarea
+                value={profile.cultureSuccess}
+                onChange={(e) => setProfile((prev) => ({ ...prev, cultureSuccess: e.target.value }))}
+                placeholder="Describe how success is celebrated"
+                disabled={!sectionEdit.experience}
+                className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                expandKey="culture-success"
+                expanded={!!expandedTextareas['culture-success']}
+                onToggle={toggleTextarea}
+                defaultRows={4}
+                showVoiceButtons
+              />
+            </div>
+          </div>
         </section>
 
         {/* Education */}
-        <section className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
+        <section id="section-education" className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-semibold">Education</h2>
@@ -3444,7 +5458,7 @@ export default function BusinessProfileEditor() {
         </section>
 
         {/* Referees */}
-        <section className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
+        <section id="section-referees" className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-semibold">Referees</h2>
@@ -3650,7 +5664,7 @@ export default function BusinessProfileEditor() {
         </section>
 
         {/* Attachments imported from Business Bank */}
-        <section className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
+        <section id="section-attachments" className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-semibold">Business Bank Attachments</h2>
@@ -3766,7 +5780,7 @@ export default function BusinessProfileEditor() {
         </section>
 
         {/* Projects */}
-        <section className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
+        <section id="section-projects" className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-semibold">Projects</h2>
@@ -3958,7 +5972,7 @@ export default function BusinessProfileEditor() {
         </section>
 
         {/* Layout - Moved to bottom, collapsible */}
-        <section className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
+        <section id="section-layout" className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
           <button
             type="button"
             className="w-full flex items-center justify-between mb-4"
@@ -4057,34 +6071,254 @@ export default function BusinessProfileEditor() {
               </div>
             )}
 
+            <div className="flex flex-wrap gap-2 mb-4">
+              {(['upload', 'link', 'bank'] as ImportTab[]).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={`px-3 py-1.5 rounded-full border text-sm ${
+                    importTab === tab ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-gray-200'
+                  }`}
+                  onClick={() => setImportTab(tab)}
+                >
+                  {tab === 'upload' ? 'Upload' : tab === 'link' ? 'Add Link' : 'Business Bank'}
+                </button>
+              ))}
+            </div>
+
+            {importTab === 'upload' && (
+              <div className="mb-4 space-y-3">
+                <div
+                  className={`rounded-lg border-2 border-dashed p-4 ${
+                    importDragActive ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50'
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    setImportDragActive(true)
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault()
+                    setImportDragActive(false)
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    setImportDragActive(false)
+                    const files = Array.from(e.dataTransfer.files || [])
+                    uploadImportFiles(files)
+                  }}
+                >
+                  <div className="text-sm text-gray-700">Drag and drop files here</div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded border border-gray-200 bg-white text-sm"
+                      onClick={() => imageUploadRef.current?.click()}
+                    >
+                      Upload Images
+                    </button>
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded border border-gray-200 bg-white text-sm"
+                      onClick={() => videoUploadRef.current?.click()}
+                    >
+                      Upload Videos
+                    </button>
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded border border-gray-200 bg-white text-sm"
+                      onClick={() => docUploadRef.current?.click()}
+                    >
+                      Upload Documents
+                    </button>
+                  </div>
+                  <div className="mt-2 text-xs text-gray-500">
+                    Supported: JPG, PNG, WEBP, MP4, WEBM, PDF, DOC, DOCX
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {importTab === 'link' && (
+              <div className="mb-4">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={linkInput}
+                    onChange={(e) => setLinkInput(e.target.value)}
+                    placeholder="Paste a URL (YouTube, website, portfolio, etc.)"
+                    className="flex-1 px-3 py-2 rounded border border-gray-200 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={addLinkItem}
+                    disabled={linkBusy || !linkInput.trim()}
+                    className="px-4 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-60"
+                  >
+                    {linkBusy ? 'Adding…' : 'Add Link'}
+                  </button>
+                </div>
+                {linkError && <div className="mt-2 text-xs text-red-600">{linkError}</div>}
+              </div>
+            )}
+
+            <input
+              ref={imageUploadRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || [])
+                if (files.length) uploadImportFiles(files, undefined, 'image')
+                e.currentTarget.value = ''
+              }}
+            />
+            <input
+              ref={videoUploadRef}
+              type="file"
+              accept="video/mp4,video/webm"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || [])
+                if (files.length) uploadImportFiles(files, undefined, 'video')
+                e.currentTarget.value = ''
+              }}
+            />
+            <input
+              ref={docUploadRef}
+              type="file"
+              accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.doc,.docx"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || [])
+                if (files.length) uploadImportFiles(files, undefined, 'doc')
+                e.currentTarget.value = ''
+              }}
+            />
+            <input
+              ref={replaceUploadRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.doc,.docx"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file && replaceTargetId) {
+                  uploadImportFiles([file], replaceTargetId)
+                }
+                setReplaceTargetId(null)
+                e.currentTarget.value = ''
+              }}
+            />
+
             <div className="border rounded max-h-[60vh] overflow-auto">
-              {availableItems.length === 0 ? (
-                <div className="p-4 text-sm text-gray-600">No Business Bank items found.</div>
+              {importTab === 'bank' ? (
+                availableItems.length === 0 ? (
+                  <div className="p-4 text-sm text-gray-600">No Business Bank items found.</div>
+                ) : (
+                  <ul className="divide-y">
+                    {availableItems.map((item) => (
+                      <li key={item.id} className="p-3 flex items-center justify-between gap-3">
+                        <label className="flex items-center gap-3 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={!!selectedIds[bankKey(item.id)]}
+                            onChange={(e) =>
+                              setSelectedIds((prev) => ({ ...prev, [bankKey(item.id)]: e.target.checked }))
+                            }
+                          />
+                          {renderImportThumb(item)}
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{item.title}</div>
+                            <div className="text-xs text-gray-500">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 border border-gray-200 mr-2">
+                                {item.item_type}
+                              </span>
+                              <span className="text-gray-600">{itemSummary(item)}</span>
+                            </div>
+                          </div>
+                        </label>
+                        <div className="text-xs text-gray-400 shrink-0">
+                          {item.file_type || ''}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : (importTab === 'upload' ? localUploadItems : localLinkItems).length === 0 ? (
+                <div className="p-4 text-sm text-gray-600">
+                  {importTab === 'upload' ? 'No uploads yet.' : 'No links added yet.'}
+                </div>
               ) : (
                 <ul className="divide-y">
-                  {availableItems.map((item) => (
-                    <li key={item.id} className="p-3 flex items-center justify-between gap-3">
-                      <label className="flex items-center gap-3 min-w-0">
+                  {(importTab === 'upload' ? localUploadItems : localLinkItems).map((item) => (
+                    <li key={item.id} className="p-3 flex items-start justify-between gap-3">
+                      <label className="flex items-start gap-3 min-w-0">
                         <input
                           type="checkbox"
-                          checked={!!selectedIds[item.id]}
+                          checked={!!selectedIds[localKey(item.id)]}
                           onChange={(e) =>
-                            setSelectedIds((prev) => ({ ...prev, [item.id]: e.target.checked }))
+                            setSelectedIds((prev) => ({ ...prev, [localKey(item.id)]: e.target.checked }))
                           }
                         />
-                        {renderImportThumb(item)}
+                        {renderLocalImportThumb(item)}
                         <div className="min-w-0">
                           <div className="font-medium truncate">{item.title}</div>
                           <div className="text-xs text-gray-500">
                             <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 border border-gray-200 mr-2">
                               {item.item_type}
                             </span>
-                            <span className="text-gray-600">{itemSummary(item)}</span>
+                            {item.file_type ? <span className="text-gray-600">{item.file_type}</span> : null}
                           </div>
+                          {item.source === 'link' && item.url ? (
+                            <div className="text-xs text-gray-400 truncate">{item.url}</div>
+                          ) : null}
+                          {item.status === 'uploading' ? (
+                            <div className="mt-2">
+                              <div className="text-xs text-blue-600">Uploading…</div>
+                              <div className="mt-1 h-1.5 w-32 rounded bg-gray-200 overflow-hidden">
+                                <div
+                                  className="h-full bg-blue-600"
+                                  style={{ width: `${Math.min(100, uploadProgress[item.id] || 10)}%` }}
+                                />
+                              </div>
+                            </div>
+                          ) : null}
+                          {item.status === 'error' ? (
+                            <div className="mt-1 text-xs text-red-600">{item.error}</div>
+                          ) : null}
                         </div>
                       </label>
-                      <div className="text-xs text-gray-400 shrink-0">
-                        {item.file_type || ''}
+                      <div className="flex flex-col items-end gap-1 text-xs">
+                        {item.source === 'upload' ? (
+                          <button
+                            type="button"
+                            className="text-blue-600 underline disabled:opacity-60"
+                            onClick={() => {
+                              setReplaceTargetId(item.id)
+                              replaceUploadRef.current?.click()
+                            }}
+                            disabled={item.status === 'uploading'}
+                          >
+                            Replace
+                          </button>
+                        ) : (
+                          <button type="button" className="text-blue-600 underline" onClick={() => replaceLinkItem(item)}>
+                            Replace
+                          </button>
+                        )}
+                        <button type="button" className="text-red-600 underline" onClick={() => removeLocalItem(item.id)}>
+                          Remove
+                        </button>
+                        <button
+                          type="button"
+                          className="text-slate-600 underline disabled:opacity-60"
+                          disabled={item.savedToBank || item.status !== 'ready'}
+                          onClick={() => saveLocalItemToBusinessBank(item)}
+                        >
+                          {item.savedToBank ? 'Saved to Business Bank' : 'Save to Business Bank'}
+                        </button>
                       </div>
                     </li>
                   ))}
@@ -4096,7 +6330,7 @@ export default function BusinessProfileEditor() {
               <button className="px-4 py-2 rounded border" onClick={() => setImportOpen(false)}>
                 Cancel
               </button>
-              <button className="px-4 py-2 rounded bg-blue-600 text-white" onClick={applyImport} disabled={!Object.values(selectedIds).some(Boolean)}>
+              <button className="px-4 py-2 rounded bg-blue-600 text-white" onClick={applyImport} disabled={!hasSelectedImportItems}>
                 Import selected
           </button>
         </div>
@@ -4353,11 +6587,13 @@ export default function BusinessProfileEditor() {
                                 const { data: urlData } = await supabase.storage.from('business-bank').createSignedUrl(item.file_path, 60 * 30)
                                 if (urlData?.signedUrl) {
                                   setIntroPreviewUrl(urlData.signedUrl)
+                                  introPreviewVideoIdRef.current = item.id
                                 }
                               }
                               // For linked videos, use file_url directly
                               else if (item.file_url) {
                                 setIntroPreviewUrl(item.file_url)
+                                introPreviewVideoIdRef.current = item.id
                               }
                             }}
                           />
@@ -4418,6 +6654,7 @@ export default function BusinessProfileEditor() {
                 onClick={() => {
                   setIntroPickId(null)
                   setIntroPreviewUrl(null)
+                  introPreviewVideoIdRef.current = null
                   setProfile((prev) => ({ ...prev, introVideoId: null }))
                   log('intro video cleared', 'P_LAYOUT', {}).catch(() => {})
                 }}

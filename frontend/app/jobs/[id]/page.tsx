@@ -38,6 +38,9 @@ export default function JobDetailPage() {
   const jobId = params?.id as string
   const fromBusiness = searchParams?.get('from_business') // Business profile ID if coming from business profile
   const fromSearch = searchParams?.get('fromSearch') === 'true' // If coming from search page
+  const fromApplications = searchParams?.get('fromApplications') === 'true' // If coming from applications page
+  const fromMap = searchParams?.get('fromMap') === 'true' // If coming from talent dashboard map
+  const returnTo = searchParams?.get('returnTo') || '/dashboard/talent' // Where to return to
   const searchQuery = searchParams?.get('searchQuery') || ''
   const searchLocation = searchParams?.get('location') || ''
   const searchType = searchParams?.get('searchType') || 'jobs'
@@ -64,8 +67,40 @@ export default function JobDetailPage() {
       setIsAuthenticated(!!uid)
       
       if (uid) {
-        // Get user type from metadata or profile
-        const userTypeFromMeta = session?.session?.user?.user_metadata?.user_type
+        // Get user type from metadata first
+        let userTypeFromMeta = session?.session?.user?.user_metadata?.user_type
+        
+        // If not in metadata, check profiles to determine user type
+        if (!userTypeFromMeta) {
+          try {
+            // Check for talent profile
+            const { data: talentProfile } = await supabase
+              .from('talent_profiles')
+              .select('id')
+              .eq('user_id', uid)
+              .maybeSingle()
+            
+            // Check for business profile
+            const { data: businessProfile } = await supabase
+              .from('business_profiles')
+              .select('id')
+              .eq('user_id', uid)
+              .maybeSingle()
+            
+            // Determine user type based on which profile exists
+            if (talentProfile?.id && !businessProfile?.id) {
+              userTypeFromMeta = 'talent'
+            } else if (businessProfile?.id && !talentProfile?.id) {
+              userTypeFromMeta = 'business'
+            } else if (talentProfile?.id && businessProfile?.id) {
+              // User has both profiles - prefer talent for job applications
+              userTypeFromMeta = 'talent'
+            }
+          } catch (err) {
+            console.error('Error checking user profiles:', err)
+          }
+        }
+        
         setUserType(userTypeFromMeta || null)
         
         // Check if user is a business and owns this job
@@ -200,24 +235,34 @@ export default function JobDetailPage() {
     if (!userId || !jobId) return
 
     try {
-      // Check if user has already applied
-      const tables = ['job_applications', 'applications']
-      for (const table of tables) {
-        const { data, error: checkError } = await supabase
-          .from(table)
-          .select('id')
-          .eq('job_id', jobId)
-          .eq('user_id', userId)
-          .maybeSingle()
+      // First, get the talent profile ID for this user
+      const { data: talentProfile } = await supabase
+        .from('talent_profiles')
+        .select('id')
+        .eq('user_id', userId)
+        .maybeSingle()
 
-        if (!checkError && data) {
-          setHasApplied(true)
-          return
-        }
+      if (!talentProfile?.id) {
+        setHasApplied(false)
+        return
       }
-      setHasApplied(false)
+
+      // Check if user has already applied using talent_profile_id
+      const { data, error: checkError } = await supabase
+        .from('applications')
+        .select('id')
+        .eq('job_id', jobId)
+        .eq('talent_profile_id', talentProfile.id)
+        .maybeSingle()
+
+      if (!checkError && data) {
+        setHasApplied(true)
+      } else {
+        setHasApplied(false)
+      }
     } catch (err) {
       console.error('Error checking application status:', err)
+      setHasApplied(false)
     }
   }
 
@@ -229,7 +274,24 @@ export default function JobDetailPage() {
       return
     }
 
-    if (userType !== 'talent') {
+    // Check if user has a talent profile (more reliable than userType)
+    let hasTalentProfile = false
+    if (userId) {
+      try {
+        const { data: talentProfile } = await supabase
+          .from('talent_profiles')
+          .select('id')
+          .eq('user_id', userId)
+          .maybeSingle()
+        
+        hasTalentProfile = !!talentProfile?.id
+      } catch (err) {
+        console.error('Error checking talent profile:', err)
+      }
+    }
+
+    // Check both userType and talent profile existence
+    if (userType !== 'talent' && !hasTalentProfile) {
       alert('Only talent users can apply to jobs. Please register as talent.')
       router.push(`/login/talent?mode=signup&redirect=${encodeURIComponent(`/jobs/${jobId}`)}`)
       return
@@ -256,11 +318,26 @@ export default function JobDetailPage() {
       }
 
       // Apply via Supabase
+      // Get the actual job ID from the database to ensure correct type
+      // The job was already fetched in fetchJob(), but we'll query it again to get the exact ID type
+      const { data: jobData, error: jobError } = await supabase
+        .from('jobs')
+        .select('id')
+        .eq('id', jobId)
+        .maybeSingle()
+
+      if (jobError || !jobData) {
+        throw new Error('Job not found. Please try again.')
+      }
+
+      // Use the job ID from the database (ensures correct type - handles both UUID and BIGINT)
+      const actualJobId = jobData.id
+
       const { error: applyError } = await supabase
         .from('applications')
         .insert({
           user_id: userId,
-          job_id: Number(jobId),
+          job_id: actualJobId, // Use the actual job ID from database
           talent_profile_id: talentProfile.id,
           status: 'applied',
           cover_letter: '',
@@ -343,7 +420,21 @@ export default function JobDetailPage() {
               <Link href="/" className="hover:text-blue-400 transition-colors">Home</Link>
               <Link href="/jobs" className="hover:text-blue-400 transition-colors">Jobs</Link>
             </nav>
-            {fromSearch ? (
+            {fromMap ? (
+              <Link
+                href={returnTo}
+                className="px-5 py-2 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors text-sm"
+              >
+                ← Back to Job Search
+              </Link>
+            ) : fromApplications ? (
+              <Link
+                href="/dashboard/talent?tab=applications"
+                className="px-5 py-2 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors text-sm"
+              >
+                ← Back to My Applications
+              </Link>
+            ) : fromSearch ? (
               <Link
                 href={`/search?searchType=${searchType}${searchQuery ? `&searchQuery=${encodeURIComponent(searchQuery)}` : ''}${searchLocation ? `&location=${encodeURIComponent(searchLocation)}` : ''}`}
                 className="px-5 py-2 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors text-sm"
@@ -359,10 +450,10 @@ export default function JobDetailPage() {
               </Link>
             ) : (
               <Link
-                href="/dashboard/business?tab=vacancies"
+                href="/jobs"
                 className="px-5 py-2 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors text-sm"
               >
-                ← Back to Vacancies
+                ← Back to Jobs
               </Link>
             )}
           </div>

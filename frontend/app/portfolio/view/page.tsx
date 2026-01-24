@@ -75,6 +75,7 @@ function PortfolioViewPageInner() {
   const router = useRouter()
   const viewTalentId = searchParams?.get('talent_id') // For businesses viewing talent profiles
   const requestId = searchParams?.get('request_id') // Connection request ID
+  const selectedSectionsParam = searchParams?.get('sections')
   
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -115,6 +116,18 @@ function PortfolioViewPageInner() {
   const [licenceListExpanded, setLicenceListExpanded] = useState(false)
   const [familyCommunityGalleryOpen, setFamilyCommunityGalleryOpen] = useState(false)
   const [familyCommunityViewImage, setFamilyCommunityViewImage] = useState<number | null>(null) // Image ID being viewed with description
+
+  const selectedSections = useMemo(() => {
+    if (!selectedSectionsParam) return null
+    const set = new Set(
+      selectedSectionsParam
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    )
+    return set.size ? set : null
+  }, [selectedSectionsParam])
+  const isSectionVisible = (key: string) => !selectedSections || selectedSections.has(key)
   
   // Video Chat and Messaging state (for business viewing talent profiles)
   const [videoChatSession, setVideoChatSession] = useState<any | null>(null)
@@ -410,7 +423,7 @@ function PortfolioViewPageInner() {
             if (requestId) {
               connReqRes = await supabase
                 .from('talent_connection_requests')
-                .select('id, status, business_id, talent_id')
+                .select('id, status, business_id, talent_id, initiated_by')
                 .eq('id', requestId)
                 .maybeSingle()
               // Store connection request ID from URL parameter
@@ -421,7 +434,7 @@ function PortfolioViewPageInner() {
               // No requestId in URL, but check if there's an accepted connection
               connReqRes = await supabase
                 .from('talent_connection_requests')
-                .select('id, status, business_id, talent_id')
+                .select('id, status, business_id, talent_id, initiated_by')
                 .eq('business_id', currentBusinessId)
                 .eq('talent_id', viewTalentId)
                 .eq('status', 'accepted')
@@ -459,7 +472,9 @@ function PortfolioViewPageInner() {
               }
               
               // Check if this request was initiated by the current business
-              if (currentBusinessId && connReqRes.data.business_id === currentBusinessId) {
+              // Use initiated_by field if available, otherwise fall back to checking business_id
+              const initiatedBy = connReqRes.data.initiated_by || (connReqRes.data.business_id === currentBusinessId ? 'business' : 'talent')
+              if (currentBusinessId && initiatedBy === 'business') {
                 setIsBusinessInitiated(true)
                 
                 // Load talent summary for business-initiated requests (like from Business Map)
@@ -751,6 +766,32 @@ function PortfolioViewPageInner() {
               if (!cancelled) {
                 setIntroVideoUrl(null)
                 setIntroVideoTitle(null)
+              }
+            }
+          }
+        }
+
+        // Fallback: if no introVideoId is set, but a Talent Bank video is marked "Show in Portfolio",
+        // use the first selected video as the intro video preview.
+        if (saved && portfolioData && targetUserForFiles && !introVideoUrl) {
+          const selections: number[] = Array.isArray(saved?.portfolioSelections) ? saved.portfolioSelections : []
+          if (selections.length) {
+            const { data: selItems, error: selErr } = await supabase
+              .from('talent_bank_items')
+              .select('id,title,file_path,file_type')
+              .eq('user_id', targetUserForFiles)
+              .in('id', selections)
+
+            if (!selErr && Array.isArray(selItems)) {
+              const firstVideo = selItems.find(
+                (it: any) => it?.file_path && (it?.file_type?.startsWith?.('video') ?? false)
+              )
+              if (firstVideo?.file_path) {
+                const url = await signedUrl(String(firstVideo.file_path), 60 * 30, !!viewTalentId)
+                if (!cancelled) {
+                  setIntroVideoUrl(url)
+                  setIntroVideoTitle(firstVideo.title || 'Introduction Video')
+                }
               }
             }
           }
@@ -2159,7 +2200,42 @@ function PortfolioViewPageInner() {
                           }}
                           className="px-8 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold transition-colors shadow-lg"
                         >
-                          DECLINE
+                          REJECT
+                        </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const { data: sessionRes } = await supabase.auth.getSession()
+                              const uid = sessionRes.session?.user?.id
+                              if (!uid) {
+                                alert('Please sign in to respond to connection requests.')
+                                return
+                              }
+                              
+                              const businessRes = await supabase
+                                .from('business_profiles')
+                                .select('id')
+                                .eq('user_id', uid)
+                                .single()
+                              
+                              if (businessRes.error || !businessRes.data) {
+                                alert('Business profile not found.')
+                                return
+                              }
+                              
+                              // Delay means keeping status as pending but marking it for later review
+                              // We could add a 'delayed' status or just leave it as pending
+                              // For now, we'll just show a message and navigate back
+                              alert('Connection request marked for later review. You can return to it from your dashboard.')
+                              window.location.href = '/dashboard/business?tab=connections'
+                            } catch (err) {
+                              console.error('Error delaying connection:', err)
+                              alert('An error occurred. Please try again.')
+                            }
+                          }}
+                          className="px-8 py-3 rounded-xl bg-yellow-600 hover:bg-yellow-500 text-white font-semibold transition-colors shadow-lg"
+                        >
+                          DELAY
                         </button>
                       </div>
                     ) : connectionStatus === 'accepted' ? (
@@ -2272,71 +2348,68 @@ function PortfolioViewPageInner() {
               </div>
             </section>
 
-            <div className="grid lg:grid-cols-12 gap-6">
+            <div className="grid lg:grid-cols-12 gap-6 items-stretch">
               {/* Main */}
-              <div className="lg:col-span-8 space-y-6">
+              <div className="lg:col-span-8 flex flex-col gap-6">
                 {/* About */}
-                <section className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
-                  <h2 className="text-xl font-semibold mb-4">About</h2>
-                  {bio ? (
-                    <>
-                      <p
-                        className="text-slate-300 leading-relaxed whitespace-pre-wrap"
-                        style={bioExpanded ? undefined : clampStyle(5)}
-                      >
-                        {bio}
-                      </p>
-                      <button
-                        type="button"
-                        className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
-                        onClick={() => setBioExpanded((v) => !v)}
-                      >
-                        {bioExpanded ? 'Show less' : 'Show more'}
-                      </button>
-                    </>
-                  ) : (
-                    <div className="text-slate-400">No bio added yet.</div>
-                  )}
-                </section>
+                {isSectionVisible('bio') && (
+                  <section className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                    <h2 className="text-xl font-semibold mb-4">About</h2>
+                    {bio ? (
+                      <>
+                        <p
+                          className="text-slate-300 leading-relaxed whitespace-pre-wrap"
+                          style={bioExpanded ? undefined : clampStyle(5)}
+                        >
+                          {bio}
+                        </p>
+                        <button
+                          type="button"
+                          className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
+                          onClick={() => setBioExpanded((v) => !v)}
+                        >
+                          {bioExpanded ? 'Show less' : 'Show more'}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="text-slate-400">No bio added yet.</div>
+                    )}
+                  </section>
+                )}
 
-                {/* Intro video (below About, like your reference) */}
-                {/* Show intro video section if introVideoId exists in saved portfolio, even if URL loading failed */}
-                {(() => {
-                  const hasIntroVideoId = typeof meta?.introVideoId === 'number' && meta.introVideoId !== null
-                  if (!hasIntroVideoId) return null
-                  
-                  return (
-                    <section className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
-                      <h2 className="text-xl font-semibold mb-4">{introVideoTitle || 'Introduction Video'}</h2>
-                      {introVideoUrl ? (
-                        <div className="mx-auto max-w-3xl">
-                          {/* Soft frame */}
-                          <div className="rounded-3xl p-[1px] bg-gradient-to-br from-white/15 via-white/5 to-transparent shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-                            <div className="rounded-3xl overflow-hidden bg-slate-950/60 border border-white/10">
-                              <div className="bg-black">
-                                <video
-                                  src={introVideoUrl}
-                                  controls
-                                  playsInline
-                                  className="w-full max-h-[280px] md:max-h-[300px] object-contain"
-                                />
-                              </div>
+                {/* Intro video (below About, above Experience) */}
+                {isSectionVisible('intro') && (
+                  <section className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                    <h2 className="text-xl font-semibold mb-4">{introVideoTitle || 'Introduction Video'}</h2>
+                    {introVideoUrl ? (
+                      <div className="mx-auto max-w-3xl">
+                        {/* Soft frame */}
+                        <div className="rounded-3xl p-[1px] bg-gradient-to-br from-white/15 via-white/5 to-transparent shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+                          <div className="rounded-3xl overflow-hidden bg-slate-950/60 border border-white/10">
+                            <div className="bg-black">
+                              <video
+                                src={introVideoUrl}
+                                controls
+                                playsInline
+                                className="w-full max-h-[280px] md:max-h-[300px] object-contain"
+                              />
                             </div>
                           </div>
-                          <div className="mt-3 text-xs text-slate-400">
-                            Tip: Keep your intro under 60–90 seconds and speak to your strongest work examples.
-                          </div>
                         </div>
-                      ) : (
-                        <div className="text-slate-400">
-                          Introduction video is being loaded. If it doesn't appear, please check your video file in Edit Portfolio.
+                        <div className="mt-3 text-xs text-slate-400">
+                          Tip: Keep your intro under 60–90 seconds and speak to your strongest work examples.
                         </div>
-                      )}
-                    </section>
-                  )
-                })()}
+                      </div>
+                    ) : (
+                      <div className="text-slate-400">
+                        No intro video added yet.
+                      </div>
+                    )}
+                  </section>
+                )}
 
                 {sectionOrder.map((k) => {
+                  if (!isSectionVisible(k)) return null
                   // Intro is handled above (defensive skip).
                   if (k === 'intro') return null
                   // Projects is intentionally rendered in the right column (under "Connect With Me") for layout aesthetics.
@@ -2731,10 +2804,12 @@ function PortfolioViewPageInner() {
                   // Unknown/unsupported section keys: skip silently (defensive).
                   return null
                 })}
+                {/* Spacer to align bottom with sidebar */}
+                <div className="flex-1" />
               </div>
 
               {/* Sidebar */}
-              <aside className="lg:col-span-4 space-y-6">
+              <aside className="lg:col-span-4 flex flex-col gap-6">
                 <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
                   <div className="text-slate-200 font-semibold mb-4">Connect With Me</div>
                   <div className="space-y-4 text-sm">
@@ -2774,14 +2849,14 @@ function PortfolioViewPageInner() {
                   </div>
 
                   {/* Social icons under Connect with Me */}
-                  {socialLinks.length ? (
+                  {isSectionVisible('social') && socialLinks.length ? (
                     <div className="mt-6">
                       <div className="text-slate-400 text-xs mb-2">Social</div>
                       <SocialIconBar links={socialLinks} />
                     </div>
                   ) : null}
 
-                  {skills.length ? (
+                  {isSectionVisible('skills') && skills.length ? (
                     <div className="mt-6">
                       <div className="text-slate-400 text-xs mb-2">Top skills</div>
                       <div className="flex flex-wrap gap-2">
@@ -2796,7 +2871,7 @@ function PortfolioViewPageInner() {
                 </div>
 
                 {/* Family and Community: placed under Connect With Me and above Projects */}
-                {familyCommunityImageIds.length > 0 && (
+                {isSectionVisible('family_community') && familyCommunityImageIds.length > 0 && (
                   <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
                     <div className="text-slate-200 font-semibold mb-4">Family and Community</div>
                     <div className="flex justify-center">
@@ -3052,7 +3127,7 @@ function PortfolioViewPageInner() {
                 </div>
 
                 {/* Licences and Accreditations: placed under Personal Documents in the right column */}
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                <div className="flex-1 rounded-2xl border border-white/10 bg-slate-950/40 p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="text-slate-200 font-semibold">Licences and Accreditations</div>
                     {licencesAccreditations.length > 2 ? (

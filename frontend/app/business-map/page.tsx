@@ -57,6 +57,14 @@ const ROLE_TITLES = [
   'Accountant', 'Financial Analyst', 'Consultant', 'Operations Manager', 'Customer Success Manager'
 ] as const
 
+const QUICK_SEARCHES = [
+  { label: 'Software Engineers', role: 'Software Engineer', skills: ['JavaScript', 'React'] },
+  { label: 'Data Scientists', role: 'Data Scientist', skills: ['Python', 'Machine Learning'] },
+  { label: 'Designers', role: 'Designer', skills: ['UI/UX Design', 'Figma'] },
+  { label: 'Marketing', role: 'Marketing', skills: ['Marketing', 'Sales'] },
+  { label: 'Project Managers', role: 'Project Manager', skills: ['Project Management', 'Agile'] },
+]
+
 export default function BusinessMapPage() {
   return (
     <Suspense fallback={null}>
@@ -74,6 +82,8 @@ function BusinessMapPageInner() {
   const [businessProfileId, setBusinessProfileId] = useState<string | null>(null)
   const [businessUserId, setBusinessUserId] = useState<string | null>(null)
 
+  // Simplified search state
+  const [searchQuery, setSearchQuery] = useState('') // Main search bar
   const [locQuery, setLocQuery] = useState('')
   const [locBusy, setLocBusy] = useState(false)
   const [locError, setLocError] = useState<string | null>(null)
@@ -81,9 +91,11 @@ function BusinessMapPageInner() {
   const [locSuggestions, setLocSuggestions] = useState<LocSuggestion[]>([])
   const [locActiveIdx, setLocActiveIdx] = useState(0)
   const RADIUS_KEY = 'creerlio_business_map_radius_km_v1'
-  const [radiusKm, setRadiusKm] = useState<number>(10)
+  const [radiusKm, setRadiusKm] = useState<number>(50) // Increased default radius
   const [searchCenter, setSearchCenter] = useState<{ lng: number; lat: number; label?: string } | null>(null)
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
 
+  // Simplified filters
   const [filters, setFilters] = useState({
     role: '',
     skills: [] as string[],
@@ -91,7 +103,6 @@ function BusinessMapPageInner() {
     location: ''
   })
   const [intentStatusFilter, setIntentStatusFilter] = useState<string>('')
-  const [intentCompatibility, setIntentCompatibility] = useState(false)
 
   const [skillsInput, setSkillsInput] = useState('')
   const [skillsInputOpen, setSkillsInputOpen] = useState(false)
@@ -103,6 +114,7 @@ function BusinessMapPageInner() {
   const [requestingConnection, setRequestingConnection] = useState(false)
   const [showTalentPopup, setShowTalentPopup] = useState(false)
 
+  const searchQueryDebounced = useDebouncedValue(searchQuery, 500)
   const locDebounced = useDebouncedValue(locQuery, 300)
   const roleDebounced = useDebouncedValue(filters.role, 300)
   const skillsDebounced = useDebouncedValue(filters.skills.join(','), 300)
@@ -119,7 +131,6 @@ function BusinessMapPageInner() {
         setIsAuthenticated(!!uid)
 
         if (uid) {
-          // Get business profile ID - try multiple select patterns for schema tolerance
           const selectors = ['id, user_id', 'id']
           let businessProfile: any = null
           
@@ -135,7 +146,6 @@ function BusinessMapPageInner() {
               break
             }
             
-            // If error is about missing column, try next selector
             const msg = String(bpError?.message ?? '')
             const code = String(bpError?.code ?? '')
             const isMissingCol = code === 'PGRST204' || /Could not find the .* column/i.test(msg)
@@ -144,11 +154,9 @@ function BusinessMapPageInner() {
 
           if (businessProfile?.id) {
             setBusinessProfileId(String(businessProfile.id))
-            // Also store the user_id for message creation
             if (businessProfile.user_id) {
               setBusinessUserId(businessProfile.user_id)
             } else {
-              // Fallback: get user_id separately if not included in initial query
               const { data: bpFull } = await supabase
                 .from('business_profiles')
                 .select('user_id')
@@ -158,11 +166,7 @@ function BusinessMapPageInner() {
                 setBusinessUserId(bpFull.user_id)
               }
             }
-            console.log('[Business Map] Business profile loaded:', businessProfile.id)
-          } else {
-            console.warn('[Business Map] No business profile found for user:', uid)
           }
-          // Note: We don't require business profile to search, only to request connections
         }
       } catch (err: any) {
         console.error('Auth check error:', err)
@@ -225,19 +229,12 @@ function BusinessMapPageInner() {
     })()
   }, [locDebounced])
 
-  // Load talents based on filters
+  // Load talents - now works with or without location
   useEffect(() => {
-    if (!searchCenter) {
-      setTalents([])
-      return
-    }
-
     const loadTalents = async () => {
       setLoading(true)
       setError(null)
       try {
-        // Use schema-tolerant query like the search page
-        // Try multiple selector patterns to handle different schemas
         const selectors = [
           'id,title,skills,experience_years,bio,city,state,country,latitude,longitude,search_summary,availability_description',
           'id,title,skills,experience_years,bio,city,state,country,latitude,longitude,search_summary',
@@ -256,14 +253,13 @@ function BusinessMapPageInner() {
             .from('talent_profiles')
             .select(sel)
           
-          // Try to filter by is_active if column exists (handle gracefully)
           try {
             query = query.eq('is_active', true)
           } catch {
             // Column doesn't exist, continue without filter
           }
           
-          const res = await query.limit(200)
+          const res = await query.limit(500) // Increased limit for broader search
           
           if (!res.error && res.data) {
             data = res.data
@@ -282,37 +278,21 @@ function BusinessMapPageInner() {
           throw lastErr
         }
 
-        // Client-side filtering for search visibility (backward compatible)
-        // Default behavior: Show all talents unless explicitly opted out
-        // Only hide talents if search_visible is explicitly set to false
-        // If search_visible is true, they must have a search_summary to appear
-        // If search_visible is null/undefined or column doesn't exist, show them (backward compatibility)
+        // Client-side filtering for search visibility
         if (data) {
-          const beforeFilter = data.length
           data = data.filter((t: any) => {
-            // Only filter if search_visible is explicitly set to a boolean value
-            // This ensures backward compatibility with existing talents
             if (typeof t.search_visible === 'boolean') {
-              if (t.search_visible === false) {
-                // Explicitly opted out - hide them
-                return false
-              }
+              if (t.search_visible === false) return false
               if (t.search_visible === true) {
-                // Explicitly opted in - must have a search_summary
                 const hasSummary = typeof t.search_summary === 'string' && t.search_summary.trim().length > 0
                 return hasSummary
               }
             }
-            // For null, undefined, or non-existent column - show them (backward compatibility)
             return true
           })
-          const afterFilter = data.length
-          if (beforeFilter > afterFilter) {
-            console.log(`Search visibility filter: ${beforeFilter} talents before, ${afterFilter} after filtering (${beforeFilter - afterFilter} filtered out)`)
-          }
         }
 
-        // Attach intent modes (if any)
+        // Attach intent modes
         if (data && data.length > 0) {
           const talentIds = data.map((t: any) => t.id).filter(Boolean)
           const { data: intents } = await supabase
@@ -344,24 +324,18 @@ function BusinessMapPageInner() {
 
           if (intentStatusFilter) {
             data = data.filter((t: any) => t.intent_visibility && t.intent_status === intentStatusFilter)
-          } else if (intentCompatibility) {
-            const compatible = new Set(['open_to_conversations', 'passive_exploring'])
-            data = data.filter((t: any) => t.intent_visibility && compatible.has(t.intent_status))
           }
         }
         
-        // Now filter by location and other criteria client-side
-        const centerLat = searchCenter.lat
-        const centerLng = searchCenter.lng
+        // Now filter by search query, location, and other criteria
+        const centerLat = searchCenter?.lat
+        const centerLng = searchCenter?.lng
 
-        // Helper function to geocode location if needed
         const geocodeTalentLocation = async (t: any): Promise<{ lat: number; lng: number } | null> => {
-          // If already has coordinates, return them
           if (t.latitude && t.longitude) {
             return { lat: t.latitude, lng: t.longitude }
           }
 
-          // Try to geocode from city, state, country
           const locationParts = [t.city, t.state, t.country].filter(Boolean)
           if (locationParts.length === 0) return null
 
@@ -376,8 +350,6 @@ function BusinessMapPageInner() {
             
             if (geocodeData.features && geocodeData.features.length > 0) {
               const [lng, lat] = geocodeData.features[0].center
-              // Optionally save the geocoded coordinates back to the database
-              // For now, we'll just use them for filtering
               return { lat, lng }
             }
           } catch (err) {
@@ -387,45 +359,30 @@ function BusinessMapPageInner() {
           return null
         }
 
-        // Process all talents and geocode those missing coordinates
+        // Process all talents
         const processedTalents = await Promise.all(
           (data || []).map(async (t: any) => {
-            // Try to get coordinates (either from DB or by geocoding)
-            const coords = await geocodeTalentLocation(t)
-            if (!coords) {
-              // If no coordinates can be determined, skip this talent (can't show on map without location)
-              console.debug('Skipping talent without coordinates:', t.id, 'Location:', [t.city, t.state, t.country].filter(Boolean).join(', ') || 'none')
-              return null
+            // Filter by main search query (searches title, bio, skills)
+            if (searchQueryDebounced.trim()) {
+              const queryLower = searchQueryDebounced.toLowerCase()
+              const titleMatch = t.title?.toLowerCase().includes(queryLower)
+              const bioMatch = t.bio?.toLowerCase().includes(queryLower)
+              const skillsMatch = Array.isArray(t.skills) && t.skills.some((s: any) => 
+                String(s).toLowerCase().includes(queryLower)
+              )
+              if (!titleMatch && !bioMatch && !skillsMatch) {
+                return null
+              }
             }
-            
-            // Now use the coordinates for distance calculation
-            const lat = coords.lat
-            const lng = coords.lng
-            
-            // Calculate distance using Haversine formula
-            const R = 6371000 // Earth radius in meters
-            const dLat = ((lat - centerLat) * Math.PI) / 180
-            const dLng = ((lng - centerLng) * Math.PI) / 180
-            const a =
-              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos((centerLat * Math.PI) / 180) *
-                Math.cos((lat * Math.PI) / 180) *
-                Math.sin(dLng / 2) *
-                Math.sin(dLng / 2)
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-            const distanceMeters = R * c
-            const distanceKm = distanceMeters / 1000
 
-            if (distanceKm > radiusKm) return null
-
-            // Filter by role/title (client-side)
+            // Filter by role
             if (filters.role && t.title) {
               if (!t.title.toLowerCase().includes(filters.role.toLowerCase())) {
                 return null
               }
             }
 
-            // Filter by skills (client-side)
+            // Filter by skills
             const talentSkills = Array.isArray(t.skills) ? t.skills.map((s: any) => String(s).toLowerCase()) : []
             if (filters.skills.length > 0) {
               const hasMatchingSkill = filters.skills.some(skill => 
@@ -434,7 +391,7 @@ function BusinessMapPageInner() {
               if (!hasMatchingSkill) return null
             }
 
-            // Filter by minimum experience (client-side)
+            // Filter by minimum experience
             if (filters.minExperience && t.experience_years !== null && t.experience_years !== undefined) {
               const minExp = parseInt(filters.minExperience)
               if (!isNaN(minExp) && t.experience_years < minExp) {
@@ -442,30 +399,66 @@ function BusinessMapPageInner() {
               }
             }
 
-            // Return the anonymized talent data with geocoded coordinates
+            // Location filtering (only if location is specified)
+            let coords: { lat: number; lng: number } | null = null
+            let distanceKm: number | null = null
+
+            if (searchCenter) {
+              coords = await geocodeTalentLocation(t)
+              if (!coords) {
+                // If location is required and we can't geocode, skip
+                return null
+              }
+              
+              const lat = coords.lat
+              const lng = coords.lng
+              
+              // Calculate distance
+              const R = 6371000
+              const dLat = ((lat - centerLat!) * Math.PI) / 180
+              const dLng = ((lng - centerLng!) * Math.PI) / 180
+              const a =
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos((centerLat! * Math.PI) / 180) *
+                  Math.cos((lat * Math.PI) / 180) *
+                  Math.sin(dLng / 2) *
+                  Math.sin(dLng / 2)
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+              const distanceMeters = R * c
+              distanceKm = distanceMeters / 1000
+
+              if (distanceKm > radiusKm) return null
+            } else {
+              // No location filter - just get coordinates for display if available
+              coords = await geocodeTalentLocation(t)
+            }
+
             return {
               id: String(t.id),
               title: t.title || null,
               skills: Array.isArray(t.skills) ? t.skills : null,
               experience_years: t.experience_years !== null && t.experience_years !== undefined ? t.experience_years : null,
-              bio: t.bio ? t.bio.substring(0, 200) : null, // Truncate bio
+              bio: t.bio ? t.bio.substring(0, 200) : null,
               city: t.city || null,
               state: t.state || null,
               country: t.country || null,
-              latitude: lat,
-              longitude: lng,
-              distance_km: Math.round(distanceKm * 10) / 10,
+              latitude: coords?.lat || null,
+              longitude: coords?.lng || null,
+              distance_km: distanceKm ? Math.round(distanceKm * 10) / 10 : null,
               search_summary: (typeof t.search_summary === 'string' && t.search_summary) || null,
-              availability_description: (typeof t.availability_description === 'string' && t.availability_description) || null
+              availability_description: (typeof t.availability_description === 'string' && t.availability_description) || null,
+              intent_status: t.intent_status || null,
+              intent_visibility: t.intent_visibility || false,
             } as AnonymizedTalent
           })
         )
 
-        // Filter out nulls (all filtering already done above)
         const filtered = processedTalents.filter((t): t is AnonymizedTalent => t !== null)
 
-        // Sort by distance
-        filtered.sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0))
+        // Sort by distance if location is set, otherwise by relevance
+        if (searchCenter) {
+          filtered.sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0))
+        }
 
         setTalents(filtered)
       } catch (err: any) {
@@ -477,7 +470,7 @@ function BusinessMapPageInner() {
     }
 
     loadTalents()
-  }, [searchCenter, radiusKm, filters.role, filters.skills, filters.minExperience, intentStatusFilter, intentCompatibility])
+  }, [searchQueryDebounced, searchCenter, radiusKm, filters.role, filters.skills, filters.minExperience, intentStatusFilter])
 
   // Handle location selection
   const handleLocationSelect = (suggestion: LocSuggestion) => {
@@ -507,101 +500,59 @@ function BusinessMapPageInner() {
     setSkillsInputOpen(false)
   }
 
-  // Handle connection request
+  // Handle quick search
+  const handleQuickSearch = (quickSearch: typeof QUICK_SEARCHES[0]) => {
+    setSearchQuery(quickSearch.role)
+    setFilters(prev => ({
+      ...prev,
+      role: quickSearch.role,
+      skills: quickSearch.skills
+    }))
+  }
+
+  // Clear all filters
+  const handleClearFilters = () => {
+    setSearchQuery('')
+    setLocQuery('')
+    setSearchCenter(null)
+    setFilters({ role: '', skills: [], minExperience: '', location: '' })
+    setIntentStatusFilter('')
+  }
+
+  // Request connection handler (same as before)
   const handleRequestConnection = async (talentId: string) => {
-    // Check authentication first
-    const { data: session } = await supabase.auth.getSession()
-    const uid = session?.session?.user?.id ?? null
-    
-    if (!uid) {
-      alert('Please sign in as a business to request connections.')
-      router.push('/login?redirect=/business-map')
+    if (!isAuthenticated) {
+      alert('Please sign in to request connections')
       return
     }
 
-    // Check if business profile exists, reload if needed
     let currentBusinessProfileId = businessProfileId
-    let currentBusinessUserId = businessUserId || uid
-    
-    if (!currentBusinessProfileId) {
+    let currentBusinessUserId = businessUserId
+
+    if (!currentBusinessProfileId || !currentBusinessUserId) {
       try {
-        // Get business profile with user_id to ensure it matches the authenticated user
-        const { data: bp, error: bpError } = await supabase
+        const { data: session } = await supabase.auth.getSession()
+        const uid = session?.session?.user?.id ?? null
+        if (!uid) {
+          alert('Please sign in to request connections')
+          return
+        }
+
+        const { data: bp } = await supabase
           .from('business_profiles')
           .select('id, user_id')
           .eq('user_id', uid)
           .maybeSingle()
 
-        if (bpError) {
-          console.error('Error fetching business profile:', bpError)
-          alert(`Failed to load business profile: ${bpError.message}. Please ensure your business profile is complete.`)
+        if (!bp?.id) {
+          alert('Business profile not found. Please create a business profile first.')
           return
         }
 
-        if (bp?.id) {
-          currentBusinessProfileId = String(bp.id)
-          setBusinessProfileId(currentBusinessProfileId)
-          if (bp.user_id) {
-            currentBusinessUserId = bp.user_id
-            setBusinessUserId(bp.user_id)
-          } else {
-            // Business profile exists but has no user_id - this is a data integrity issue
-            console.error('Business profile missing user_id:', bp.id)
-            alert('Business profile configuration error. Please contact support or recreate your business profile.')
-            return
-          }
-        } else {
-          // No business profile - redirect to create one
-          if (confirm('You need to complete your business profile before requesting connections. Would you like to go to your profile page now?')) {
-            router.push('/dashboard/business/edit')
-          }
-          return
-        }
-      } catch (err: any) {
-        console.error('Error checking business profile:', err)
-        alert(`Failed to check business profile: ${err.message}. Please try again or complete your profile first.`)
-        return
-      }
-    } else {
-      // Verify the existing businessProfileId belongs to the current user
-      try {
-        const { data: bp, error: bpError } = await supabase
-          .from('business_profiles')
-          .select('id, user_id')
-          .eq('id', currentBusinessProfileId)
-          .maybeSingle()
-
-        if (bpError || !bp) {
-          console.error('Error verifying business profile:', bpError)
-          // Reload business profile
-          const { data: bpReload } = await supabase
-            .from('business_profiles')
-            .select('id, user_id')
-            .eq('user_id', uid)
-            .maybeSingle()
-          
-          if (bpReload?.id) {
-            currentBusinessProfileId = String(bpReload.id)
-            setBusinessProfileId(currentBusinessProfileId)
-            if (bpReload.user_id) {
-              currentBusinessUserId = bpReload.user_id
-              setBusinessUserId(bpReload.user_id)
-            }
-          } else {
-            alert('Business profile not found. Please complete your business profile first.')
-            router.push('/dashboard/business/edit')
-            return
-          }
-        } else if (bp.user_id !== uid) {
-          // Business profile doesn't belong to current user
-          alert('Business profile ownership mismatch. Please sign in with the correct account.')
-          return
-        } else {
-          // Business profile is valid - ensure user_id is set
-          if (bp.user_id && !currentBusinessUserId) {
-            currentBusinessUserId = bp.user_id
-            setBusinessUserId(bp.user_id)
-          }
+        currentBusinessProfileId = String(bp.id)
+        if (bp.user_id) {
+          currentBusinessUserId = bp.user_id
+          setBusinessUserId(bp.user_id)
         }
       } catch (err: any) {
         console.error('Error verifying business profile:', err)
@@ -612,15 +563,11 @@ function BusinessMapPageInner() {
 
     setRequestingConnection(true)
     try {
-      // Use the verified business profile ID
       const bpId = currentBusinessProfileId
       if (!bpId) {
         throw new Error('Business profile not found')
       }
       
-      console.log('[Business Map] Requesting connection with:', { businessProfileId: bpId, talentId, currentBusinessUserId })
-
-      // Check if connection request already exists
       const { data: existing } = await supabase
         .from('talent_connection_requests')
         .select('id, status')
@@ -640,25 +587,20 @@ function BusinessMapPageInner() {
         return
       }
 
-      // Create connection request
-      // Note: selected_sections is required but will be empty initially
-      // Talent can review and select sections when they accept
       const { data: newRequest, error: insertError } = await supabase
         .from('talent_connection_requests')
         .insert({
           business_id: bpId,
           talent_id: talentId,
           status: 'pending',
-          selected_sections: [] // Empty array - talent will select sections when accepting
+          selected_sections: []
         })
         .select()
         .single()
 
       if (insertError) throw insertError
 
-      // Create a conversation and initial message/notification for the talent
       try {
-        // Get business name for the message
         const { data: businessData } = await supabase
           .from('business_profiles')
           .select('business_name, name, company_name, user_id')
@@ -668,7 +610,6 @@ function BusinessMapPageInner() {
         const businessName = businessData?.business_name || businessData?.name || businessData?.company_name || 'A business'
         const currentBusinessUserId = businessUserId || businessData?.user_id
 
-        // Check if conversation already exists
         const { data: existingConv } = await supabase
           .from('conversations')
           .select('id')
@@ -679,7 +620,6 @@ function BusinessMapPageInner() {
         let conversationId = existingConv?.id
 
         if (!conversationId) {
-          // Create new conversation
           const { data: newConv, error: convError } = await supabase
             .from('conversations')
             .insert({
@@ -695,7 +635,6 @@ function BusinessMapPageInner() {
           }
         }
 
-        // Create initial message about the connection request
         if (conversationId && currentBusinessUserId) {
           const messageBody = `${businessName} has requested to connect with you. Review their profile in the Connection Requests section of your dashboard to accept or decline.`
           
@@ -709,7 +648,6 @@ function BusinessMapPageInner() {
             })
         }
       } catch (msgErr) {
-        // Non-critical error - connection request was created successfully
         console.warn('Failed to create notification message:', msgErr)
       }
 
@@ -724,10 +662,8 @@ function BusinessMapPageInner() {
     }
   }
 
-  // Reload business profile when popup opens (to ensure it's available)
   useEffect(() => {
     if (showTalentPopup && !businessProfileId && isAuthenticated) {
-      // Reload business profile if not loaded yet
       ;(async () => {
         try {
           const { data: session } = await supabase.auth.getSession()
@@ -745,7 +681,6 @@ function BusinessMapPageInner() {
               if (bp.user_id) {
                 setBusinessUserId(bp.user_id)
               }
-              console.log('[Business Map] Business profile reloaded:', bp.id)
             }
           }
         } catch (err) {
@@ -755,7 +690,6 @@ function BusinessMapPageInner() {
     }
   }, [showTalentPopup, businessProfileId, isAuthenticated])
 
-  // Handle talent marker click (can be called with string or number ID)
   const handleTalentMarkerClick = (talentId: string | number) => {
     const talentIdStr = String(talentId)
     const talent = talents.find(t => t.id === talentIdStr)
@@ -766,7 +700,6 @@ function BusinessMapPageInner() {
     }
   }
 
-  // Get map markers for SearchMap component
   const mapMarkers = useMemo(() => {
     return talents
       .filter(t => t.latitude !== null && t.longitude !== null)
@@ -784,10 +717,9 @@ function BusinessMapPageInner() {
       }))
   }, [talents])
 
-  // Get map center - use search center or default to Sydney
   const mapCenter = searchCenter || (talents.length > 0 && talents[0].latitude && talents[0].longitude 
     ? { lat: talents[0].latitude, lng: talents[0].longitude }
-    : { lat: -33.8688, lng: 151.2093 }) // Default to Sydney
+    : { lat: -33.8688, lng: 151.2093 })
 
   if (!isAuthenticated) {
     return (
@@ -809,62 +741,118 @@ function BusinessMapPageInner() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white">
       {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur bg-slate-950/70 border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
-          <Link href="/dashboard/business" className="flex items-center gap-2 text-2xl font-bold text-white hover:text-blue-400 transition-colors">
-            ← Business Dashboard
-          </Link>
-          <h1 className="text-xl font-semibold">Business Map - Find Talent</h1>
+      <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-8 py-4">
+          <div className="flex items-center justify-between">
+            <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-gray-900">
+              Creerlio
+            </Link>
+
+            <nav className="hidden lg:flex items-center gap-x-8 text-sm text-gray-600">
+              <Link href="/talent" className="hover:text-blue-600 transition-colors">Talent</Link>
+              <Link href="/business" className="hover:text-blue-600 transition-colors">Business</Link>
+              <Link href="/search" className="hover:text-blue-600 transition-colors">Search</Link>
+              <Link href="/jobs" className="hover:text-blue-600 transition-colors">Jobs</Link>
+            </nav>
+
+            <div className="flex gap-3">
+              <Link
+                href="/login/talent?mode=signup&redirect=/dashboard/talent"
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+              >
+                Create Talent Account
+              </Link>
+              <Link
+                href="/login/business?mode=signup&redirect=/dashboard/business"
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+              >
+                Create Business Account
+              </Link>
+              <Link
+                href="/login/talent?mode=signin&redirect=/dashboard/talent"
+                className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+              >
+                Sign In
+              </Link>
+            </div>
+          </div>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Filters Sidebar */}
-          <div className="lg:col-span-1 space-y-6">
-            <div className="dashboard-card rounded-xl p-6">
-              <h2 className="text-xl font-bold text-white mb-4">Search Filters</h2>
+        {/* Map and Filters Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          {/* Filters Section - 1/4 width */}
+          <div className="lg:col-span-1">
+            <div className="dashboard-card rounded-xl p-3">
+              <h1 className="text-lg font-bold text-white mb-3">Find Talent</h1>
+            
+            {/* Main Search Bar */}
+            <div className="mb-3">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by role, skill, or industry"
+                className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+              />
+            </div>
 
-              {/* Location Search */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Location</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={locQuery}
-                    onChange={(e) => setLocQuery(e.target.value)}
-                    onFocus={() => locSuggestions.length > 0 && setLocOpen(true)}
-                    placeholder="City, State, or Country"
-                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
-                  />
-                  {locOpen && locSuggestions.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
-                      {locSuggestions.map((s, idx) => (
-                        <button
-                          key={s.id}
-                          onClick={() => handleLocationSelect(s)}
-                          className={`w-full text-left px-4 py-2 hover:bg-white/10 transition-colors ${
-                            idx === locActiveIdx ? 'bg-blue-500/20' : ''
-                          }`}
-                        >
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+            {/* Quick Search Buttons */}
+            <div className="mb-3">
+              <p className="text-xs text-gray-300 mb-1.5">Quick searches:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_SEARCHES.map((qs) => (
+                  <button
+                    key={qs.label}
+                    onClick={() => handleQuickSearch(qs)}
+                    className="px-2 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded text-xs transition-colors"
+                  >
+                    {qs.label}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {/* Radius */}
+            {/* Location (Optional) */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-gray-300 mb-1.5">
+                Location (Optional)
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={locQuery}
+                  onChange={(e) => setLocQuery(e.target.value)}
+                  onFocus={() => locSuggestions.length > 0 && setLocOpen(true)}
+                  placeholder="City, state, or country"
+                  className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+                />
+                {locOpen && locSuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
+                    {locSuggestions.map((s, idx) => (
+                      <button
+                        key={s.id}
+                        onClick={() => handleLocationSelect(s)}
+                        className={`w-full text-left px-4 py-2 hover:bg-white/10 transition-colors ${
+                          idx === locActiveIdx ? 'bg-blue-500/20' : ''
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               {searchCenter && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Radius: {radiusKm} km
+                <div className="mt-1.5">
+                  <label className="block text-xs font-medium text-gray-300 mb-1">
+                    Search radius: {radiusKm} km
                   </label>
                   <input
                     type="range"
                     min="5"
-                    max="100"
+                    max="200"
                     step="5"
                     value={radiusKm}
                     onChange={(e) => setRadiusKm(parseInt(e.target.value))}
@@ -872,133 +860,149 @@ function BusinessMapPageInner() {
                   />
                 </div>
               )}
+            </div>
 
-              {/* Role/Title Filter */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Role/Title</label>
-                <input
-                  type="text"
-                  value={filters.role}
-                  onChange={(e) => setFilters(prev => ({ ...prev, role: e.target.value }))}
-                  placeholder="e.g., Software Engineer"
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
-                />
-              </div>
+            {/* Advanced Filters Toggle */}
+            <div className="flex items-center justify-between mb-2">
+              <button
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className="text-xs text-blue-400 hover:text-blue-300"
+              >
+                {showAdvancedFilters ? '▼ Hide' : '▶ Show'} Advanced
+              </button>
+              {(searchQuery || locQuery || filters.role || filters.skills.length > 0 || filters.minExperience) && (
+                <button
+                  onClick={handleClearFilters}
+                  className="text-xs text-gray-400 hover:text-gray-300"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
 
-              {/* Skills Filter */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Skills</label>
-                <div className="relative">
+            {/* Advanced Filters (Collapsible) */}
+            {showAdvancedFilters && (
+              <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
+                {/* Role Filter */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-300 mb-1">Role/Title</label>
                   <input
                     type="text"
-                    value={skillsInput}
-                    onChange={(e) => handleSkillsInputChange(e.target.value)}
-                    placeholder="Type to search skills..."
-                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                    value={filters.role}
+                    onChange={(e) => setFilters(prev => ({ ...prev, role: e.target.value }))}
+                    placeholder="e.g., Software Engineer"
+                    className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
                   />
-                  {skillsInputOpen && (
-                    <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
-                      {SKILLS_OPTIONS.filter(s => s.toLowerCase().includes(skillsInput.toLowerCase()))
-                        .slice(0, 10)
-                        .map((skill, idx) => (
+                </div>
+
+                {/* Skills Filter */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-300 mb-1">Skills</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={skillsInput}
+                      onChange={(e) => handleSkillsInputChange(e.target.value)}
+                      placeholder="Type to search skills..."
+                      className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+                    />
+                    {skillsInputOpen && (
+                      <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
+                        {SKILLS_OPTIONS.filter(s => s.toLowerCase().includes(skillsInput.toLowerCase()))
+                          .slice(0, 10)
+                          .map((skill, idx) => (
+                            <button
+                              key={skill}
+                              onClick={() => handleAddSkill(skill)}
+                              className={`w-full text-left px-4 py-2 hover:bg-white/10 transition-colors ${
+                                idx === skillsInputActiveIdx ? 'bg-blue-500/20' : ''
+                              }`}
+                            >
+                              {skill}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                  {filters.skills.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {filters.skills.map(skill => (
+                        <span
+                          key={skill}
+                          className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded text-sm flex items-center gap-1"
+                        >
+                          {skill}
                           <button
-                            key={skill}
-                            onClick={() => handleAddSkill(skill)}
-                            className={`w-full text-left px-4 py-2 hover:bg-white/10 transition-colors ${
-                              idx === skillsInputActiveIdx ? 'bg-blue-500/20' : ''
-                            }`}
+                            onClick={() => setFilters(prev => ({ ...prev, skills: prev.skills.filter(s => s !== skill) }))}
+                            className="hover:text-red-400"
                           >
-                            {skill}
+                            ×
                           </button>
-                        ))}
+                        </span>
+                      ))}
                     </div>
                   )}
                 </div>
-                {filters.skills.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {filters.skills.map(skill => (
-                      <span
-                        key={skill}
-                        className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded text-sm flex items-center gap-1"
-                      >
-                        {skill}
-                        <button
-                          onClick={() => setFilters(prev => ({ ...prev, skills: prev.skills.filter(s => s !== skill) }))}
-                          className="hover:text-red-400"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              {/* Experience Filter */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Minimum Experience (Years)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={filters.minExperience}
-                  onChange={(e) => setFilters(prev => ({ ...prev, minExperience: e.target.value }))}
-                  placeholder="e.g., 5"
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
-                />
-              </div>
+                {/* Experience Filter */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-300 mb-1">Min Experience (Years)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={filters.minExperience}
+                    onChange={(e) => setFilters(prev => ({ ...prev, minExperience: e.target.value }))}
+                    placeholder="e.g., 5"
+                    className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+                  />
+                </div>
 
-              {/* Intent Filters */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Intent filters</label>
-                <div className="flex flex-col gap-3">
+                {/* Intent Filter */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-300 mb-1">Intent Status</label>
                   <select
                     value={intentStatusFilter}
                     onChange={(e) => setIntentStatusFilter(e.target.value)}
-                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
                   >
                     <option value="">All intent statuses</option>
                     <option value="open_to_conversations">Open to conversations</option>
                     <option value="passive_exploring">Passive exploring</option>
                     <option value="not_available">Not available</option>
                   </select>
-                  <label className="flex items-center gap-2 text-xs text-gray-300">
-                    <input
-                      type="checkbox"
-                      className="accent-blue-500"
-                      checked={intentCompatibility}
-                      onChange={(e) => setIntentCompatibility(e.target.checked)}
-                    />
-                    Show only compatible intent signals
-                  </label>
                 </div>
               </div>
+            )}
 
-              {error && (
-                <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-sm text-red-400">
-                  {error}
-                </div>
-              )}
+            {/* Results Count */}
+            {!loading && (
+              <div className="mt-2 pt-2 border-t border-white/10">
+                <p className="text-xs text-gray-300">
+                  {talents.length} {talents.length === 1 ? 'talent found' : 'talents found'}
+                  {searchCenter && ` within ${radiusKm} km`}
+                </p>
+              </div>
+            )}
 
-              {loading && (
-                <div className="text-center py-4">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                  <p className="text-sm text-gray-400 mt-2">Searching talent...</p>
-                </div>
-              )}
+            {error && (
+              <div className="mt-2 p-2 bg-red-500/10 border border-red-500/50 rounded-lg text-xs text-red-400">
+                {error}
+              </div>
+            )}
 
-              {!loading && searchCenter && (
-                <div className="text-sm text-gray-400 mt-4">
-                  Found {talents.length} {talents.length === 1 ? 'talent' : 'talents'} within {radiusKm} km
-                </div>
-              )}
+            {loading && (
+              <div className="mt-2 text-center py-2">
+                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <p className="text-xs text-gray-400 mt-1">Searching...</p>
+              </div>
+            )}
             </div>
           </div>
 
-          {/* Map and Results */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Map */}
+          {/* Map - 3/4 width */}
+          <div className="lg:col-span-3">
             <div className="dashboard-card rounded-xl p-0 overflow-hidden" style={{ height: '600px' }}>
-              {typeof window !== 'undefined' && searchCenter && (
+              {typeof window !== 'undefined' && (searchCenter || talents.length > 0) ? (
                 <SearchMap
                   markers={mapMarkers}
                   center={mapCenter}
@@ -1006,124 +1010,93 @@ function BusinessMapPageInner() {
                   className="w-full h-full"
                   onMarkerClick={handleTalentMarkerClick}
                 />
-              )}
-              {typeof window !== 'undefined' && !searchCenter && (
+              ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-400">
                   <div className="text-center">
                     <p className="text-lg mb-2">📍 Search for Talent</p>
-                    <p className="text-sm">Enter a location above to find talent in your area</p>
+                    <p className="text-sm">Enter a search term above to find talent</p>
+                    <p className="text-xs text-gray-500 mt-1">Location is optional - you can search everywhere or filter by location</p>
                   </div>
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Talent Results */}
-            {talents.length > 0 && (
-              <div className="dashboard-card rounded-xl p-6">
-                <h2 className="text-xl font-bold text-white mb-4">Matching Talent</h2>
-                <div className="space-y-4 max-h-96 overflow-auto">
+          {/* Talent Results List - moved below map */}
+          <div className="lg:col-span-4 mt-4">
+            {talents.length > 0 ? (
+              <div className="dashboard-card rounded-xl p-4">
+                <h2 className="text-lg font-bold text-white mb-4">Results ({talents.length})</h2>
+                <div className="space-y-3 max-h-[600px] overflow-auto">
                   {talents.map((talent) => (
                     <div
                       key={talent.id}
-                      className="border border-white/10 rounded-lg p-4 hover:border-blue-500/50 transition-colors cursor-pointer"
+                      className="border border-white/10 rounded-lg p-3 hover:border-blue-500/50 transition-colors cursor-pointer bg-white/5"
                       onClick={() => handleTalentMarkerClick(talent.id)}
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          {/* Anonymized Title */}
-                          {talent.title && (
-                            <div className="flex items-center gap-2 mb-2">
-                              {talent.intent_visibility && talent.intent_status ? (
-                                <span
-                                  className={`inline-flex h-2 w-2 rounded-full ${
-                                    talent.intent_status === 'open_to_conversations' ? 'bg-emerald-400' :
-                                    talent.intent_status === 'passive_exploring' ? 'bg-blue-400' :
-                                    'bg-slate-400'
-                                  }`}
-                                  title={`Intent: ${talent.intent_status.replace(/_/g, ' ')}`}
-                                />
-                              ) : null}
-                              <h3 className="text-lg font-semibold text-white">{talent.title}</h3>
-                            </div>
-                          )}
-
-                          {/* Search Summary Preview (if available) */}
-                          {talent.search_summary && (
-                            <p className="text-sm text-gray-200 mb-2 line-clamp-2">{talent.search_summary}</p>
-                          )}
-
-                          {/* Experience */}
-                          {talent.experience_years !== null && (
-                            <p className="text-sm text-gray-400 mb-2">
-                              {talent.experience_years} {talent.experience_years === 1 ? 'year' : 'years'} of experience
-                            </p>
-                          )}
-
-                          {/* Skills Preview (limited to 5) */}
-                          {talent.skills && talent.skills.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mb-2">
-                              {talent.skills.slice(0, 5).map((skill, idx) => (
-                                <span
-                                  key={idx}
-                                  className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded text-xs"
-                                >
-                                  {skill}
-                                </span>
-                              ))}
-                              {talent.skills.length > 5 && (
-                                <span className="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-xs">
-                                  +{talent.skills.length - 5} more
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Location (city/state only, not exact address) */}
-                          {(talent.city || talent.state) && (
-                            <p className="text-sm text-gray-400 mb-2">
-                              📍 {[talent.city, talent.state].filter(Boolean).join(', ')}
-                              {talent.distance_km && ` (${talent.distance_km} km away)`}
-                            </p>
+                      {talent.title && (
+                        <div className="flex items-center gap-2 mb-2">
+                          {talent.intent_visibility && talent.intent_status ? (
+                            <span
+                              className={`inline-flex h-2 w-2 rounded-full ${
+                                talent.intent_status === 'open_to_conversations' ? 'bg-emerald-400' :
+                                talent.intent_status === 'passive_exploring' ? 'bg-blue-400' :
+                                'bg-slate-400'
+                              }`}
+                              title={`Intent: ${talent.intent_status.replace(/_/g, ' ')}`}
+                            />
+                          ) : null}
+                          <h3 className="text-base font-semibold text-white">{talent.title}</h3>
+                        </div>
+                      )}
+                      {talent.search_summary && (
+                        <p className="text-xs text-gray-300 mb-2 line-clamp-2">{talent.search_summary}</p>
+                      )}
+                      {talent.experience_years !== null && (
+                        <p className="text-xs text-gray-400 mb-1">
+                          {talent.experience_years} {talent.experience_years === 1 ? 'year' : 'years'} experience
+                        </p>
+                      )}
+                      {talent.skills && talent.skills.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {talent.skills.slice(0, 3).map((skill, idx) => (
+                            <span
+                              key={idx}
+                              className="px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded text-xs"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                          {talent.skills.length > 3 && (
+                            <span className="px-1.5 py-0.5 bg-gray-500/20 text-gray-400 rounded text-xs">
+                              +{talent.skills.length - 3}
+                            </span>
                           )}
                         </div>
-
-                        {/* View Details Button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleTalentMarkerClick(talent.id)
-                          }}
-                          className="ml-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm whitespace-nowrap"
-                        >
-                          View Details
-                        </button>
-                      </div>
+                      )}
+                      {(talent.city || talent.state) && (
+                        <p className="text-xs text-gray-400">
+                          📍 {[talent.city, talent.state].filter(Boolean).join(', ')}
+                          {talent.distance_km && ` (${talent.distance_km} km)`}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
-            )}
-
-            {!loading && searchCenter && talents.length === 0 && (
+            ) : !loading && (searchQuery || locQuery) ? (
               <div className="dashboard-card rounded-xl p-6 text-center">
-                <p className="text-gray-400">No talent found matching your filters. Try adjusting your search criteria.</p>
+                <p className="text-gray-400">No talent found matching your search. Try adjusting your filters.</p>
               </div>
-            )}
-
-            {!searchCenter && (
-              <div className="dashboard-card rounded-xl p-6 text-center">
-                <p className="text-gray-400">Enter a location above to search for talent.</p>
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
 
-      {/* Talent Popup Modal */}
+      {/* Talent Popup Modal - Same as before */}
       {showTalentPopup && selectedTalent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-slate-800 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-auto border border-white/10 shadow-2xl">
-            {/* Header */}
             <div className="flex items-start justify-between mb-4">
               <h2 className="text-2xl font-bold text-white">Talent Summary</h2>
               <button
@@ -1138,16 +1111,13 @@ function BusinessMapPageInner() {
               </button>
             </div>
 
-            {/* Talent Details */}
             <div className="space-y-4">
-              {/* Title/Role */}
               {selectedTalent.title && (
                 <div>
                   <h3 className="text-xl font-semibold text-white mb-1">{selectedTalent.title}</h3>
                 </div>
               )}
 
-              {/* Experience */}
               {selectedTalent.experience_years !== null && selectedTalent.experience_years !== undefined && (
                 <div>
                   <p className="text-sm text-gray-300">
@@ -1156,7 +1126,6 @@ function BusinessMapPageInner() {
                 </div>
               )}
 
-              {/* Location */}
               {(selectedTalent.city || selectedTalent.state || selectedTalent.country) && (
                 <div>
                   <p className="text-sm text-gray-300">
@@ -1166,7 +1135,6 @@ function BusinessMapPageInner() {
                 </div>
               )}
 
-              {/* Search Summary - This is what the talent wrote for businesses to see */}
               {selectedTalent.search_summary ? (
                 <div>
                   <h4 className="text-sm font-semibold text-gray-300 mb-2">About</h4>
@@ -1178,7 +1146,6 @@ function BusinessMapPageInner() {
                 </div>
               )}
 
-              {/* Availability Description */}
               {selectedTalent.availability_description && (
                 <div>
                   <h4 className="text-sm font-semibold text-gray-300 mb-2">Availability</h4>
@@ -1186,7 +1153,6 @@ function BusinessMapPageInner() {
                 </div>
               )}
 
-              {/* Skills Preview */}
               {selectedTalent.skills && selectedTalent.skills.length > 0 && (
                 <div>
                   <h4 className="text-sm font-semibold text-gray-300 mb-2">Skills</h4>
@@ -1208,14 +1174,12 @@ function BusinessMapPageInner() {
                 </div>
               )}
 
-              {/* Privacy Notice */}
               <div className="mt-6 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                 <p className="text-xs text-blue-300">
                   ℹ️ This is a brief summary provided by the talent. To see their full profile and contact them, you'll need to request a connection, which they can accept or decline after reviewing your business profile.
                 </p>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex gap-4 mt-6 pt-6 border-t border-white/10">
                 <button
                   onClick={() => handleRequestConnection(selectedTalent.id)}

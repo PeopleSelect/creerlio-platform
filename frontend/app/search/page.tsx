@@ -383,8 +383,14 @@ function SearchPageInner() {
         }
       }
 
-      // Process Business results
-      if (searchType === 'business' && searchResults.businesses && searchResults.businesses.length > 0) {
+      // Process Business results - show businesses on map whenever they're in results
+      if (searchResults.businesses && searchResults.businesses.length > 0) {
+        console.log('[SearchMap] Processing businesses for markers:', {
+          count: searchResults.businesses.length,
+          searchType,
+          businesses: searchResults.businesses.map(b => ({ id: b.id, name: b.name, hasLat: !!b.latitude, hasLng: !!b.longitude, location: b.location, city: b.city }))
+        })
+        
         for (const business of searchResults.businesses) {
           let lat: number | null = null
           let lng: number | null = null
@@ -393,27 +399,77 @@ function SearchPageInner() {
           if (business.latitude && business.longitude) {
             lat = business.latitude
             lng = business.longitude
-          } else if (business.location) {
-            // Geocode location string
-            const coords = await geocodeLocation(business.location)
-            if (coords) {
-              lat = coords.lat
-              lng = coords.lng
+            console.log('[SearchMap] Using existing coordinates for business:', business.name, { lat, lng })
+          } else {
+            // Try to fetch location data from business_profiles if missing
+            if (business.id && (!business.latitude || !business.longitude)) {
+              try {
+                const businessId = typeof business.id === 'string' ? parseInt(business.id, 10) : business.id
+                // businessId might be UUID string or number, handle both
+                const businessIdStr = typeof businessId === 'string' ? businessId : String(businessId)
+                if (businessIdStr) {
+                  console.log('[SearchMap] Fetching missing location data for business:', business.name, businessIdStr)
+                  const { data: profileData, error: profileError } = await supabase
+                    .from('business_profiles')
+                    .select('*')
+                    .eq('id', businessIdStr)
+                    .maybeSingle()
+
+                  if (!profileError && profileData) {
+                    // Handle both latitude/longitude and lat/lng column names
+                    const profileLat = profileData.latitude ?? profileData.lat ?? null
+                    const profileLng = profileData.longitude ?? profileData.lng ?? null
+                    
+                    if (profileLat && profileLng) {
+                      lat = profileLat
+                      lng = profileLng
+                      console.log('[SearchMap] Fetched coordinates from database:', business.name, { lat, lng })
+                    } else if (profileData.location) {
+                      business.location = profileData.location
+                    } else if (profileData.city || profileData.state || profileData.country) {
+                      business.city = profileData.city
+                      business.state = profileData.state
+                      business.country = profileData.country
+                    }
+                  } else if (profileError) {
+                    console.warn('[SearchMap] Error fetching profile data:', profileError)
+                  }
+                }
+              } catch (err) {
+                console.warn('[SearchMap] Exception fetching profile data:', err)
+              }
             }
-          } else if (business.city || business.state || business.country) {
-            // Build location string from city/state/country
-            const locationParts = [business.city, business.state, business.country].filter(Boolean)
-            if (locationParts.length > 0) {
-              const locationStr = locationParts.join(', ')
-              const coords = await geocodeLocation(locationStr)
-              if (coords) {
-                lat = coords.lat
-                lng = coords.lng
+
+            // If still no coordinates, try geocoding
+            if (!lat || !lng) {
+              if (business.location) {
+                // Geocode location string
+                console.log('[SearchMap] Geocoding location for business:', business.name, business.location)
+                const coords = await geocodeLocation(business.location)
+                if (coords) {
+                  lat = coords.lat
+                  lng = coords.lng
+                  console.log('[SearchMap] Geocoded coordinates:', { lat, lng })
+                }
+              } else if (business.city || business.state || business.country) {
+                // Build location string from city/state/country
+                const locationParts = [business.city, business.state, business.country].filter(Boolean)
+                if (locationParts.length > 0) {
+                  const locationStr = locationParts.join(', ')
+                  console.log('[SearchMap] Geocoding city/state/country for business:', business.name, locationStr)
+                  const coords = await geocodeLocation(locationStr)
+                  if (coords) {
+                    lat = coords.lat
+                    lng = coords.lng
+                    console.log('[SearchMap] Geocoded coordinates from city/state/country:', { lat, lng })
+                  }
+                }
               }
             }
           }
 
           if (lat !== null && lng !== null) {
+            console.log('[SearchMap] Adding business marker:', business.name, { lat, lng })
             markers.push({
               id: business.id,
               lat,
@@ -422,10 +478,29 @@ function SearchPageInner() {
               description: business.tagline || business.mission || undefined,
               type: 'business'
             })
+          } else {
+            console.warn('[SearchMap] Could not get coordinates for business:', business.name, {
+              hasLat: !!business.latitude,
+              hasLng: !!business.longitude,
+              location: business.location,
+              city: business.city,
+              state: business.state,
+              country: business.country
+            })
           }
         }
       }
 
+      console.log('[SearchMap] Final markers:', {
+        total: markers.length,
+        byType: {
+          jobs: markers.filter(m => m.type === 'job').length,
+          businesses: markers.filter(m => m.type === 'business').length,
+          talent: markers.filter(m => m.type === 'talent').length
+        },
+        markers: markers.map(m => ({ id: m.id, type: m.type, title: m.title, lat: m.lat, lng: m.lng }))
+      })
+      
       setMapMarkers(markers)
       setIsGeocoding(false)
     }
@@ -477,24 +552,112 @@ function SearchPageInner() {
         const loc = (location || '').trim()
 
         // Jobs are stored in Supabase (if table exists). If it's not configured yet, show a calm message.
-        let qb: any = supabase.from('jobs').select('id,title,description,location,city,status,created_at').limit(100)
-        // Prefer published jobs if column exists
-        qb = qb.eq('status', 'published')
-
+        let qb: any = supabase
+          .from('jobs')
+          .select('id,title,description,location,city,country,status,created_at,business_profile_id')
+          .limit(100)
+        
+        // Build OR conditions - combine keyword and location into one OR clause
+        const allConditions: string[] = []
         if (q) {
-          qb = qb.or(`title.ilike.%${q}%,description.ilike.%${q}%`)
+          allConditions.push(`title.ilike.%${q}%`)
+          allConditions.push(`description.ilike.%${q}%`)
         }
         if (loc) {
-          qb = qb.or(`location.ilike.%${loc}%,city.ilike.%${loc}%`)
+          allConditions.push(`location.ilike.%${loc}%`)
+          allConditions.push(`city.ilike.%${loc}%`)
+          allConditions.push(`country.ilike.%${loc}%`)
+        }
+        
+        // Apply OR filter if we have conditions
+        if (allConditions.length > 0) {
+          qb = qb.or(allConditions.join(','))
+        }
+        
+        // Prefer published jobs if column exists (try with status filter first)
+        let res: any = await qb.eq('status', 'published')
+        
+        // If error, try again without status filter (schema may not have it)
+        if (res.error) {
+          qb = supabase
+            .from('jobs')
+            .select('id,title,description,location,city,country,created_at,business_profile_id')
+            .limit(100)
+          
+          if (allConditions.length > 0) {
+            qb = qb.or(allConditions.join(','))
+          }
+          
+          res = await qb
         }
 
-        const res: any = await qb
+        // Check for specific error types
         if (res.error) {
-          setSearchResults({ jobs: [] })
-          setError('Jobs search is not available yet (missing jobs table or permissions).')
-          return
+          const errorMsg = String(res.error?.message || '')
+          const errorCode = String(res.error?.code || '')
+          
+          // If it's a missing table/column error, show helpful message
+          if (errorCode === 'PGRST204' || /Could not find the .* column/i.test(errorMsg) || /relation.*does not exist/i.test(errorMsg)) {
+            console.error('Jobs search error:', res.error)
+            setSearchResults({ jobs: [] })
+            setError('Jobs search is not available yet (missing jobs table or permissions).')
+            return
+          }
+          
+          // For other errors, try a simpler query without filters
+          try {
+            const simpleRes = await supabase
+              .from('jobs')
+              .select('id,title,description,location,city,country,created_at,business_profile_id')
+              .limit(100)
+            
+            if (simpleRes.error) {
+              console.error('Jobs search error:', simpleRes.error)
+              setSearchResults({ jobs: [] })
+              setError('Jobs search is not available yet (missing jobs table or permissions).')
+              return
+            }
+            
+            // Filter results manually if query failed
+            let filteredData = simpleRes.data || []
+            if (q) {
+              const qLower = q.toLowerCase()
+              filteredData = filteredData.filter((j: any) => 
+                (j.title || '').toLowerCase().includes(qLower) ||
+                (j.description || '').toLowerCase().includes(qLower)
+              )
+            }
+            if (loc) {
+              const locLower = loc.toLowerCase()
+              filteredData = filteredData.filter((j: any) =>
+                (j.location || '').toLowerCase().includes(locLower) ||
+                (j.city || '').toLowerCase().includes(locLower) ||
+                (j.country || '').toLowerCase().includes(locLower)
+              )
+            }
+            
+            res = { data: filteredData, error: null }
+          } catch (fallbackError) {
+            console.error('Jobs search fallback error:', fallbackError)
+            setSearchResults({ jobs: [] })
+            setError('Jobs search is not available yet (missing jobs table or permissions).')
+            return
+          }
         }
-        setSearchResults({ jobs: (res.data || []) as any })
+        
+        // Map the results to match the Job interface
+        const mappedJobs: Job[] = (res.data || []).map((j: any) => ({
+          id: String(j?.id || ''),
+          title: typeof j?.title === 'string' ? j.title : 'Job',
+          description: typeof j?.description === 'string' ? j.description : null,
+          location: typeof j?.location === 'string' ? j.location : null,
+          city: typeof j?.city === 'string' ? j.city : null,
+          status: typeof j?.status === 'string' ? j.status : 'published',
+          created_at: typeof j?.created_at === 'string' ? j.created_at : new Date().toISOString(),
+        }))
+        
+        setSearchResults({ jobs: mappedJobs })
+        setError(null)
       } else if (searchType === 'talent') {
         if (!allowTalentSearch) {
           setError('Talent search is only available to Business accounts.')
@@ -597,13 +760,139 @@ function SearchPageInner() {
         
         // Add businesses from published pages
         if (!pagesRes.error && pagesRes.data && pagesRes.data.length > 0) {
-          businesses = pagesRes.data.map((r: any) => ({
-            id: String(r.business_id),
-            slug: typeof r.slug === 'string' ? r.slug : null,
-            name: typeof r.name === 'string' ? r.name : 'Business',
-            tagline: typeof r.tagline === 'string' ? r.tagline : null,
-            mission: typeof r.mission === 'string' ? r.mission : null,
-          }))
+          // business_id is UUID, keep as string
+          const pageBusinessIds = pagesRes.data
+            .map((r: any) => {
+              const id = r.business_id
+              // Keep as UUID string (business_profiles.id is UUID)
+              if (typeof id === 'string') return id
+              if (typeof id === 'number') return String(id)
+              return null
+            })
+            .filter((id: any): id is string => id != null && typeof id === 'string')
+          
+          // Fetch location data for businesses from business_profile_pages
+          const locationMap = new Map<string, any>()
+          if (pageBusinessIds.length > 0) {
+            console.log('[BusinessSearch] Fetching location data for business IDs:', pageBusinessIds)
+            
+            // Try batch query first
+            let locationData: any[] | null = null
+            let locationError: any = null
+            
+            try {
+              // Use select('*') to get all columns, then extract what we need
+              // business_profiles.id is UUID, so pageBusinessIds should be UUID strings
+              const result = await supabase
+                .from('business_profiles')
+                .select('*')
+                .in('id', pageBusinessIds)
+              
+              locationData = result.data
+              locationError = result.error
+              
+              if (locationError) {
+                console.error('[BusinessSearch] Batch query error:', {
+                  error: locationError,
+                  message: locationError.message,
+                  details: locationError.details,
+                  hint: locationError.hint,
+                  businessIds: pageBusinessIds
+                })
+              }
+            } catch (err) {
+              console.warn('[BusinessSearch] Batch query exception, trying individual queries:', err)
+              locationError = err
+            }
+            
+            // If batch query failed, try individual queries as fallback
+            if (locationError || !locationData || locationData.length === 0) {
+              console.log('[BusinessSearch] Batch query failed or returned no data, fetching individually...')
+              locationData = []
+              
+              for (const businessId of pageBusinessIds) {
+                try {
+                  // businessId is already a UUID string
+                  const { data: singleData, error: singleError } = await supabase
+                    .from('business_profiles')
+                    .select('*')
+                    .eq('id', businessId)
+                    .maybeSingle()
+                  
+                  if (!singleError && singleData) {
+                    locationData.push(singleData)
+                  } else if (singleError) {
+                    console.warn(`[BusinessSearch] Error fetching location for business ${businessId}:`, {
+                      error: singleError,
+                      message: singleError.message,
+                      details: singleError.details
+                    })
+                  }
+                } catch (err) {
+                  console.warn(`[BusinessSearch] Exception fetching location for business ${businessId}:`, err)
+                }
+              }
+            }
+            
+            if (locationError && locationData && locationData.length === 0) {
+              console.error('[BusinessSearch] Error fetching location data:', {
+                error: locationError,
+                message: locationError?.message,
+                details: locationError?.details,
+                hint: locationError?.hint,
+                businessIds: pageBusinessIds
+              })
+            } else {
+              console.log('[BusinessSearch] Successfully fetched location data:', {
+                count: locationData?.length || 0,
+                ids: locationData?.map((d: any) => d.id) || []
+              })
+            }
+            
+            // Create a map of business_id to location data
+            if (locationData && locationData.length > 0) {
+              locationData.forEach((loc: any) => {
+                locationMap.set(String(loc.id), loc)
+              })
+            }
+            
+            console.log('[BusinessSearch] Fetched location data:', {
+              pageBusinessIds,
+              locationDataCount: locationData?.length || 0,
+              locationMapSize: locationMap.size
+            })
+            
+            // Map businesses with location data
+            businesses = pagesRes.data.map((r: any) => {
+              const businessId = String(r.business_id)
+              const location = locationMap.get(businessId)
+              // Handle both latitude/longitude and lat/lng column names
+              const lat = location?.latitude ?? location?.lat ?? null
+              const lng = location?.longitude ?? location?.lng ?? null
+              return {
+                id: businessId,
+                slug: typeof r.slug === 'string' ? r.slug : null,
+                name: typeof r.name === 'string' ? r.name : 'Business',
+                tagline: typeof r.tagline === 'string' ? r.tagline : null,
+                mission: typeof r.mission === 'string' ? r.mission : null,
+                location: location?.location || null,
+                city: location?.city || null,
+                state: location?.state || null,
+                country: location?.country || null,
+                latitude: typeof lat === 'number' ? lat : null,
+                longitude: typeof lng === 'number' ? lng : null,
+              }
+            })
+          } else {
+            // Fallback if no valid IDs
+            businesses = pagesRes.data.map((r: any) => ({
+              id: String(r.business_id),
+              slug: typeof r.slug === 'string' ? r.slug : null,
+              name: typeof r.name === 'string' ? r.name : 'Business',
+              tagline: typeof r.tagline === 'string' ? r.tagline : null,
+              mission: typeof r.mission === 'string' ? r.mission : null,
+            }))
+          }
         }
         
         // Also search business_profiles table (combine results from both tables)
@@ -820,14 +1109,9 @@ function SearchPageInner() {
         <div className="space-y-12">
           {/* Hero Section */}
           <div className="text-center space-y-6">
-            <h1 className="text-5xl lg:text-6xl font-extrabold leading-tight text-gray-900">
+            <h1 className="text-3xl lg:text-4xl font-extrabold leading-tight text-gray-900">
               Search <span className="text-[#2B4EA2]">{isPublicTalentAudience ? 'Businesses or Jobs' : 'Talent, Businesses or Jobs'}</span>
             </h1>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              {isPublicTalentAudience
-                ? 'Explore businesses and roles on Creerlio — businesses can only connect after a Talent requests a connection. Map search shows a basic overview of Talent without revealing identity.'
-                : 'Find the perfect match with AI-powered search'}
-            </p>
             {!isAuthenticated ? (
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Link
@@ -847,19 +1131,19 @@ function SearchPageInner() {
           </div>
 
           {/* Search Interface with Map */}
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="grid lg:grid-cols-3 gap-6">
             {/* Search Form and Results - Left Side */}
-            <div className="space-y-6">
+            <div className="lg:col-span-1 space-y-6">
               {/* Search Form */}
-              <div className="dashboard-card rounded-2xl p-12">
-                <form onSubmit={handleSearch} className="space-y-6">
-                  <div className="space-y-4">
+              <div className="dashboard-card rounded-2xl p-8">
+                <form onSubmit={handleSearch} className="space-y-4">
+                  <div className="space-y-3">
                     {/* Search Type */}
                     <div className="flex gap-2">
                       <button
                         type="button"
                         onClick={() => setSearchType('jobs')}
-                        className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                        className={`flex-1 px-3 py-1.5 rounded-lg font-medium transition-colors text-sm ${
                           searchType === 'jobs'
                             ? 'bg-[#2B4EA2] text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -871,7 +1155,7 @@ function SearchPageInner() {
                       <button
                         type="button"
                         onClick={() => setSearchType('talent')}
-                        className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                        className={`flex-1 px-3 py-1.5 rounded-lg font-medium transition-colors text-sm ${
                           searchType === 'talent'
                             ? 'bg-[#2B4EA2] text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -883,7 +1167,7 @@ function SearchPageInner() {
                       <button
                         type="button"
                         onClick={() => setSearchType('business')}
-                        className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                        className={`flex-1 px-3 py-1.5 rounded-lg font-medium transition-colors text-sm ${
                           searchType === 'business'
                             ? 'bg-[#2B4EA2] text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -905,7 +1189,7 @@ function SearchPageInner() {
                             ? 'Search businesses… (e.g. industry, company, program)'
                             : 'Search talent…'
                       }
-                      className="w-full px-6 py-4 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#2B4EA2] transition-colors"
+                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#2B4EA2] transition-colors text-sm"
                     />
 
                     {/* Location Filter with Autocomplete */}
@@ -927,7 +1211,7 @@ function SearchPageInner() {
                           setTimeout(() => setShowLocationSuggestions(false), 200)
                         }}
                         placeholder="Location (optional)"
-                        className="w-full px-6 py-4 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#2B4EA2] transition-colors"
+                        className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#2B4EA2] transition-colors text-sm"
                       />
                       {showLocationSuggestions && locationSuggestions.length > 0 && (
                         <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
@@ -956,7 +1240,7 @@ function SearchPageInner() {
                     <button
                       type="submit"
                       disabled={isSearching}
-                      className="w-full px-6 py-4 bg-[#2B4EA2] hover:bg-[#243F86] rounded-lg font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full px-4 py-3 bg-[#2B4EA2] hover:bg-[#243F86] rounded-lg font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                     >
                       {isSearching ? 'Searching...' : 'Search'}
                     </button>
@@ -1129,7 +1413,7 @@ function SearchPageInner() {
               </div>
             ) : (
               <div 
-                className="dashboard-card rounded-2xl p-6 transition-all relative"
+                className="lg:col-span-2 dashboard-card rounded-2xl p-6 transition-all relative"
               >
                 <div className="h-[600px] w-full">
                   {isGeocoding ? (

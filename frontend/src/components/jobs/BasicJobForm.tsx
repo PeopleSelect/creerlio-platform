@@ -25,6 +25,9 @@ export default function BasicJobForm({ businessProfile }: BasicJobFormProps) {
     city: '',
     state: '',
     country: '',
+    location: '',
+    latitude: null as number | null,
+    longitude: null as number | null,
     work_type: 'full-time',
     hours: '',
     pay: '',
@@ -174,7 +177,9 @@ export default function BasicJobForm({ businessProfile }: BasicJobFormProps) {
         city: formData.city || null,
         state: formData.state || null,
         country: formData.country || null,
-        location: location || null,
+        location: formData.location || location || null,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
         required_skills: [],
         preferred_skills: [],
         status: formData.status,
@@ -276,6 +281,23 @@ export default function BasicJobForm({ businessProfile }: BasicJobFormProps) {
             onCountryChange={(value) => setFormData(prev => ({ ...prev, country: value }))}
             onStateChange={(value) => setFormData(prev => ({ ...prev, state: value }))}
             onCityChange={(value) => setFormData(prev => ({ ...prev, city: value }))}
+            onLocationChange={(location) => {
+              if (location) {
+                setFormData(prev => ({
+                  ...prev,
+                  location: location.label,
+                  latitude: location.lat,
+                  longitude: location.lng
+                }))
+              } else {
+                setFormData(prev => ({
+                  ...prev,
+                  location: '',
+                  latitude: null,
+                  longitude: null
+                }))
+              }
+            }}
           />
           {errors.location && <p className="mt-1 text-sm text-red-600">{errors.location}</p>}
         </div>

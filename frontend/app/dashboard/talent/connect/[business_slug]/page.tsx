@@ -443,7 +443,7 @@ export default function TalentConnectPage({ params }: { params: { business_slug:
                       </p>
                     </div>
                     <a
-                      href="/portfolio/view"
+                      href={`/portfolio/view?sections=${encodeURIComponent(selectedList.join(','))}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="ml-4 px-5 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold whitespace-nowrap transition-colors"

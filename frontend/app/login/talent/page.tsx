@@ -27,6 +27,7 @@ function TalentLoginPageInner() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [phone, setPhone] = useState('')
@@ -314,37 +315,36 @@ function TalentLoginPageInner() {
   return (
     <div className="min-h-screen bg-white">
       {/* Public Header */}
-      <header className="sticky top-0 z-50 bg-black border-0">
+      <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-8 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-white hover:text-[#20C997] transition-colors">
+            <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-gray-900">
               Creerlio
             </Link>
 
-            <nav className="hidden lg:flex items-center gap-x-8 text-sm text-white">
-              <Link href="/about" className="hover:text-[#20C997] transition-colors">About</Link>
-              <Link href="/#talent" className="hover:text-[#20C997] transition-colors">Talent</Link>
-              <Link href="/#business" className="hover:text-[#20C997] transition-colors">Business</Link>
-              <Link href="/search" className="hover:text-[#20C997] transition-colors">Search</Link>
-              <Link href="/jobs" className="hover:text-[#20C997] transition-colors">Jobs</Link>
+            <nav className="hidden lg:flex items-center gap-x-8 text-sm text-gray-600">
+              <Link href="/talent" className="hover:text-blue-600 transition-colors">Talent</Link>
+              <Link href="/business" className="hover:text-blue-600 transition-colors">Business</Link>
+              <Link href="/search" className="hover:text-blue-600 transition-colors">Search</Link>
+              <Link href="/jobs" className="hover:text-blue-600 transition-colors">Jobs</Link>
             </nav>
 
             <div className="flex gap-3">
               <Link
                 href="/login/talent?mode=signup&redirect=/dashboard/talent"
-                className="px-4 py-2 rounded-lg bg-[#20C997] hover:bg-[#1DB886] font-semibold text-sm text-white transition-colors"
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
               >
                 Create Talent Account
               </Link>
               <Link
                 href="/login/business?mode=signup&redirect=/dashboard/business"
-                className="px-4 py-2 rounded-lg bg-[#20C997] hover:bg-[#1DB886] font-semibold text-sm text-white transition-colors"
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
               >
                 Create Business Account
               </Link>
               <Link
                 href="/login/talent?mode=signin&redirect=/dashboard/talent"
-                className="px-5 py-2 rounded-lg bg-[#20C997] hover:bg-[#1DB886] font-semibold text-sm text-white transition-colors"
+                className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
               >
                 Sign In
               </Link>
@@ -486,6 +486,7 @@ function TalentLoginPageInner() {
                   <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
                   <input
                     type="email"
+                    name="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
@@ -532,29 +533,49 @@ function TalentLoginPageInner() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
-                    placeholder="At least 8 characters"
-                    autoComplete="new-password"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full px-4 py-3 pr-12 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                      placeholder="At least 8 characters"
+                      autoComplete="new-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-300 hover:text-white"
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Confirm Password <span className="text-red-400">*</span></label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
-                    placeholder="Confirm your password"
-                    autoComplete="new-password"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      name="confirm-password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full px-4 py-3 pr-12 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                      placeholder="Confirm your password"
+                      autoComplete="new-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-300 hover:text-white"
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
                 </div>
               </>
             ) : (
@@ -563,6 +584,7 @@ function TalentLoginPageInner() {
                   <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
                   <input
                     type="email"
+                    name="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
@@ -574,16 +596,26 @@ function TalentLoginPageInner() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
-                    placeholder="••••••••"
-                    autoComplete="current-password"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full px-4 py-3 pr-12 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-300 hover:text-white"
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
                 </div>
               </>
             )}

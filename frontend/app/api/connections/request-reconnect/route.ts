@@ -80,10 +80,12 @@ export async function POST(request: NextRequest) {
 
     // Update the connection request status to indicate reconnection is pending
     // We use 'pending' status to indicate the talent is requesting to reconnect
+    // Also set reconnect_requested_by to 'talent' to mark this as a reconnection request
     const { error: updateError } = await supabase
       .from('talent_connection_requests')
       .update({
         status: 'pending',
+        reconnect_requested_by: 'talent',
         responded_at: new Date().toISOString()
       })
       .eq('id', connection_request_id)

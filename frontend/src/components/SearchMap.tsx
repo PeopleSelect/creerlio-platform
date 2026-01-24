@@ -118,7 +118,7 @@ export default function SearchMap({ markers, className = '', center, zoom = 11, 
         el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)'
 
         // Create popup (basic popup - custom modal will show on click)
-        const popup = new mapboxgl.Popup({ offset: 25 })
+        const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
           .setHTML(`
             <div class="text-black">
               <h3 class="font-semibold text-sm mb-1">${markerData.title}</h3>
@@ -133,17 +133,52 @@ export default function SearchMap({ markers, className = '', center, zoom = 11, 
           .setPopup(popup)
           .addTo(map.current)
 
+        // Track hover state to prevent popup closing during click
+        let isHovering = false
+        let hoverTimeout: NodeJS.Timeout | null = null
+
+        // Add hover handlers to show popup on hover
+        el.addEventListener('mouseenter', () => {
+          isHovering = true
+          if (hoverTimeout) {
+            clearTimeout(hoverTimeout)
+            hoverTimeout = null
+          }
+          if (!popup.isOpen()) {
+            marker.togglePopup()
+          }
+        })
+
+        el.addEventListener('mouseleave', () => {
+          isHovering = false
+          // Delay closing to allow click events to fire
+          hoverTimeout = setTimeout(() => {
+            if (popup.isOpen() && !isHovering) {
+              popup.remove()
+            }
+          }, 200)
+        })
+
         // Add click handler if provided
         if (onMarkerClick) {
           // Handle marker click - click on marker element opens custom modal
           el.addEventListener('click', (e) => {
             e.stopPropagation()
+            if (hoverTimeout) {
+              clearTimeout(hoverTimeout)
+              hoverTimeout = null
+            }
+            popup.remove() // Close popup before opening modal
             onMarkerClick(markerData.id)
           })
           
           // Close default popup when marker is clicked (we use custom modal instead)
           marker.on('click', (e) => {
             e.originalEvent?.stopPropagation()
+            if (hoverTimeout) {
+              clearTimeout(hoverTimeout)
+              hoverTimeout = null
+            }
             popup.remove() // Close default popup
             onMarkerClick(markerData.id) // Open custom modal
           })

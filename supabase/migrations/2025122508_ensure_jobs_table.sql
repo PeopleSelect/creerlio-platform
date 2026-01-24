@@ -174,6 +174,26 @@ BEGIN
     ALTER TABLE public.jobs ADD COLUMN location TEXT;
   END IF;
   
+  -- Add latitude column if it doesn't exist (for map functionality)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+    AND table_name = 'jobs' 
+    AND column_name = 'latitude'
+  ) THEN
+    ALTER TABLE public.jobs ADD COLUMN latitude DOUBLE PRECISION;
+  END IF;
+  
+  -- Add longitude column if it doesn't exist (for map functionality)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+    AND table_name = 'jobs' 
+    AND column_name = 'longitude'
+  ) THEN
+    ALTER TABLE public.jobs ADD COLUMN longitude DOUBLE PRECISION;
+  END IF;
+  
   -- Add skill columns
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns 

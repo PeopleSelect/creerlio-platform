@@ -35,6 +35,8 @@ export default function EditJobPage() {
     state: '',
     country: '',
     location: '',
+    latitude: null as number | null,
+    longitude: null as number | null,
     required_skills: '',
     preferred_skills: '',
     experience_level: '',
@@ -120,6 +122,8 @@ export default function EditJobPage() {
             state: jobData.state || '',
             country: jobData.country || '',
             location: jobData.location || '',
+            latitude: jobData.latitude || null,
+            longitude: jobData.longitude || null,
             required_skills: Array.isArray(jobData.required_skills) ? jobData.required_skills.join(', ') : '',
             preferred_skills: Array.isArray(jobData.preferred_skills) ? jobData.preferred_skills.join(', ') : '',
             experience_level: jobData.experience_level || '',
@@ -198,6 +202,8 @@ export default function EditJobPage() {
         state: formData.state || null,
         country: formData.country || null,
         location: formData.location || null,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
         required_skills,
         preferred_skills,
         experience_level: formData.experience_level || null,
@@ -322,6 +328,23 @@ export default function EditJobPage() {
             onCountryChange={(value) => setFormData(prev => ({ ...prev, country: value }))}
             onStateChange={(value) => setFormData(prev => ({ ...prev, state: value }))}
             onCityChange={(value) => setFormData(prev => ({ ...prev, city: value }))}
+            onLocationChange={(location) => {
+              if (location) {
+                setFormData(prev => ({
+                  ...prev,
+                  location: location.label,
+                  latitude: location.lat,
+                  longitude: location.lng
+                }))
+              } else {
+                setFormData(prev => ({
+                  ...prev,
+                  location: '',
+                  latitude: null,
+                  longitude: null
+                }))
+              }
+            }}
           />
 
           {/* Skills */}

@@ -30,6 +30,9 @@ export default function AdvancedJobForm({ businessProfile }: AdvancedJobFormProp
     city: '',
     state: '',
     country: '',
+    location: '',
+    latitude: null as number | null,
+    longitude: null as number | null,
     remote_type: 'on-site', // on-site, remote, hybrid
     work_type: 'full-time',
     contract_length: '',
@@ -304,7 +307,9 @@ export default function AdvancedJobForm({ businessProfile }: AdvancedJobFormProp
         city: formData.city || null,
         state: formData.state || null,
         country: formData.country || null,
-        location: location || null,
+        location: formData.location || location || null,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
         required_skills: formData.skills,
         preferred_skills: [],
         experience_level: formData.experience_level || null,
@@ -467,6 +472,23 @@ export default function AdvancedJobForm({ businessProfile }: AdvancedJobFormProp
               onCountryChange={(value) => setFormData(prev => ({ ...prev, country: value }))}
               onStateChange={(value) => setFormData(prev => ({ ...prev, state: value }))}
               onCityChange={(value) => setFormData(prev => ({ ...prev, city: value }))}
+              onLocationChange={(location) => {
+                if (location) {
+                  setFormData(prev => ({
+                    ...prev,
+                    location: location.label,
+                    latitude: location.lat,
+                    longitude: location.lng
+                  }))
+                } else {
+                  setFormData(prev => ({
+                    ...prev,
+                    location: '',
+                    latitude: null,
+                    longitude: null
+                  }))
+                }
+              }}
             />
           </div>
 

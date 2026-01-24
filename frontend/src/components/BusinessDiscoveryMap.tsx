@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useImperativeHandle, forwardRef } from 'react'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import { useRouter } from 'next/navigation'
 
 // Dynamic import for mapbox-gl to avoid SSR issues
 let mapboxgl: any = null
@@ -40,6 +41,10 @@ export interface RouteState {
   error?: string
 }
 
+export interface BusinessDiscoveryMapHandle {
+  zoomToMarkerAndOpenPopup: (type: 'business' | 'job', id: string | number, zoom?: number) => void
+}
+
 interface BusinessDiscoveryMapProps {
   filters: {
     q: string
@@ -60,6 +65,7 @@ interface BusinessDiscoveryMapProps {
   searchCenter: { lng: number; lat: number; label?: string } | null
   radiusKm: number
   showAllBusinesses: boolean
+  radiusBusinessesActive?: boolean
   onResults: (results: any[]) => void
   selectedBusinessId: string | null
   onSelectedBusinessId: (id: string | null) => void
@@ -75,6 +81,17 @@ interface BusinessDiscoveryMapProps {
   intentStatus?: string
   intentCompatibility?: boolean
   fitBounds?: [[number, number], [number, number]] | null
+  jobs?: Array<{
+    id: string | number
+    title: string
+    business_name: string
+    business_profile_id?: string | number | null
+    lat: number | null
+    lng: number | null
+    location?: string
+    city?: string
+    country?: string
+  }>
 }
 
 const mapStyles: Record<string, string> = {
@@ -90,19 +107,82 @@ const emitDebugLog = (payload: Record<string, unknown>) => {
   fetch('/api/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {})
 }
 
-export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
+const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDiscoveryMapProps>((props, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<any>(null)
   const markersRef = useRef<any[]>([])
+  const jobMarkersRef = useRef<any[]>([])
   const pointBMarkerRef = useRef<any>(null)
   const routeBoundsRef = useRef<any>(null)
   const routeGeoRef = useRef<any>(null)
   const routePointARef = useRef<[number, number] | null>(null)
+  const lastProcessedSelectIdRef = useRef<string | null>(null)
   const routePointBRef = useRef<[number, number] | null>(null)
+  const lastFlyToRef = useRef<{ lng: number; lat: number; zoom?: number } | null>(null)
+  const router = useRouter()
   const [mapLoaded, setMapLoaded] = useState(false)
   const [businesses, setBusinesses] = useState<BusinessFeature[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [jobListModal, setJobListModal] = useState<{
+    open: boolean
+    businessId: string | number | null
+    businessName: string
+    jobs: Array<{
+      id: string | number
+      title: string
+      business_name: string
+      location?: string | null
+      city?: string | null
+      state?: string | null
+      country?: string | null
+    }>
+  }>({
+    open: false,
+    businessId: null,
+    businessName: '',
+    jobs: []
+  })
   const abortControllerRef = useRef<AbortController | null>(null)
+  const lastFetchParamsRef = useRef<string>('')
+  const onResultsRef = useRef(props.onResults)
+  const onSelectedBusinessChangeRef = useRef(props.onSelectedBusinessChange)
+  const onSelectedBusinessIdRef = useRef(props.onSelectedBusinessId)
+  const onRouteStateChangeRef = useRef(props.onRouteStateChange)
+
+  const getPointAFromSelection = useCallback(() => {
+    if (!props.selectedBusinessId) return null
+    const selectId = String(props.selectedBusinessId)
+    const selectedBiz = businesses.find((b) => {
+      const bizId = String(b.properties.id)
+      return bizId === selectId || Number(bizId) === Number(selectId)
+    })
+    if (selectedBiz?.geometry?.coordinates) {
+      return {
+        coords: selectedBiz.geometry.coordinates as [number, number],
+        label: selectedBiz.properties?.name || 'Business',
+        selectedBiz,
+      }
+    }
+    const jobMatch = (props.jobs || []).find(
+      (job) => String(job.business_profile_id) === selectId
+    )
+    if (jobMatch?.lat != null && jobMatch?.lng != null) {
+      return {
+        coords: [jobMatch.lng, jobMatch.lat] as [number, number],
+        label: jobMatch.business_name || 'Business',
+        selectedBiz: null,
+      }
+    }
+    return null
+  }, [props.selectedBusinessId, props.jobs, businesses])
+
+  // Keep refs updated
+  useEffect(() => {
+    onResultsRef.current = props.onResults
+    onSelectedBusinessChangeRef.current = props.onSelectedBusinessChange
+    onSelectedBusinessIdRef.current = props.onSelectedBusinessId
+    onRouteStateChangeRef.current = props.onRouteStateChange
+  }, [props.onResults, props.onSelectedBusinessChange, props.onSelectedBusinessId, props.onRouteStateChange])
 
   // Initialize map
   useEffect(() => {
@@ -240,15 +320,88 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
     }
   }, [props.activeStyle, mapLoaded])
 
-  // Handle flyTo
-  useEffect(() => {
-    if (map.current && mapLoaded && props.flyTo) {
-      map.current.flyTo({
-        center: [props.flyTo.lng, props.flyTo.lat],
-        zoom: props.flyTo.zoom || 12,
-        essential: true,
-      })
+  // Expose method to zoom to marker and open popup
+  useImperativeHandle(ref, () => ({
+    zoomToMarkerAndOpenPopup: (type: 'business' | 'job', id: string | number, zoom?: number) => {
+      if (!map.current || !mapLoaded) return
+
+      let marker: any = null
+      let coords: [number, number] | null = null
+
+      if (type === 'business') {
+        marker = markersRef.current.find((m: any) => m._businessId === String(id))
+        if (marker) {
+          const business = businesses.find((b: BusinessFeature) => b.properties.id === String(id))
+          if (business?.geometry?.coordinates) {
+            coords = business.geometry.coordinates as [number, number]
+          }
+        }
+      } else if (type === 'job') {
+        marker = jobMarkersRef.current.find((m: any) => m._jobId === String(id))
+        if (marker) {
+          const job = props.jobs?.find((j) => String(j.id) === String(id))
+          if (job?.lat != null && job?.lng != null) {
+            coords = [job.lng, job.lat]
+          }
+        }
+      }
+
+      if (marker && coords) {
+        // Close any open popups first
+        markersRef.current.forEach((m: any) => {
+          if (m._isPopupOpen && m._popup) {
+            m._popup.remove()
+            m._isPopupOpen = false
+          }
+        })
+        jobMarkersRef.current.forEach((m: any) => {
+          if (m._isPopupOpen && m._popup) {
+            m._popup.remove()
+            m._isPopupOpen = false
+          }
+        })
+
+        // Zoom to marker
+        map.current.flyTo({
+          center: coords,
+          zoom: zoom || 14,
+          essential: true,
+        })
+
+        // Open popup after zoom animation
+        setTimeout(() => {
+          if (marker._popup && map.current) {
+            marker._popup.setLngLat(coords).addTo(map.current)
+            marker._isPopupOpen = true
+          }
+        }, 500) // Wait for flyTo animation to complete
+      }
     }
+  }), [mapLoaded, businesses, props.jobs])
+
+  // Handle flyTo - prevent infinite loops by tracking last flyTo
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !props.flyTo) return
+    
+    // Check if this is the same flyTo as last time to prevent loops
+    const currentFlyTo = props.flyTo
+    const lastFlyTo = lastFlyToRef.current
+    
+    if (lastFlyTo && 
+        Math.abs(lastFlyTo.lng - currentFlyTo.lng) < 0.0001 &&
+        Math.abs(lastFlyTo.lat - currentFlyTo.lat) < 0.0001 &&
+        lastFlyTo.zoom === currentFlyTo.zoom) {
+      // Same location, skip to prevent loop
+      return
+    }
+    
+    lastFlyToRef.current = { ...currentFlyTo }
+    
+    map.current.flyTo({
+      center: [currentFlyTo.lng, currentFlyTo.lat],
+      zoom: currentFlyTo.zoom || 12,
+      essential: true,
+    })
   }, [props.flyTo, mapLoaded])
 
   useEffect(() => {
@@ -265,9 +418,61 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
     })
   }, [props.fitBounds, mapLoaded])
 
+  const buildBusinessParams = useCallback(() => {
+    const params = new URLSearchParams()
+    if (props.filters.q) params.set('q', props.filters.q)
+    if (props.filters.industries.length > 0) params.set('industries', props.filters.industries.join(','))
+    if (props.filters.work) params.set('work', props.filters.work)
+
+    const useRadius = !!(props.radiusBusinessesActive && props.searchCenter)
+
+    if (props.showAllBusinesses && !useRadius) {
+      params.set('show_all', '1')
+    }
+
+    if (props.intentStatus) params.set('intent_status', props.intentStatus)
+    if (props.intentCompatibility) params.set('intent_compatibility', '1')
+    if (useRadius && props.searchCenter) {
+      params.set('lat', String(props.searchCenter.lat))
+      params.set('lng', String(props.searchCenter.lng))
+      params.set('radius', String(props.radiusKm))
+    }
+
+    return { params, useRadius }
+  }, [
+    props.filters.q,
+    props.filters.industries?.join(','),
+    props.filters.work,
+    props.radiusBusinessesActive,
+    props.searchCenter?.lat,
+    props.searchCenter?.lng,
+    props.showAllBusinesses,
+    props.intentStatus,
+    props.intentCompatibility,
+    props.radiusKm,
+  ])
+
   // Fetch businesses from API
   const fetchBusinesses = useCallback(async () => {
     if (!mapLoaded) return
+    
+    // Don't fetch businesses if the global toggle is off
+    if (!props.showAllBusinesses) {
+      setBusinesses([])
+      onResultsRef.current([])
+      return
+    }
+
+    const { params, useRadius } = buildBusinessParams()
+    const paramsString = params.toString()
+    
+    // Skip if we're already fetching with the same parameters
+    if (lastFetchParamsRef.current === paramsString && isLoading) {
+      return
+    }
+    
+    // Update last fetch params
+    lastFetchParamsRef.current = paramsString
 
     // Abort previous request
     if (abortControllerRef.current) {
@@ -280,21 +485,7 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
     setIsLoading(true)
 
     try {
-      const params = new URLSearchParams()
-
-      if (props.filters.q) params.set('q', props.filters.q)
-      if (props.filters.industries.length > 0) params.set('industries', props.filters.industries.join(','))
-      if (props.filters.work) params.set('work', props.filters.work)
-      if (props.showAllBusinesses) params.set('show_all', '1')
-      if (props.intentStatus) params.set('intent_status', props.intentStatus)
-      if (props.intentCompatibility) params.set('intent_compatibility', '1')
-      if (props.searchCenter) {
-        params.set('lat', String(props.searchCenter.lat))
-        params.set('lng', String(props.searchCenter.lng))
-        params.set('radius', String(props.radiusKm))
-      }
-
-      const response = await fetch(`/api/map/businesses?${params.toString()}`, {
+      const response = await fetch(`/api/map/businesses?${paramsString}`, {
         signal: ac.signal,
         cache: 'no-store',
       })
@@ -305,77 +496,139 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
 
       const data = await response.json()
       const bizList = Array.isArray(data?.businesses) ? data.businesses : []
+      
+      // Log first business details for debugging
+      if (bizList.length > 0) {
+        const firstBiz = bizList[0]
+        console.log('[BusinessDiscoveryMap] First business from API:', {
+          id: firstBiz.id,
+          name: firstBiz.name,
+          business_name: firstBiz.business_name,
+          nameType: typeof firstBiz.name,
+          hasName: !!firstBiz.name,
+          hasBusinessName: !!firstBiz.business_name,
+          allKeys: Object.keys(firstBiz)
+        })
+      }
+      console.log('[BusinessDiscoveryMap] Total businesses fetched:', bizList.length)
 
       // Convert to GeoJSON features
+      // When showAllBusinesses is true, show ALL businesses, even without coordinates
+      // For businesses without coordinates, use a default location (center of Australia) or search center
       const features: BusinessFeature[] = bizList
-        .filter((b: any) => b.lat != null && b.lng != null && Number.isFinite(b.lat) && Number.isFinite(b.lng))
-        .map((b: any) => ({
-          id: String(b.id),
-          type: 'Feature' as const,
-          geometry: {
-            type: 'Point' as const,
-            coordinates: [Number(b.lng), Number(b.lat)],
-          },
-          properties: {
+        .map((b: any) => {
+          // Determine display coordinates
+          let displayLat = b.lat
+          let displayLng = b.lng
+          
+          // If no coordinates, try to use search center or default to center of Australia
+          if ((displayLat == null || displayLng == null || !Number.isFinite(displayLat) || !Number.isFinite(displayLng))) {
+            if (useRadius && props.searchCenter) {
+              // Use search center as approximate location
+              displayLat = props.searchCenter.lat
+              displayLng = props.searchCenter.lng
+            } else if (props.showAllBusinesses) {
+              // When showing all businesses, use center of Australia as default location
+              // This ensures all businesses appear on the map even without coordinates
+              displayLat = -25.2744 // Center of Australia
+              displayLng = 133.7751
+            } else {
+              // If no coordinates and no search center and not showing all, skip this business
+              return null
+            }
+          }
+          
+          // Ensure we have valid coordinates
+          if (displayLat == null || displayLng == null || !Number.isFinite(displayLat) || !Number.isFinite(displayLng)) {
+            return null
+          }
+          
+          return {
             id: String(b.id),
-            name: String(b.name || 'Business'),
-            slug: String(b.slug || ''),
-            industries: Array.isArray(b.industries) ? b.industries : (b.industry ? [b.industry] : []),
-            lat: Number(b.lat),
-            lng: Number(b.lng),
-            sizeBand: b.size_band || b.sizeBand,
-            openness: b.openness,
-            intentStatus: b.intent_status ?? null,
-            intentVisible: !!b.intent_visibility,
-          },
-        }))
+            type: 'Feature' as const,
+            geometry: {
+              type: 'Point' as const,
+              coordinates: [Number(displayLng), Number(displayLat)],
+            },
+            properties: {
+              id: String(b.id),
+              // Try multiple name fields and ensure we have a valid name
+              name: (b.name && String(b.name).trim()) || 
+                    (b.business_name && String(b.business_name).trim()) || 
+                    (b.company_name && String(b.company_name).trim()) ||
+                    (b.display_name && String(b.display_name).trim()) ||
+                    'Business',
+              slug: String(b.slug || ''),
+              industries: Array.isArray(b.industries) ? b.industries : (b.industry ? [b.industry] : []),
+              lat: Number(displayLat),
+              lng: Number(displayLng),
+              sizeBand: b.size_band || b.sizeBand,
+              openness: b.openness,
+              intentStatus: b.intent_status ?? null,
+              intentVisible: !!b.intent_visibility,
+            },
+          }
+        })
+        .filter((f): f is BusinessFeature => f !== null)
 
       setBusinesses(features)
-      props.onResults(features.map(f => ({
-        id: f.properties.id,
-        name: f.properties.name,
-        slug: f.properties.slug,
-        industries: f.properties.industries,
-        lng: f.properties.lng,
-        lat: f.properties.lat,
-        intent_status: f.properties.intentStatus ?? null,
-        intent_visibility: f.properties.intentVisible ?? false,
-      })))
+      
+      // Debug: Log first feature to verify name is set correctly
+      if (features.length > 0) {
+        console.log('[BusinessDiscoveryMap] First feature properties:', {
+          id: features[0].properties.id,
+          name: features[0].properties.name,
+          nameType: typeof features[0].properties.name,
+          industries: features[0].properties.industries
+        })
+      }
+      
+      // Pass the full BusinessFeature objects so all properties are available in the results
+      onResultsRef.current(features)
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Failed to fetch businesses:', error)
         setBusinesses([])
-        props.onResults([])
+        onResultsRef.current([])
       }
     } finally {
       setIsLoading(false)
     }
-  }, [
-    mapLoaded,
-    props.filters,
-    props.showAllBusinesses,
-    props.searchCenter,
-    props.radiusKm,
-    props.intentStatus,
-    props.intentCompatibility,
-  ])
+  }, [mapLoaded, props.showAllBusinesses, buildBusinessParams])
 
-  // Trigger fetch when filters change
+  // Trigger fetch when filters change - but only if params actually changed
   useEffect(() => {
-    fetchBusinesses()
-  }, [fetchBusinesses])
+    if (!mapLoaded) return
+    
+    const { params } = buildBusinessParams()
+    const paramsString = params.toString()
+
+    const shouldForceRefetch = props.showAllBusinesses && businesses.length === 0
+
+    // Only fetch if params actually changed (don't check isLoading to avoid blocking)
+    if (lastFetchParamsRef.current !== paramsString || shouldForceRefetch) {
+      fetchBusinesses()
+    }
+  }, [mapLoaded, props.showAllBusinesses, businesses.length, buildBusinessParams, fetchBusinesses])
 
   // Clear businesses immediately when showAllBusinesses is toggled off
   useEffect(() => {
     if (!props.showAllBusinesses) {
-      // If show_all is false and no filters are applied, clear businesses immediately
-      const hasFilters = props.filters.q?.trim() || props.filters.industries.length > 0 || props.filters.work?.trim()
-      if (!hasFilters) {
-        setBusinesses([])
-        props.onResults([])
-      }
+      setBusinesses([])
+      onResultsRef.current([])
     }
-  }, [props.showAllBusinesses, props.filters, props])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.showAllBusinesses])
+
+  // Ensure toggling showAllBusinesses always refetches fresh data
+  useEffect(() => {
+    // Reset cached params so the next toggle forces a refetch
+    lastFetchParamsRef.current = ''
+    if (props.showAllBusinesses) {
+      fetchBusinesses()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.showAllBusinesses])
 
   // Create/update markers - only recreate when businesses change, not when selection changes
   const updateMarkers = useCallback(() => {
@@ -419,19 +672,28 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
               ${business.properties.name}
             </div>
             ${intentLabel}
-            <div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">
+            <div style="font-size: 11px; color: #64748b; margin-bottom: 8px;">
               ${business.properties.industries.length > 0 ? business.properties.industries[0] : 'Business'}
             </div>
-            <a
-              href="/dashboard/business/view?id=${business.properties.id}&from=talent-map"
-              class="business-profile-link"
-              data-id="${business.properties.id}"
-              data-slug="${business.properties.slug}"
-              style="display: inline-block; padding: 4px 10px; background: #3b82f6; color: white; text-decoration: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer;"
-              onclick="window.location.href='/dashboard/business/view?id=${business.properties.id}&from=talent-map'; return false;"
-            >
-              View Profile
-            </a>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <a
+                href="/dashboard/business/view?id=${business.properties.id}&from=talent-map"
+                class="business-profile-link"
+                data-id="${business.properties.id}"
+                data-slug="${business.properties.slug}"
+                style="display: inline-block; padding: 4px 10px; background: #3b82f6; color: white; text-decoration: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center;"
+                onclick="window.location.href='/dashboard/business/view?id=${business.properties.id}&from=talent-map'; return false;"
+              >
+                View Business
+              </a>
+              <button
+                class="business-jobs-btn"
+                data-business-id="${business.properties.id}"
+                style="display: inline-block; padding: 4px 10px; background: #8b5cf6; color: white; text-decoration: none; border: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center;"
+              >
+                View Jobs
+              </button>
+            </div>
           </div>
         `
 
@@ -482,9 +744,75 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
           }
 
           // Update selection state
-          props.onSelectedBusinessId(business.properties.id)
-          props.onSelectedBusinessChange(business)
-          props.onRouteStateChange({ busy: false })
+          onSelectedBusinessIdRef.current(business.properties.id)
+          onSelectedBusinessChangeRef.current(business)
+          onRouteStateChangeRef.current({ busy: false })
+        })
+
+        // Click handler for "View Jobs" button on business marker
+        const handleBusinessViewJobsClick = async (e: Event) => {
+          e.preventDefault()
+          e.stopPropagation()
+          
+          const businessId = business.properties.id
+          const businessName = business.properties.name
+          
+          // Close popup
+          popup.remove()
+          ;(marker as any)._isPopupOpen = false
+          
+          // Fetch all jobs for this business
+          try {
+            const response = await fetch(`/api/jobs/by-business?business_id=${businessId}`, {
+              cache: 'no-store'
+            })
+            
+            if (response.ok) {
+              const data = await response.json()
+              const jobsList = Array.isArray(data?.jobs) ? data.jobs : []
+              const apiBusinessName = data?.business_name || businessName
+              
+              if (jobsList.length > 1) {
+                // Multiple jobs - show modal
+                setJobListModal({
+                  open: true,
+                  businessId: businessId,
+                  businessName: apiBusinessName,
+                  jobs: jobsList.map((j: any) => ({
+                    id: j.id,
+                    title: j.title || 'Untitled Job',
+                    business_name: j.business_name || apiBusinessName,
+                    location: j.location || null,
+                    city: j.city || null,
+                    state: j.state || null,
+                    country: j.country || null,
+                  }))
+                })
+              } else if (jobsList.length === 1) {
+                // Single job - go directly to it
+                router.push(`/jobs/${jobsList[0].id}?fromMap=true&returnTo=/dashboard/talent`)
+              } else {
+                // No jobs found - show message or navigate to business profile
+                alert('No jobs available for this business.')
+              }
+            } else {
+              // If API fails, show error
+              alert('Unable to load jobs for this business.')
+            }
+          } catch (error) {
+            console.error('[BusinessDiscoveryMap] Error fetching jobs for business:', error)
+            alert('Unable to load jobs for this business.')
+          }
+        }
+        
+        // Attach click handler to "View Jobs" button after popup is added to DOM
+        popup.on('open', () => {
+          setTimeout(() => {
+            const button = popup.getElement()?.querySelector('.business-jobs-btn')
+            if (button) {
+              button.addEventListener('click', handleBusinessViewJobsClick)
+            }
+          }, 100)
         })
 
         // Popup close handler
@@ -501,6 +829,236 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
   useEffect(() => {
     updateMarkers()
   }, [updateMarkers])
+
+  // Create/update job markers
+  const updateJobMarkers = useCallback(() => {
+    if (!map.current || !mapLoaded) return
+
+    const jobs = props.jobs || []
+    console.log('[BusinessDiscoveryMap] updateJobMarkers called:', {
+      jobsCount: jobs.length,
+      jobs: jobs.map((j: any) => ({
+        id: j.id,
+        title: j.title,
+        business_name: j.business_name,
+        lat: j.lat,
+        lng: j.lng,
+        hasCoords: !!(j.lat && j.lng)
+      }))
+    })
+    const currentJobIds = jobs.map(j => String(j.id))
+    const existingJobMarkerIds = jobMarkersRef.current.map((m: any) => m._jobId)
+
+    // Remove markers for jobs that no longer exist
+    jobMarkersRef.current = jobMarkersRef.current.filter((marker: any) => {
+      if (!currentJobIds.includes(marker._jobId)) {
+        marker.remove()
+        return false
+      }
+      return true
+    })
+
+    // Add markers for new jobs
+    jobs.forEach((job) => {
+      if (!existingJobMarkerIds.includes(String(job.id))) {
+        // Try to get coordinates - use job coordinates, or try to geocode from location
+        let jobLat = job.lat
+        let jobLng = job.lng
+        
+        // If no coordinates but has location data, try to use search center as approximate location
+        // (for jobs that passed the location filter but don't have exact coordinates)
+        if ((jobLat == null || jobLng == null || !Number.isFinite(jobLat) || !Number.isFinite(jobLng)) && props.searchCenter) {
+          // Use search center as approximate location for jobs without coordinates
+          jobLat = props.searchCenter.lat
+          jobLng = props.searchCenter.lng
+        }
+        
+        // Skip if still no coordinates
+        if (jobLat == null || jobLng == null || !Number.isFinite(jobLat) || !Number.isFinite(jobLng)) {
+          console.log('[BusinessDiscoveryMap] Skipping job marker - no coordinates:', {
+            jobId: job.id,
+            title: job.title,
+            hasLat: job.lat != null,
+            hasLng: job.lng != null,
+            hasSearchCenter: !!props.searchCenter
+          })
+          return
+        }
+
+        // Create marker element - purple color for jobs
+        const el = document.createElement('div')
+        el.className = 'job-marker'
+        el.style.width = '24px'
+        el.style.height = '24px'
+        el.style.borderRadius = '50%'
+        el.style.backgroundColor = '#8b5cf6'
+        el.style.border = '3px solid white'
+        el.style.cursor = 'pointer'
+        el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.5)'
+
+        const businessName = job.business_name || 'Unknown Company'
+        const jobTitle = job.title || 'Untitled Job'
+        const location = job.location || job.city || job.country || ''
+
+        const popupContent = `
+          <div style="padding: 6px; min-width: 140px;">
+            <div style="font-weight: 600; font-size: 13px; margin-bottom: 2px; color: #1e293b;">
+              ${businessName}
+            </div>
+            <div style="font-size: 12px; color: #475569; margin-bottom: 4px; font-weight: 500;">
+              ${jobTitle}
+            </div>
+            ${location ? `<div style="font-size: 11px; color: #64748b; margin-bottom: 8px;">${location}</div>` : ''}
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <a
+                href="/dashboard/business/view?id=${job.business_profile_id || ''}&from=talent-map"
+                class="job-business-link"
+                data-business-id="${job.business_profile_id || ''}"
+                style="display: inline-block; padding: 4px 10px; background: #3b82f6; color: white; text-decoration: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center;"
+                onclick="window.location.href='/dashboard/business/view?id=${job.business_profile_id || ''}&from=talent-map'; return false;"
+              >
+                View Business
+              </a>
+              <button
+                class="job-link-btn"
+                data-job-id="${job.id}"
+                data-business-id="${job.business_profile_id || ''}"
+                style="display: inline-block; padding: 4px 10px; background: #8b5cf6; color: white; text-decoration: none; border: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center;"
+              >
+                View Jobs
+              </button>
+            </div>
+          </div>
+        `
+
+        const popup = new mapboxgl.Popup({
+          closeButton: true,
+          closeOnClick: false,
+          anchor: 'bottom',
+          offset: 20,
+          maxWidth: '220px'
+        }).setHTML(popupContent)
+
+        // Create marker
+        const marker = new mapboxgl.Marker({
+          element: el,
+          anchor: 'center'
+        })
+          .setLngLat([jobLng, jobLat])
+          .addTo(map.current)
+        
+        console.log('[BusinessDiscoveryMap] Created job marker:', {
+          jobId: job.id,
+          title: job.title,
+          coords: [jobLng, jobLat]
+        })
+
+        // Store references
+        ;(marker as any)._jobId = String(job.id)
+        ;(marker as any)._businessId = String(job.business_profile_id || '')
+        ;(marker as any)._element = el
+        ;(marker as any)._popup = popup
+        ;(marker as any)._isPopupOpen = false
+
+        // Click handler for marker
+        el.addEventListener('click', (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+
+          const selectedBusinessId = String(job.business_profile_id || '')
+          if (selectedBusinessId) {
+            onSelectedBusinessIdRef.current(selectedBusinessId)
+            const selectedBusiness = businesses.find((b) => String(b.properties.id) === selectedBusinessId) || null
+            onSelectedBusinessChangeRef.current(selectedBusiness)
+          }
+
+          // Toggle popup
+          if ((marker as any)._isPopupOpen) {
+            popup.remove()
+            ;(marker as any)._isPopupOpen = false
+          } else {
+            popup.setLngLat([job.lng, job.lat]).addTo(map.current)
+            ;(marker as any)._isPopupOpen = true
+          }
+        })
+
+        // Click handler for "View Jobs" button - fetch all jobs for this business
+        const handleViewJobsClick = async (e: Event) => {
+          e.preventDefault()
+          e.stopPropagation()
+          
+          const businessId = (marker as any)._businessId
+          const currentJobBusinessName = job.business_name || 'Unknown Company'
+          
+          // Close popup
+          popup.remove()
+          ;(marker as any)._isPopupOpen = false
+          
+          // Fetch all jobs for this business
+          try {
+            const response = await fetch(`/api/jobs/by-business?business_id=${businessId}`, {
+              cache: 'no-store'
+            })
+            
+            if (response.ok) {
+              const data = await response.json()
+              const jobsList = Array.isArray(data?.jobs) ? data.jobs : []
+              const apiBusinessName = data?.business_name || currentJobBusinessName
+              
+              if (jobsList.length > 1) {
+                // Multiple jobs - show modal
+                setJobListModal({
+                  open: true,
+                  businessId: businessId,
+                  businessName: apiBusinessName,
+                  jobs: jobsList.map((j: any) => ({
+                    id: j.id,
+                    title: j.title || 'Untitled Job',
+                    business_name: j.business_name || apiBusinessName
+                  }))
+                })
+              } else if (jobsList.length === 1) {
+                // Single job - go directly to it
+                router.push(`/jobs/${jobsList[0].id}?fromMap=true&returnTo=/dashboard/talent`)
+              } else {
+                // No jobs found - go to the job we clicked
+                router.push(`/jobs/${job.id}?fromMap=true&returnTo=/dashboard/talent`)
+              }
+            } else {
+              // If API fails, go to the job we clicked
+              router.push(`/jobs/${job.id}?fromMap=true&returnTo=/dashboard/talent`)
+            }
+          } catch (error) {
+            console.error('[BusinessDiscoveryMap] Error fetching jobs for business:', error)
+            // On error, go to the job we clicked
+            router.push(`/jobs/${job.id}?fromMap=true&returnTo=/dashboard/talent`)
+          }
+        }
+        
+        // Attach click handler to button after popup is added to DOM
+        popup.on('open', () => {
+          setTimeout(() => {
+            const button = popup.getElement()?.querySelector('.job-link-btn')
+            if (button) {
+              button.addEventListener('click', handleViewJobsClick)
+            }
+          }, 100)
+        })
+
+        // Popup close handler
+        popup.on('close', () => {
+          ;(marker as any)._isPopupOpen = false
+        })
+
+        jobMarkersRef.current.push(marker)
+      }
+    })
+  }, [props.jobs, mapLoaded])
+
+  // Update job markers when jobs change
+  useEffect(() => {
+    updateJobMarkers()
+  }, [updateJobMarkers])
 
   // Update marker colors and popups when selection changes (without recreating markers)
   useEffect(() => {
@@ -533,36 +1091,28 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
 
   // Handle selectBusinessId prop - fly to location when business is selected
   useEffect(() => {
-    if (!props.selectBusinessId || !map.current || !mapLoaded) {
-      console.log('[BusinessDiscoveryMap] Fly-to skipped:', { 
-        hasSelectId: !!props.selectBusinessId, 
-        hasMap: !!map.current, 
-        mapLoaded 
-      })
+    const selectIdStr = props.selectBusinessId ? String(props.selectBusinessId).trim() : null
+    
+    // Skip if we've already processed this ID
+    if (!selectIdStr || selectIdStr === lastProcessedSelectIdRef.current) {
       return
     }
     
-    console.log('[BusinessDiscoveryMap] Attempting to fly to business:', {
-      selectBusinessId: props.selectBusinessId,
-      businessesCount: businesses.length,
-      isLoading,
-      businessIds: businesses.map(b => ({ id: b.properties.id, type: typeof b.properties.id, name: b.properties.name }))
-    })
+    if (!map.current || !mapLoaded) {
+      return
+    }
     
     // Wait for businesses to load
     if (businesses.length === 0) {
       if (isLoading) {
         // Still loading, wait a bit more
-        console.log('[BusinessDiscoveryMap] Waiting for businesses to load...')
         return
       }
       // Not loading but no businesses - business might not be in current results
-      console.warn('[BusinessDiscoveryMap] Business not found in current results:', props.selectBusinessId)
       return
     }
     
     // Try multiple matching strategies
-    const selectIdStr = String(props.selectBusinessId).trim()
     const business = businesses.find(b => {
       const bizIdStr = String(b.properties.id).trim()
       const bizIdNum = Number(b.properties.id)
@@ -570,38 +1120,29 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
       
       // Try exact ID match (string)
       if (bizIdStr === selectIdStr) {
-        console.log('[BusinessDiscoveryMap] Matched by string ID:', { bizIdStr, selectIdStr })
         return true
       }
       // Try numeric ID match (only if both are valid numbers)
       if (!isNaN(bizIdNum) && !isNaN(selectIdNum) && bizIdNum === selectIdNum) {
-        console.log('[BusinessDiscoveryMap] Matched by numeric ID:', { bizIdNum, selectIdNum })
         return true
       }
       // Try slug match (if selectBusinessId is a slug)
       if (b.properties.slug && String(b.properties.slug).trim() === selectIdStr) {
-        console.log('[BusinessDiscoveryMap] Matched by slug:', { slug: b.properties.slug, selectIdStr })
         return true
       }
       // Try name match (case-insensitive)
       if (b.properties.name && String(b.properties.name).toLowerCase().trim() === selectIdStr.toLowerCase().trim()) {
-        console.log('[BusinessDiscoveryMap] Matched by name:', { name: b.properties.name, selectIdStr })
         return true
       }
       return false
     })
     
     if (business) {
-      console.log('[BusinessDiscoveryMap] Business found, updating selection and flying to:', {
-        id: business.properties.id,
-        name: business.properties.name,
-        coordinates: business.geometry.coordinates
-      })
-      props.onSelectedBusinessChange(business)
+      lastProcessedSelectIdRef.current = selectIdStr
+      onSelectedBusinessChangeRef.current(business)
       // Fly to the business location when selected from results
       const [lng, lat] = business.geometry.coordinates
       if (Number.isFinite(lng) && Number.isFinite(lat) && lng !== 0 && lat !== 0) {
-        console.log('[BusinessDiscoveryMap] Flying to business:', business.properties.name, { lng, lat, id: business.properties.id })
         try {
           map.current.flyTo({
             center: [lng, lat],
@@ -609,7 +1150,6 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
             duration: 1000, // Smooth animation
             essential: true, // Make it essential so it doesn't get cancelled
           })
-          console.log('[BusinessDiscoveryMap] Fly-to command executed successfully')
         } catch (flyErr) {
           console.error('[BusinessDiscoveryMap] Fly-to error:', flyErr)
           // Fallback: just set the center without animation
@@ -620,24 +1160,9 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
             console.error('[BusinessDiscoveryMap] Set center/zoom also failed:', setErr)
           }
         }
-      } else {
-        console.warn('[BusinessDiscoveryMap] Business has invalid coordinates:', business.properties.name, { lng, lat })
       }
-    } else {
-      console.warn('[BusinessDiscoveryMap] Business not found:', {
-        selectBusinessId: props.selectBusinessId,
-        selectIdType: typeof props.selectBusinessId,
-        selectIdValue: props.selectBusinessId,
-        availableBusinesses: businesses.map(b => ({ 
-          id: b.properties.id, 
-          idType: typeof b.properties.id,
-          idValue: b.properties.id,
-          name: b.properties.name, 
-          slug: b.properties.slug 
-        }))
-      })
     }
-  }, [props.selectBusinessId, businesses, mapLoaded, isLoading, props])
+  }, [props.selectBusinessId, businesses, mapLoaded, isLoading])
 
   // Draw commute rings around selected business
   useEffect(() => {
@@ -757,26 +1282,35 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
         pointBMarkerRef.current = null
       }
       
+      // Restore Point A marker to original position if it was offset
+      const pointAInfo = getPointAFromSelection()
+      if (pointAInfo?.selectedBiz) {
+        const existingPointAMarker = markersRef.current.find(
+          (m: any) => m._businessId === pointAInfo.selectedBiz.properties.id
+        )
+        if (existingPointAMarker && (existingPointAMarker as any)._originalLngLat) {
+          existingPointAMarker.setLngLat((existingPointAMarker as any)._originalLngLat)
+          delete (existingPointAMarker as any)._originalLngLat
+        }
+      }
+      
       // Clear route state
-      props.onRouteStateChange({ busy: false, error: null, to: null, drivingMins: null, cyclingMins: null })
+      onRouteStateChangeRef.current({ busy: false, error: null, to: null, drivingMins: null, cyclingMins: null })
       return
     }
 
     if (!props.selectedBusinessId) return
 
-    const selectedBiz = businesses.find(b => {
-      const bizId = String(b.properties.id)
-      const selectId = String(props.selectedBusinessId)
-      return bizId === selectId || Number(bizId) === Number(selectId)
-    })
-    if (!selectedBiz) return
+    const pointAInfo = getPointAFromSelection()
+    if (!pointAInfo) return
+    const selectedBiz = pointAInfo.selectedBiz
 
     // Geocode the route query to get Point B
     const geocodePointB = async () => {
       const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
       if (!MAPBOX_TOKEN) return
 
-      props.onRouteStateChange({ busy: true })
+      onRouteStateChangeRef.current({ busy: true })
 
       try {
         const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(props.externalRouteQuery)}.json?access_token=${MAPBOX_TOKEN}&limit=1`
@@ -784,7 +1318,7 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
         const geocodeData = await geocodeRes.json()
 
         if (!geocodeData.features || geocodeData.features.length === 0) {
-          props.onRouteStateChange({ busy: false, error: 'Location not found' })
+          onRouteStateChangeRef.current({ busy: false, error: 'Location not found' })
           return
         }
 
@@ -793,7 +1327,7 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
         const pointBLabel = pointB.place_name
 
         // Calculate routes using Mapbox Directions API
-        const pointA = selectedBiz.geometry.coordinates
+        const pointA = pointAInfo.coords
 
         // Calculate driving route
         const drivingUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${pointA[0]},${pointA[1]};${lngB},${latB}?geometries=geojson&access_token=${MAPBOX_TOKEN}`
@@ -809,6 +1343,45 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
         const drivingKm = drivingData.routes?.[0]?.distance ? Math.round(drivingData.routes[0].distance / 100) / 10 : undefined // Convert meters to km with 1 decimal
         const cyclingMins = cyclingData.routes?.[0]?.duration ? Math.round(cyclingData.routes[0].duration / 60) : undefined
         const cyclingKm = cyclingData.routes?.[0]?.distance ? Math.round(cyclingData.routes[0].distance / 100) / 10 : undefined
+
+        // Calculate perpendicular offset to avoid obstructing route
+        // Calculate bearing from Point A to Point B
+        const calculateBearing = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+          const dLng = (lng2 - lng1) * Math.PI / 180
+          const lat1Rad = lat1 * Math.PI / 180
+          const lat2Rad = lat2 * Math.PI / 180
+          const y = Math.sin(dLng) * Math.cos(lat2Rad)
+          const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng)
+          return Math.atan2(y, x) * 180 / Math.PI
+        }
+
+        // Calculate offset position (perpendicular to route, ~100 meters)
+        const calculateOffsetPosition = (lat: number, lng: number, bearing: number, offsetMeters: number) => {
+          const R = 6371000 // Earth radius in meters
+          const offsetRad = offsetMeters / R
+          const bearingRad = (bearing + 90) * Math.PI / 180 // Perpendicular (90 degrees)
+          const latRad = lat * Math.PI / 180
+          const lngRad = lng * Math.PI / 180
+          
+          const newLat = Math.asin(
+            Math.sin(latRad) * Math.cos(offsetRad) +
+            Math.cos(latRad) * Math.sin(offsetRad) * Math.cos(bearingRad)
+          ) * 180 / Math.PI
+          
+          const newLng = lngRad + Math.atan2(
+            Math.sin(bearingRad) * Math.sin(offsetRad) * Math.cos(latRad),
+            Math.cos(offsetRad) - Math.sin(latRad) * Math.sin(newLat * Math.PI / 180)
+          ) * 180 / Math.PI
+          
+          return [newLng, newLat]
+        }
+
+        const bearing = calculateBearing(pointA[1], pointA[0], latB, lngB)
+        const offsetDistance = 0.0008 // ~100 meters in degrees (approximate)
+        
+        // Offset Point A to the left of route, Point B to the right
+        const pointAOffset = calculateOffsetPosition(pointA[1], pointA[0], bearing, -offsetDistance)
+        const pointBOffset = calculateOffsetPosition(latB, lngB, bearing, offsetDistance)
 
         // Draw the driving route on the map
         if (drivingData.routes?.[0]?.geometry) {
@@ -847,7 +1420,22 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
           routePointBRef.current = [lngB, latB]
         }
 
-        // Create or update draggable Point B marker
+        // Create or update Point A marker (offset to avoid route)
+        if (selectedBiz) {
+          const existingPointAMarker = markersRef.current.find((m: any) => m._businessId === selectedBiz.properties.id)
+          if (existingPointAMarker) {
+            // Temporarily offset the business marker for route display
+            const pointAMarkerEl = existingPointAMarker.getElement()
+            if (pointAMarkerEl) {
+              // Store original position
+              ;(existingPointAMarker as any)._originalLngLat = existingPointAMarker.getLngLat()
+              // Offset marker position
+              existingPointAMarker.setLngLat([pointAOffset[0], pointAOffset[1]])
+            }
+          }
+        }
+
+        // Create or update draggable Point B marker (offset to avoid route)
         if (pointBMarkerRef.current) {
           pointBMarkerRef.current.remove()
         }
@@ -875,10 +1463,16 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
           </div>
         `)
 
+        // Store original Point B position for route calculations
+        const pointBOriginalLngLat = [lngB, latB]
+        
         const pointBMarker = new mapboxgl.Marker(markerEl, { draggable: true })
-          .setLngLat([lngB, latB])
+          .setLngLat([pointBOffset[0], pointBOffset[1]]) // Use offset position for display
           .setPopup(pointBPopup)
           .addTo(map.current)
+        
+        // Store original position in marker for route calculations
+        ;(pointBMarker as any)._originalLngLat = pointBOriginalLngLat
 
         // Show popup by default
         pointBMarker.togglePopup()
@@ -916,20 +1510,25 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
 
         // Recalculate route when marker is dragged
         pointBMarker.on('dragend', async () => {
-          const newLngLat = pointBMarker.getLngLat()
-
           try {
-            const selectedBiz = businesses.find(b => b.properties.id === props.selectedBusinessId)
-            if (!selectedBiz) return
+            const pointAInfo = getPointAFromSelection()
+            if (!pointAInfo) return
 
-            const pointA = selectedBiz.geometry.coordinates
+            const pointA = pointAInfo.coords
+            
+            // Get the actual dragged position (which is offset)
+            const draggedLngLat = pointBMarker.getLngLat()
+            // Calculate the original position by reversing the offset
+            const reverseBearing = calculateBearing(pointA[1], pointA[0], draggedLngLat.lat, draggedLngLat.lng)
+            const reverseOffset = calculateOffsetPosition(draggedLngLat.lat, draggedLngLat.lng, reverseBearing, -offsetDistance)
+            const newLngLat = { lng: reverseOffset[0], lat: reverseOffset[1] }
 
-            // Recalculate driving route
+            // Recalculate driving route using actual coordinates
             const drivingUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${pointA[0]},${pointA[1]};${newLngLat.lng},${newLngLat.lat}?geometries=geojson&access_token=${MAPBOX_TOKEN}`
             const drivingRes = await fetch(drivingUrl)
             const drivingData = await drivingRes.json()
 
-            // Recalculate cycling route
+            // Recalculate cycling route using actual coordinates
             const cyclingUrl = `https://api.mapbox.com/directions/v5/mapbox/cycling/${pointA[0]},${pointA[1]};${newLngLat.lng},${newLngLat.lat}?geometries=geojson&access_token=${MAPBOX_TOKEN}`
             const cyclingRes = await fetch(cyclingUrl)
             const cyclingData = await cyclingRes.json()
@@ -938,6 +1537,26 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
             const newDrivingKm = drivingData.routes?.[0]?.distance ? Math.round(drivingData.routes[0].distance / 100) / 10 : undefined
             const newCyclingMins = cyclingData.routes?.[0]?.duration ? Math.round(cyclingData.routes[0].duration / 60) : undefined
             const newCyclingKm = cyclingData.routes?.[0]?.distance ? Math.round(cyclingData.routes[0].distance / 100) / 10 : undefined
+            
+            // Recalculate offset for new position and update marker display position
+            const newBearing = calculateBearing(pointA[1], pointA[0], newLngLat.lat, newLngLat.lng)
+            const newPointBOffset = calculateOffsetPosition(newLngLat.lat, newLngLat.lng, newBearing, offsetDistance)
+            pointBMarker.setLngLat([newPointBOffset[0], newPointBOffset[1]])
+            ;(pointBMarker as any)._originalLngLat = [newLngLat.lng, newLngLat.lat]
+            
+            // Update Point A marker offset as well
+            if (pointAInfo.selectedBiz) {
+              const existingPointAMarker = markersRef.current.find(
+                (m: any) => m._businessId === pointAInfo.selectedBiz.properties.id
+              )
+              if (existingPointAMarker) {
+                const pointAOffset = calculateOffsetPosition(pointA[1], pointA[0], newBearing, -offsetDistance)
+                existingPointAMarker.setLngLat([pointAOffset[0], pointAOffset[1]])
+                if (!(existingPointAMarker as any)._originalLngLat) {
+                  ;(existingPointAMarker as any)._originalLngLat = existingPointAMarker.getLngLat()
+                }
+              }
+            }
 
             // Update route on map
             if (drivingData.routes?.[0]?.geometry) {
@@ -999,7 +1618,7 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
               routeBoundsRef.current = newBounds
             }, 300)
 
-            props.onRouteStateChange({
+            onRouteStateChangeRef.current({
               to: { label: newLabel, lat: newLngLat.lat, lng: newLngLat.lng },
               drivingMins: newDrivingMins,
               drivingKm: newDrivingKm,
@@ -1014,7 +1633,7 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
 
         pointBMarkerRef.current = pointBMarker
 
-        props.onRouteStateChange({
+        onRouteStateChangeRef.current({
           to: { label: pointBLabel, lat: latB, lng: lngB },
           drivingMins,
           drivingKm,
@@ -1024,12 +1643,12 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
         })
       } catch (error) {
         console.error('Route calculation error:', error)
-        props.onRouteStateChange({ busy: false, error: 'Failed to calculate route' })
+        onRouteStateChangeRef.current({ busy: false, error: 'Failed to calculate route' })
       }
     }
 
     geocodePointB()
-  }, [props.externalRouteQuery, props.selectedBusinessId, businesses, mapLoaded])
+  }, [props.externalRouteQuery, props.selectedBusinessId, businesses, mapLoaded, getPointAFromSelection])
 
   // Real estate overlay - Heatmap layer
   useEffect(() => {
@@ -1118,13 +1737,86 @@ export default function BusinessDiscoveryMap(props: BusinessDiscoveryMapProps) {
   }, [mapLoaded, props.toggles.property])
 
   return (
-    <div className="w-full h-full relative bg-gray-900 rounded-lg overflow-hidden">
-      {isLoading && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+    <>
+      <div className="w-full h-full relative bg-gray-900 rounded-lg overflow-hidden">
+        {isLoading && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        )}
+        <div ref={mapContainer} className="w-full h-full" />
+      </div>
+      
+      {/* Job List Modal */}
+      {jobListModal.open && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setJobListModal({ open: false, businessId: null, businessName: '', jobs: [] })}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900 mb-1">
+                {jobListModal.businessName}
+              </h2>
+              <p className="text-sm text-gray-600">
+                {jobListModal.jobs.length} {jobListModal.jobs.length === 1 ? 'job' : 'jobs'} available
+              </p>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="space-y-3">
+                {jobListModal.jobs.map((job) => {
+                  const locationLabel =
+                    job.location ||
+                    [job.city, job.state, job.country].filter(Boolean).join(', ')
+
+                  return (
+                    <div
+                      key={job.id}
+                      className="w-full p-4 rounded-lg border border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-gray-900">{job.title}</div>
+                          <div className="text-sm text-gray-600 mt-1">{job.business_name}</div>
+                          {locationLabel && (
+                            <div className="text-xs text-gray-500 mt-1">{locationLabel}</div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setJobListModal({ open: false, businessId: null, businessName: '', jobs: [] })
+                            router.push(`/jobs/${job.id}?fromMap=true&returnTo=/dashboard/talent`)
+                          }}
+                          className="shrink-0 px-3 py-1.5 rounded-md bg-purple-600 text-white text-xs font-semibold hover:bg-purple-700 transition-colors"
+                        >
+                          View Job
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-gray-200">
+              <button
+                onClick={() => setJobListModal({ open: false, businessId: null, businessName: '', jobs: [] })}
+                className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
-      <div ref={mapContainer} className="w-full h-full" />
-    </div>
+    </>
   )
-}
+})
+
+BusinessDiscoveryMap.displayName = 'BusinessDiscoveryMap'
+
+export default BusinessDiscoveryMap

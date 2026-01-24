@@ -39,6 +39,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    console.log('[Accept Reconnect] Processing request:', {
+      connection_request_id,
+      user_id: user.id
+    })
+
     // Verify the user owns this business profile
     const { data: businessProfile, error: businessError } = await supabase
       .from('business_profiles')
@@ -47,27 +52,117 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (businessError || !businessProfile) {
+      console.error('[Accept Reconnect] Business profile error:', businessError)
       return NextResponse.json(
-        { error: 'Business profile not found' },
+        { error: 'Business profile not found', details: businessError?.message },
         { status: 403 }
       )
     }
 
-    // Verify the connection request exists, belongs to this business, and is pending (reconnection request)
+    console.log('[Accept Reconnect] Business profile found:', {
+      business_id: businessProfile.id,
+      business_name: businessProfile.business_name || businessProfile.name
+    })
+
+    // Verify the connection request exists and belongs to this business
+    // For reconnection requests, status could be:
+    // - 'pending' (updated from 'discontinued' by request-reconnect)
+    // - 'discontinued' (original state, if request-reconnect hasn't updated it yet)
+    // We'll check business_id match first, then validate status
     const { data: connectionRequest, error: connError } = await supabase
       .from('talent_connection_requests')
-      .select('id, talent_id, business_id, status, selected_sections, created_at')
+      .select('id, talent_id, business_id, status, selected_sections, created_at, reconnect_requested_by')
       .eq('id', connection_request_id)
-      .eq('business_id', businessProfile.id)
-      .eq('status', 'pending')
-      .maybeSingle()
+      .maybeSingle() // Don't filter by business_id here - we'll check it manually to get better error messages
 
-    if (connError || !connectionRequest) {
+    if (connError) {
+      console.error('[Accept Reconnect] Error fetching connection request:', connError)
       return NextResponse.json(
-        { error: 'Connection request not found or not in pending status' },
+        { error: 'Failed to fetch connection request', details: connError.message },
         { status: 400 }
       )
     }
+
+    if (!connectionRequest) {
+      console.error('[Accept Reconnect] Connection request not found:', {
+        connection_request_id,
+        expected_business_id: businessProfile.id
+      })
+      return NextResponse.json(
+        { 
+          error: 'Connection request not found',
+          connection_request_id
+        },
+        { status: 400 }
+      )
+    }
+
+    // Verify the connection request belongs to this business
+    if (connectionRequest.business_id !== businessProfile.id) {
+      console.error('[Accept Reconnect] Business ID mismatch:', {
+        connection_request_id,
+        connection_request_business_id: connectionRequest.business_id,
+        expected_business_id: businessProfile.id
+      })
+      return NextResponse.json(
+        { 
+          error: 'Connection request does not belong to this business',
+          connection_request_id,
+          business_id_mismatch: true
+        },
+        { status: 403 }
+      )
+    }
+
+    // Verify this is a valid reconnection request
+    // Since this endpoint is specifically for accepting reconnection requests (called from notifications),
+    // we should be lenient about the status. The connection request might be in various states:
+    // - 'pending' (after request-reconnect updated it)
+    // - 'discontinued' (original state, if request-reconnect hasn't updated it yet)
+    // - Any other status (except 'accepted') - we're restoring a connection, so we should allow it
+    // We'll only reject if it's already 'accepted' (can't re-accept an already accepted connection)
+    const isAlreadyAccepted = connectionRequest.status === 'accepted'
+    const isExplicitReconnect = connectionRequest.reconnect_requested_by === 'talent'
+    const isPendingRequest = connectionRequest.status === 'pending'
+    const isDiscontinued = connectionRequest.status === 'discontinued'
+    
+    // Accept any status except 'accepted' - we're restoring a connection
+    // This is more lenient because the user is explicitly accepting a reconnection request
+    const isValidReconnect = !isAlreadyAccepted
+
+    console.log('[Accept Reconnect] Connection request validation:', {
+      connection_request_id,
+      status: connectionRequest.status,
+      reconnect_requested_by: connectionRequest.reconnect_requested_by,
+      isPending: isPendingRequest,
+      isDiscontinued,
+      isExplicitReconnect,
+      isAlreadyAccepted,
+      isValidReconnect
+    })
+
+    if (!isValidReconnect) {
+      console.error('[Accept Reconnect] Connection already accepted - cannot re-accept:', {
+        status: connectionRequest.status,
+        connection_request_id,
+        business_id: connectionRequest.business_id
+      })
+      return NextResponse.json(
+        { 
+          error: 'Connection is already accepted',
+          current_status: connectionRequest.status,
+          details: 'This connection is already in an accepted state. Cannot re-accept.'
+        },
+        { status: 400 }
+      )
+    }
+
+    console.log('[Accept Reconnect] Valid reconnection request found:', {
+      connection_request_id,
+      status: connectionRequest.status,
+      reconnect_requested_by: connectionRequest.reconnect_requested_by,
+      talent_id: connectionRequest.talent_id
+    })
 
     // Get talent name for the response
     const { data: talentProfile } = await supabase

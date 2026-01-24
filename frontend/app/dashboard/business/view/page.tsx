@@ -29,6 +29,61 @@ type SocialPlatform =
 
 type SocialLink = { platform: SocialPlatform | string; url: string }
 
+type ProductOverview = {
+  short_headline: string
+  summary: string
+  primary_industries: string[]
+  business_model: string
+  is_public: boolean
+}
+
+type ProductRoadmap = {
+  upcoming_products: string[]
+  roadmap_ideas: string
+  expansion_plans: string
+  new_markets: string
+  is_public: boolean
+}
+
+type ProductMedia = {
+  media_type: string
+  title: string
+  file_url: string | null
+  file_path: string | null
+  file_type: string | null
+  order_index: number
+}
+
+type ProductCard = {
+  id: number
+  name: string
+  category: string
+  short_description: string
+  who_it_is_for: string
+  problem_it_solves: string
+  logo_or_icon: string | null
+  explainer_video_url: string | null
+  external_link: string | null
+  lifecycle_stage: string | null
+  visibility_level: string
+  roles: string[]
+  skills: string[]
+  teams: string[]
+  growth_areas: string[]
+  media: ProductMedia[]
+  impact: {
+    who_it_helps: string
+    what_it_improves: string
+    real_world_outcomes: string
+  }
+  signals: {
+    we_are_hiring_for_this: boolean
+    open_to_partnerships: boolean
+    in_research_and_development: boolean
+    currently_scaling: boolean
+  }
+}
+
 function safeArray<T = any>(v: any): T[] {
   return Array.isArray(v) ? (v as T[]) : []
 }
@@ -306,6 +361,14 @@ function BusinessProfileViewPageInner() {
     | { kind: 'pdf'; url: string; title: string }
     | null
   >(null)
+  const [productsOverview, setProductsOverview] = useState<ProductOverview | null>(null)
+  const [productsRoadmap, setProductsRoadmap] = useState<ProductRoadmap | null>(null)
+  const [productCards, setProductCards] = useState<ProductCard[]>([])
+  const [productLoading, setProductLoading] = useState(false)
+  const [productError, setProductError] = useState<string | null>(null)
+  const [productModal, setProductModal] = useState<ProductCard | null>(null)
+  const [productAccessMap, setProductAccessMap] = useState<Record<number, { canViewDetail: boolean; visibility_level: string }>>({})
+  const [connectionStatus, setConnectionStatus] = useState<string | null>(null)
   const [bioExpanded, setBioExpanded] = useState(false)
   const [expExpanded, setExpExpanded] = useState<Record<number, boolean>>({})
   const [eduExpanded, setEduExpanded] = useState<Record<number, boolean>>({})
@@ -315,6 +378,7 @@ function BusinessProfileViewPageInner() {
   const [eduListExpanded, setEduListExpanded] = useState(false)
   const [refListExpanded, setRefListExpanded] = useState(false)
   const [refExpanded, setRefExpanded] = useState<Record<number, boolean>>({})
+  const [cultureExpanded, setCultureExpanded] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     const params = Object.fromEntries(searchParams.entries())
@@ -364,6 +428,10 @@ function BusinessProfileViewPageInner() {
     if (!publicConnectSlug) return '/login/talent?mode=signup'
     return `/login/talent?mode=signup&redirect=/dashboard/talent/connect/${publicConnectSlug}`
   }, [publicConnectSlug])
+  const talentConnectHref = useMemo(() => {
+    if (!publicConnectSlug) return '/dashboard/talent'
+    return `/dashboard/talent/connect/${publicConnectSlug}`
+  }, [publicConnectSlug])
 
   useEffect(() => {
     let cancelled = false
@@ -373,8 +441,8 @@ function BusinessProfileViewPageInner() {
       try {
         const { data: sessionRes } = await supabase.auth.getSession()
         const uid = sessionRes.session?.user?.id ?? null
-        const email = sessionRes.session?.user?.email ?? null
-        if (!cancelled) setAuthEmail(email)
+        const viewerEmail = sessionRes.session?.user?.email ?? null
+        if (!cancelled) setAuthEmail(viewerEmail)
         if (!cancelled) setViewerId(uid)
         
         // Get business ID from URL params (if viewing someone else's profile)
@@ -503,7 +571,7 @@ function BusinessProfileViewPageInner() {
         // First check if business_profiles exists (this is the source of truth)
         let bpCheckQuery = supabase
           .from('business_profiles')
-          .select('id, business_name, name, user_id, is_active')
+          .select('id, business_name, name, user_id, is_active, email')
         
         if (targetBusinessId) {
           bpCheckQuery = bpCheckQuery.eq('id', targetBusinessId)
@@ -585,6 +653,12 @@ function BusinessProfileViewPageInner() {
           const profileId = String(bpCheck.data.id)
           setBusinessProfileId(profileId)
           setViewingBusinessId(profileId)
+        }
+
+        // Use business profile email for the sidebar contact info
+        if (!cancelled) {
+          const profileEmail = String(bpCheck.data.email || '').trim()
+          setAuthEmail(profileEmail || (queryUserId === uid ? viewerEmail : null))
         }
 
         // Business profile exists, now try to load the profile data from business_bank_items
@@ -680,6 +754,30 @@ function BusinessProfileViewPageInner() {
             attachmentIdsLength: Array.isArray(p?.attachmentIds) ? p.attachmentIds.length : 0,
           })))
         }
+
+        // Debug: Log culture values with full details
+        const cultureDecisionsRaw = saved?.cultureDecisions
+        const cultureFeedbackRaw = saved?.cultureFeedback
+        const cultureConflictRaw = saved?.cultureConflict
+        const cultureSuccessRaw = saved?.cultureSuccess
+        console.log('[View Profile] Loaded culture values:', {
+          hasCultureDecisions: !!cultureDecisionsRaw,
+          cultureDecisionsType: typeof cultureDecisionsRaw,
+          cultureDecisionsValue: cultureDecisionsRaw,
+          cultureDecisionsLength: typeof cultureDecisionsRaw === 'string' ? cultureDecisionsRaw.length : 0,
+          hasCultureFeedback: !!cultureFeedbackRaw,
+          cultureFeedbackType: typeof cultureFeedbackRaw,
+          cultureFeedbackValue: cultureFeedbackRaw,
+          cultureFeedbackLength: typeof cultureFeedbackRaw === 'string' ? cultureFeedbackRaw.length : 0,
+          hasCultureConflict: !!cultureConflictRaw,
+          cultureConflictType: typeof cultureConflictRaw,
+          cultureConflictValue: cultureConflictRaw,
+          cultureConflictLength: typeof cultureConflictRaw === 'string' ? cultureConflictRaw.length : 0,
+          hasCultureSuccess: !!cultureSuccessRaw,
+          cultureSuccessType: typeof cultureSuccessRaw,
+          cultureSuccessValue: cultureSuccessRaw,
+          cultureSuccessLength: typeof cultureSuccessRaw === 'string' ? cultureSuccessRaw.length : 0,
+        })
 
         // businessProfileId is already set above if we found the business profile
         // No need to query again - we already have it from bpCheck above
@@ -963,11 +1061,29 @@ function BusinessProfileViewPageInner() {
     for (const k of fallback) {
       if (!merged.includes(k)) merged.push(k)
     }
+    
+    // Check if we have culture values - if so, ensure 'experience' is included
+    const cultureDecisionsRaw = (meta as any)?.cultureDecisions
+    const cultureFeedbackRaw = (meta as any)?.cultureFeedback
+    const cultureConflictRaw = (meta as any)?.cultureConflict
+    const cultureSuccessRaw = (meta as any)?.cultureSuccess
+    const hasAnyCultureValue = 
+      (!!cultureDecisionsRaw && String(cultureDecisionsRaw).trim().length > 0) ||
+      (!!cultureFeedbackRaw && String(cultureFeedbackRaw).trim().length > 0) ||
+      (!!cultureConflictRaw && String(cultureConflictRaw).trim().length > 0) ||
+      (!!cultureSuccessRaw && String(cultureSuccessRaw).trim().length > 0)
+    
+    if (hasAnyCultureValue && !merged.includes('experience')) {
+      merged.push('experience')
+    }
+    
     // Filter out 'social' from sectionOrder - it should only appear in sidebar, not main content
     // Also filter out sections that are not visible (sectionVisibility is false)
     const filtered = merged.filter((k) => {
       const key = String(k).toLowerCase().trim()
       if (key === 'social') return false // Social always in sidebar
+      // Special case: if 'experience' has culture values, always include it (visibility check happens in render)
+      if (key === 'experience' && hasAnyCultureValue) return true
       // Check section visibility - default to true if not set
       const sectionKey = key === 'skills' ? 'skills' : key
       const isVisible = sectionVisibility[sectionKey] !== false // Default to true
@@ -981,6 +1097,15 @@ function BusinessProfileViewPageInner() {
         visibility: sectionVisibility,
       })
     }
+    // Debug: Log if experience is in section order
+    console.log('[View Profile] Section order check:', {
+      hasExperience: filtered.includes('experience'),
+      sectionOrder: filtered,
+      sectionOrderString: JSON.stringify(filtered),
+      sectionVisibilityExperience: sectionVisibility.experience,
+      sectionVisibilityExperienceType: typeof sectionVisibility.experience,
+      allSectionVisibility: JSON.stringify(sectionVisibility),
+    })
     return filtered
   }, [meta, sectionVisibility])
   const skills = useMemo(() => safeArray<string>(meta?.skills).map((s) => String(s || '').trim()).filter(Boolean), [meta])
@@ -1188,6 +1313,52 @@ function BusinessProfileViewPageInner() {
   const title = (typeof meta?.title === 'string' && meta.title) || 'Your Profile'
   const name = (typeof meta?.name === 'string' && meta.name) || 'Business'
   const bio = normalizeDisplayText((typeof meta?.bio === 'string' && meta.bio) || '')
+  const cultureDecisionsRaw = (meta as any)?.cultureDecisions
+  const cultureFeedbackRaw = (meta as any)?.cultureFeedback
+  const cultureConflictRaw = (meta as any)?.cultureConflict
+  const cultureSuccessRaw = (meta as any)?.cultureSuccess
+  const cultureDecisions = normalizeDisplayText(String(cultureDecisionsRaw || ''))
+  const cultureFeedback = normalizeDisplayText(String(cultureFeedbackRaw || ''))
+  const cultureConflict = normalizeDisplayText(String(cultureConflictRaw || ''))
+  const cultureSuccess = normalizeDisplayText(String(cultureSuccessRaw || ''))
+  // Check both raw and normalized values to catch edge cases
+  const hasCultureValues =
+    (!!cultureDecisionsRaw && String(cultureDecisionsRaw).trim().length > 0) ||
+    (!!cultureFeedbackRaw && String(cultureFeedbackRaw).trim().length > 0) ||
+    (!!cultureConflictRaw && String(cultureConflictRaw).trim().length > 0) ||
+    (!!cultureSuccessRaw && String(cultureSuccessRaw).trim().length > 0) ||
+    (!!cultureDecisions && cultureDecisions.length > 0) ||
+    (!!cultureFeedback && cultureFeedback.length > 0) ||
+    (!!cultureConflict && cultureConflict.length > 0) ||
+    (!!cultureSuccess && cultureSuccess.length > 0)
+  
+  // Debug: Log culture values extraction
+  useEffect(() => {
+    if (meta) {
+      console.log('[View Profile] Culture values check:', {
+        rawCultureDecisions: (meta as any)?.cultureDecisions,
+        rawCultureDecisionsType: typeof (meta as any)?.cultureDecisions,
+        rawCultureFeedback: (meta as any)?.cultureFeedback,
+        rawCultureFeedbackType: typeof (meta as any)?.cultureFeedback,
+        rawCultureConflict: (meta as any)?.cultureConflict,
+        rawCultureConflictType: typeof (meta as any)?.cultureConflict,
+        rawCultureSuccess: (meta as any)?.cultureSuccess,
+        rawCultureSuccessType: typeof (meta as any)?.cultureSuccess,
+        normalizedCultureDecisions: cultureDecisions,
+        normalizedCultureDecisionsLength: cultureDecisions.length,
+        normalizedCultureFeedback: cultureFeedback,
+        normalizedCultureFeedbackLength: cultureFeedback.length,
+        normalizedCultureConflict: cultureConflict,
+        normalizedCultureConflictLength: cultureConflict.length,
+        normalizedCultureSuccess: cultureSuccess,
+        normalizedCultureSuccessLength: cultureSuccess.length,
+        hasCultureValues,
+        hasCultureValuesType: typeof hasCultureValues,
+        sectionVisibilityExperience: sectionVisibility.experience,
+        sectionVisibilityExperienceType: typeof sectionVisibility.experience,
+      })
+    }
+  }, [meta, cultureDecisions, cultureFeedback, cultureConflict, cultureSuccess, hasCultureValues, sectionVisibility.experience])
   const location =
     (typeof (meta as any)?.location === 'string' && (meta as any).location) ||
     (typeof (meta as any)?.city === 'string' && (meta as any).city) ||
@@ -1369,6 +1540,251 @@ function BusinessProfileViewPageInner() {
       overflow: 'hidden',
     }
   }
+
+  useEffect(() => {
+    if (!businessProfileId) return
+    let cancelled = false
+    ;(async () => {
+      setProductLoading(true)
+      setProductError(null)
+      try {
+        const [overviewRes, roadmapRes, productsRes] = await Promise.all([
+          supabase
+            .from('business_products_services_overview')
+            .select('short_headline, summary, primary_industries, business_model, is_public')
+            .eq('business_id', businessProfileId)
+            .maybeSingle(),
+          supabase
+            .from('business_product_roadmap')
+            .select('upcoming_products, roadmap_ideas, expansion_plans, new_markets, is_public')
+            .eq('business_id', businessProfileId)
+            .maybeSingle(),
+          supabase
+            .from('business_products_services')
+            .select('id, name, category, short_description, who_it_is_for, problem_it_solves, logo_or_icon, explainer_video_url, external_link, lifecycle_stage, order_index, is_published')
+            .eq('business_id', businessProfileId)
+            .eq('is_active', true)
+            .order('order_index', { ascending: true }),
+        ])
+
+        if (!cancelled) {
+          setProductsOverview(
+            overviewRes.data
+              ? {
+                  short_headline: overviewRes.data.short_headline || '',
+                  summary: overviewRes.data.summary || '',
+                  primary_industries: Array.isArray(overviewRes.data.primary_industries) ? overviewRes.data.primary_industries : [],
+                  business_model: overviewRes.data.business_model || '',
+                  is_public: overviewRes.data.is_public ?? true,
+                }
+              : null
+          )
+          setProductsRoadmap(
+            roadmapRes.data
+              ? {
+                  upcoming_products: Array.isArray(roadmapRes.data.upcoming_products) ? roadmapRes.data.upcoming_products : [],
+                  roadmap_ideas: roadmapRes.data.roadmap_ideas || '',
+                  expansion_plans: roadmapRes.data.expansion_plans || '',
+                  new_markets: roadmapRes.data.new_markets || '',
+                  is_public: roadmapRes.data.is_public ?? true,
+                }
+              : null
+          )
+        }
+
+        const products = Array.isArray(productsRes.data) ? productsRes.data : []
+        const visibleProducts = isOwner ? products : products.filter((p) => p.is_published !== false)
+        const productIds = visibleProducts.map((p) => p.id)
+
+        if (!productIds.length) {
+          if (!cancelled) setProductCards([])
+          return
+        }
+
+        const [
+          rolesRes,
+          skillsRes,
+          teamsRes,
+          growthRes,
+          mediaRes,
+          impactRes,
+          signalsRes,
+          permissionsRes,
+          accessRes,
+        ] = await Promise.all([
+          supabase.from('business_product_roles').select('product_id, role_name, order_index').in('product_id', productIds),
+          supabase.from('business_product_skills').select('product_id, skill_name').in('product_id', productIds),
+          supabase.from('business_product_teams').select('product_id, team_name').in('product_id', productIds),
+          supabase.from('business_product_growth_areas').select('product_id, growth_area').in('product_id', productIds),
+          supabase.from('business_product_media').select('product_id, media_type, title, file_path, file_url, file_type, order_index').in('product_id', productIds),
+          supabase.from('business_product_impact').select('product_id, who_it_helps, what_it_improves, real_world_outcomes').in('product_id', productIds),
+          supabase.from('business_product_signals').select('product_id, we_are_hiring_for_this, open_to_partnerships, in_research_and_development, currently_scaling').in('product_id', productIds),
+          supabase.from('business_product_permissions').select('product_id, visibility_level').in('product_id', productIds),
+          viewerId
+            ? supabase.from('business_product_access').select('product_id, status').eq('user_id', viewerId).in('product_id', productIds)
+            : Promise.resolve({ data: [] as any[] }),
+        ])
+
+        const accessStatus = new Map<number, string>()
+        for (const a of accessRes.data ?? []) {
+          accessStatus.set(a.product_id, String(a.status || 'requested'))
+        }
+
+        let connectedStatus = connectionStatus
+        if (viewerId && !isOwner) {
+          try {
+            const talentRes = await supabase
+              .from('talent_profiles')
+              .select('id')
+              .eq('user_id', viewerId)
+              .maybeSingle()
+            if (talentRes.data?.id) {
+              const connRes = await supabase
+                .from('talent_connection_requests')
+                .select('id, status')
+                .eq('business_id', businessProfileId)
+                .eq('talent_id', talentRes.data.id)
+                .eq('status', 'accepted')
+                .order('responded_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+              if (!cancelled && connRes.data?.status) {
+                connectedStatus = connRes.data.status
+                setConnectionStatus(connRes.data.status)
+              }
+            }
+          } catch {}
+        }
+
+        const rolesMap = new Map<number, string[]>()
+        const skillsMap = new Map<number, string[]>()
+        const teamsMap = new Map<number, string[]>()
+        const growthMap = new Map<number, string[]>()
+        const mediaMap = new Map<number, ProductMedia[]>()
+        const impactMap = new Map<number, ProductCard['impact']>()
+        const signalsMap = new Map<number, ProductCard['signals']>()
+        const permMap = new Map<number, string>()
+
+        for (const r of rolesRes.data ?? []) {
+          const arr = rolesMap.get(r.product_id) ?? []
+          arr.push(String(r.role_name || ''))
+          rolesMap.set(r.product_id, arr)
+        }
+        for (const s of skillsRes.data ?? []) {
+          const arr = skillsMap.get(s.product_id) ?? []
+          arr.push(String(s.skill_name || ''))
+          skillsMap.set(s.product_id, arr)
+        }
+        for (const t of teamsRes.data ?? []) {
+          const arr = teamsMap.get(t.product_id) ?? []
+          arr.push(String(t.team_name || ''))
+          teamsMap.set(t.product_id, arr)
+        }
+        for (const g of growthRes.data ?? []) {
+          const arr = growthMap.get(g.product_id) ?? []
+          arr.push(String(g.growth_area || ''))
+          growthMap.set(g.product_id, arr)
+        }
+        for (const p of permissionsRes.data ?? []) {
+          permMap.set(p.product_id, String(p.visibility_level || 'public_summary'))
+        }
+        for (const i of impactRes.data ?? []) {
+          impactMap.set(i.product_id, {
+            who_it_helps: i.who_it_helps || '',
+            what_it_improves: i.what_it_improves || '',
+            real_world_outcomes: i.real_world_outcomes || '',
+          })
+        }
+        for (const s of signalsRes.data ?? []) {
+          signalsMap.set(s.product_id, {
+            we_are_hiring_for_this: !!s.we_are_hiring_for_this,
+            open_to_partnerships: !!s.open_to_partnerships,
+            in_research_and_development: !!s.in_research_and_development,
+            currently_scaling: !!s.currently_scaling,
+          })
+        }
+        for (const m of mediaRes.data ?? []) {
+          const arr = mediaMap.get(m.product_id) ?? []
+          arr.push({
+            media_type: String(m.media_type || 'document'),
+            title: String(m.title || ''),
+            file_path: m.file_path ?? null,
+            file_url: m.file_url ?? null,
+            file_type: m.file_type ?? null,
+            order_index: typeof m.order_index === 'number' ? m.order_index : 0,
+          })
+          mediaMap.set(m.product_id, arr)
+        }
+
+        const accessMap: Record<number, { canViewDetail: boolean; visibility_level: string }> = {}
+        const cards: ProductCard[] = []
+        for (const p of visibleProducts) {
+          const visibility = permMap.get(p.id) || 'public_summary'
+          let canViewDetail = false
+          if (isOwner) {
+            canViewDetail = true
+          } else if (visibility === 'gated_detail') {
+            canViewDetail = connectedStatus === 'accepted' || accessStatus.get(p.id) === 'approved' || accessStatus.get(p.id) === 'nda_signed'
+          } else if (visibility === 'nda_only') {
+            canViewDetail = accessStatus.get(p.id) === 'nda_signed'
+          }
+
+          if (!isOwner && visibility === 'confidential') continue
+
+          const media = (mediaMap.get(p.id) ?? []).sort((a, b) => a.order_index - b.order_index)
+          const hydratedMedia = await Promise.all(
+            media.map(async (m) => {
+              if (!m.file_url && m.file_path) {
+                const url = await signedUrl(m.file_path)
+                return { ...m, file_url: url }
+              }
+              return m
+            })
+          )
+
+          cards.push({
+            id: p.id,
+            name: p.name || '',
+            category: p.category || '',
+            short_description: p.short_description || '',
+            who_it_is_for: p.who_it_is_for || '',
+            problem_it_solves: p.problem_it_solves || '',
+            logo_or_icon: p.logo_or_icon || null,
+            explainer_video_url: p.explainer_video_url || null,
+            external_link: p.external_link || null,
+            lifecycle_stage: p.lifecycle_stage || null,
+            visibility_level: visibility,
+            roles: rolesMap.get(p.id) ?? [],
+            skills: skillsMap.get(p.id) ?? [],
+            teams: teamsMap.get(p.id) ?? [],
+            growth_areas: growthMap.get(p.id) ?? [],
+            media: hydratedMedia,
+            impact: impactMap.get(p.id) ?? { who_it_helps: '', what_it_improves: '', real_world_outcomes: '' },
+            signals: signalsMap.get(p.id) ?? {
+              we_are_hiring_for_this: false,
+              open_to_partnerships: false,
+              in_research_and_development: false,
+              currently_scaling: false,
+            },
+          })
+          accessMap[p.id] = { canViewDetail, visibility_level: visibility }
+        }
+
+        if (!cancelled) {
+          setProductAccessMap(accessMap)
+          setProductCards(cards)
+        }
+      } catch (err: any) {
+        console.error('[View Profile] Products & Services load error:', err)
+        if (!cancelled) setProductError(err?.message || 'Failed to load Products & Services.')
+      } finally {
+        if (!cancelled) setProductLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [businessProfileId, viewerId, isOwner])
 
   function iconSvg(platform: string) {
     const p = String(platform || '').toLowerCase()
@@ -1693,6 +2109,178 @@ function BusinessProfileViewPageInner() {
           </div>
         </div>
       ) : null}
+      {productModal ? (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6"
+          onClick={() => setProductModal(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full max-w-4xl bg-slate-950 rounded-2xl border border-white/10 p-6 text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-4 mb-4">
+              <div>
+                <div className="text-2xl font-semibold">{productModal.name}</div>
+                <div className="text-xs text-slate-400 mt-1">
+                  {productModal.category}{productModal.lifecycle_stage ? ` • ${productModal.lifecycle_stage}` : ''}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm"
+                onClick={() => setProductModal(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="text-slate-300 whitespace-pre-wrap">{productModal.short_description}</div>
+            <div className="mt-3 text-sm text-slate-400">
+              <div><span className="text-slate-200">Who it is for:</span> {productModal.who_it_is_for}</div>
+              <div className="mt-1"><span className="text-slate-200">Problem it solves:</span> {productModal.problem_it_solves}</div>
+            </div>
+
+            {(() => {
+              const access = productAccessMap[productModal.id]
+              const canViewDetail = isOwner || access?.canViewDetail
+              if (!canViewDetail && access?.visibility_level !== 'public_summary') {
+                return (
+                  <div className="mt-4 rounded-xl border border-white/10 bg-slate-900/50 p-4">
+                    <div className="text-slate-300">Detailed information is gated for this product.</div>
+                    <button
+                      type="button"
+                      className="mt-3 px-3 py-1.5 rounded bg-blue-600 text-white text-sm"
+                      onClick={() => alert('Request sent. The business will review your access request.')}
+                    >
+                      Request deeper access
+                    </button>
+                  </div>
+                )
+              }
+
+              return (
+                <div className="mt-6 space-y-6">
+                  {productModal.media.length ? (
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Media</div>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {productModal.media.map((m, idx) => (
+                          <div key={`${m.media_type}-${idx}`} className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
+                            <div className="text-xs text-slate-400 mb-2">{m.media_type}</div>
+                            {m.file_url ? (
+                              m.media_type === 'image' ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={m.file_url}
+                                  alt={m.title || 'Media'}
+                                  className="w-full h-40 object-cover rounded-lg"
+                                  onClick={() => setPreview({ kind: 'image', url: m.file_url as string, title: m.title || 'Media' })}
+                                />
+                              ) : m.media_type === 'video' ? (
+                                <video src={m.file_url} controls className="w-full h-40 object-cover rounded-lg" />
+                              ) : (
+                                <a className="text-blue-300 underline" href={m.file_url} target="_blank" rel="noreferrer">
+                                  {m.title || 'Open media'}
+                                </a>
+                              )
+                            ) : (
+                              <div className="text-xs text-slate-500">No media preview available.</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Teams involved</div>
+                      <div className="flex flex-wrap gap-2 text-xs text-slate-300">
+                        {productModal.teams.length ? productModal.teams.map((t) => (
+                          <span key={t} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">{t}</span>
+                        )) : <span className="text-slate-500">No teams listed.</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Typical roles</div>
+                      <div className="flex flex-wrap gap-2 text-xs text-slate-300">
+                        {productModal.roles.length ? productModal.roles.map((r) => (
+                          <span key={r} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">{r}</span>
+                        )) : <span className="text-slate-500">No roles listed.</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Skills used</div>
+                      <div className="flex flex-wrap gap-2 text-xs text-slate-300">
+                        {productModal.skills.length ? productModal.skills.map((s) => (
+                          <span key={s} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">{s}</span>
+                        )) : <span className="text-slate-500">No skills listed.</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Growth areas</div>
+                      <div className="flex flex-wrap gap-2 text-xs text-slate-300">
+                        {productModal.growth_areas.length ? productModal.growth_areas.map((g) => (
+                          <span key={g} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">{g}</span>
+                        )) : <span className="text-slate-500">No growth areas listed.</span>}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm font-semibold mb-2">Impact & Outcomes</div>
+                    <div className="text-slate-300 whitespace-pre-wrap text-sm">
+                      {productModal.impact.who_it_helps ? `Who it helps: ${productModal.impact.who_it_helps}\n` : ''}
+                      {productModal.impact.what_it_improves ? `What it improves: ${productModal.impact.what_it_improves}\n` : ''}
+                      {productModal.impact.real_world_outcomes ? `Real-world outcomes: ${productModal.impact.real_world_outcomes}` : ''}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm font-semibold mb-2">Relationship signals</div>
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-300">
+                      {productModal.signals.we_are_hiring_for_this ? <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Hiring</span> : null}
+                      {productModal.signals.open_to_partnerships ? <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Partnerships</span> : null}
+                      {productModal.signals.in_research_and_development ? <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">R&D</span> : null}
+                      {productModal.signals.currently_scaling ? <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Scaling</span> : null}
+                      {!productModal.signals.we_are_hiring_for_this &&
+                        !productModal.signals.open_to_partnerships &&
+                        !productModal.signals.in_research_and_development &&
+                        !productModal.signals.currently_scaling ? (
+                        <span className="text-slate-500">No signals shared.</span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {(productsRoadmap && (productsRoadmap.is_public || isOwner)) ? (
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Roadmap & Future Plans</div>
+                      {productsRoadmap.upcoming_products.length ? (
+                        <div className="flex flex-wrap gap-2 text-xs text-slate-300 mb-2">
+                          {productsRoadmap.upcoming_products.map((u) => (
+                            <span key={u} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">{u}</span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {productsRoadmap.roadmap_ideas ? (
+                        <div className="text-slate-300 whitespace-pre-wrap text-sm mb-1">{productsRoadmap.roadmap_ideas}</div>
+                      ) : null}
+                      {productsRoadmap.expansion_plans ? (
+                        <div className="text-slate-300 whitespace-pre-wrap text-sm mb-1">{productsRoadmap.expansion_plans}</div>
+                      ) : null}
+                      {productsRoadmap.new_markets ? (
+                        <div className="text-slate-300 whitespace-pre-wrap text-sm">{productsRoadmap.new_markets}</div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      ) : null}
 
       <header className="sticky top-0 z-40 backdrop-blur bg-slate-950/70 border-b border-white/10">
         <div className="max-w-[95vw] xl:max-w-[1400px] mx-auto px-4 md:px-8 py-4 flex items-center justify-between">
@@ -1701,7 +2289,7 @@ function BusinessProfileViewPageInner() {
               <>
                 {backToMapHref ? (
                   <Link href={backToMapHref} className="text-slate-300 hover:text-blue-400">
-                    ← Back to Talent Map
+                    ← Back to Overview
                   </Link>
                 ) : null}
                 <Link href="/dashboard/business" className="text-slate-300 hover:text-blue-400">
@@ -1726,6 +2314,13 @@ function BusinessProfileViewPageInner() {
                   Back to Home
                 </Link>
               </>
+            ) : !isOwner ? (
+              <Link
+                href={talentConnectHref}
+                className="px-4 py-2 rounded-lg bg-white text-slate-900 font-semibold hover:bg-slate-100 transition-colors"
+              >
+                Connect with this Business
+              </Link>
             ) : (
               <>
                 {/* Connection Request Action Buttons */}
@@ -1912,15 +2507,126 @@ function BusinessProfileViewPageInner() {
           </div>
         ) : (
           <div className="space-y-8">
+            {/* Jump to Navigation Menu */}
+            <nav className="sticky top-4 z-50 bg-slate-900/95 backdrop-blur-sm border border-white/10 rounded-xl p-4 shadow-lg">
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+                <span className="text-sm font-medium text-slate-300 whitespace-nowrap">Jump to:</span>
+                <div className="flex items-center gap-2">
+                  <a
+                    href="#section-about"
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium whitespace-nowrap transition-colors"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      document.getElementById('section-about')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }}
+                  >
+                    About
+                  </a>
+                  {(() => {
+                    const hasIntroVideoId = typeof meta?.introVideoId === 'number' && meta.introVideoId !== null
+                    if (!hasIntroVideoId) return null
+                    return (
+                      <a
+                        href="#section-intro"
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium whitespace-nowrap transition-colors"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          document.getElementById('section-intro')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                        }}
+                      >
+                        Introduction Video
+                      </a>
+                    )
+                  })()}
+                  {(() => {
+                    const hasProducts = productsOverview || (productCards && productCards.length > 0) || productsRoadmap
+                    if (!hasProducts) return null
+                    return (
+                      <a
+                        href="#section-products"
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium whitespace-nowrap transition-colors"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          document.getElementById('section-products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                        }}
+                      >
+                        Products & Services
+                      </a>
+                    )
+                  })()}
+                  {hasCultureValues && sectionVisibility.experience !== false && (
+                    <a
+                      href="#section-culture"
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium whitespace-nowrap transition-colors"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        document.getElementById('section-culture')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }}
+                    >
+                      Culture & Values
+                    </a>
+                  )}
+                  {sectionOrder.includes('education') && (
+                    <a
+                      href="#section-education"
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium whitespace-nowrap transition-colors"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        document.getElementById('section-education')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }}
+                    >
+                      Education
+                    </a>
+                  )}
+                  {sectionOrder.includes('referees') && (
+                    <a
+                      href="#section-referees"
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium whitespace-nowrap transition-colors"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        document.getElementById('section-referees')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }}
+                    >
+                      Referees
+                    </a>
+                  )}
+                  {sectionOrder.includes('attachments') && (
+                    <a
+                      href="#section-attachments"
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium whitespace-nowrap transition-colors"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        document.getElementById('section-attachments')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }}
+                    >
+                      Attachments
+                    </a>
+                  )}
+                  {sectionOrder.includes('projects') && (
+                    <a
+                      href="#section-projects"
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium whitespace-nowrap transition-colors"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        document.getElementById('section-projects')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }}
+                    >
+                      Job Vacancies
+                    </a>
+                  )}
+                </div>
+              </div>
+            </nav>
+
             {/* Hero */}
             <section className="overflow-hidden rounded-3xl border border-white/10 bg-slate-950/40">
-              <div className="h-44 md:h-64 bg-slate-900 relative">
+              <div className="h-96 md:h-[36rem] bg-slate-900 relative">
                 {bannerUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img 
                     src={bannerUrl} 
                     alt="Banner" 
-                    className="w-full h-full object-cover opacity-80"
+                    className="w-full h-full object-contain opacity-80"
                     onError={(e) => {
                       console.error('[View Profile] Banner image failed to load:', bannerUrl)
                       e.currentTarget.style.display = 'none'
@@ -1936,14 +2642,14 @@ function BusinessProfileViewPageInner() {
               </div>
               <div className="p-6 md:p-8">
                 <div className="flex flex-col md:flex-row md:items-end gap-5">
-                  <div className="-mt-16 md:-mt-20 shrink-0">
-                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-3xl overflow-hidden border border-white/10 bg-white/5 shadow-xl">
+                  <div className="shrink-0 -mt-8 md:-mt-10">
+                    <div className="w-20 h-20 md:w-24 md:h-24 rounded-3xl overflow-hidden border border-white/10 bg-white shadow-xl">
                       {avatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img 
                           src={avatarUrl} 
                           alt="Avatar" 
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain p-2"
                           onError={(e) => {
                             console.error('[View Profile] Avatar image failed to load:', avatarUrl)
                             e.currentTarget.style.display = 'none'
@@ -1989,7 +2695,7 @@ function BusinessProfileViewPageInner() {
               {/* Main */}
               <div className="lg:col-span-9 space-y-6">
                 {/* About */}
-                <section className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                <section id="section-about" className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
                   <h2 className="text-xl font-semibold mb-4">About</h2>
                   {bio ? (
                     <>
@@ -2019,7 +2725,7 @@ function BusinessProfileViewPageInner() {
                   if (!hasIntroVideoId) return null
                   
                   return (
-                    <section className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                    <section id="section-intro" className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
                       <h2 className="text-xl font-semibold mb-4">{introVideoTitle || 'Introduction Video'}</h2>
                       {introVideoUrl ? (
                         <div className="mx-auto max-w-3xl">
@@ -2084,6 +2790,107 @@ function BusinessProfileViewPageInner() {
                   )
                 })()}
 
+                {/* Products & Services */}
+                <section id="section-products" className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                  <h2 className="text-xl font-semibold mb-4">Products & Services</h2>
+                  {productError ? <div className="text-sm text-red-400 mb-3">{productError}</div> : null}
+                  {productLoading ? (
+                    <div className="text-slate-400">Loading products and services…</div>
+                  ) : (
+                    <>
+                      {(productsOverview && (productsOverview.is_public || isOwner)) ? (
+                        <div className="mb-6">
+                          <div className="text-lg font-semibold">{productsOverview.short_headline}</div>
+                          <div className="text-slate-300 mt-2 whitespace-pre-wrap">{productsOverview.summary}</div>
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
+                            {productsOverview.primary_industries.map((i) => (
+                              <span key={i} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">
+                                {i}
+                              </span>
+                            ))}
+                          </div>
+                          {productsOverview.business_model ? (
+                            <div className="mt-2 text-xs text-slate-400">Business model: {productsOverview.business_model}</div>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      {productCards.length ? (
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {productCards.map((card) => {
+                            const access = productAccessMap[card.id]
+                            const canViewDetail = access?.canViewDetail || isOwner
+                            return (
+                              <div key={card.id} className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <div className="text-lg font-semibold">{card.name}</div>
+                                    <div className="text-xs text-slate-400 mt-1">
+                                      {card.category}{card.lifecycle_stage ? ` • ${card.lifecycle_stage}` : ''}
+                                    </div>
+                                  </div>
+                                  <div className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10">
+                                    {access?.visibility_level || 'public_summary'}
+                                  </div>
+                                </div>
+                                <div className="mt-3 text-sm text-slate-300 whitespace-pre-wrap">{card.short_description}</div>
+                                <div className="mt-3 text-xs text-slate-400">
+                                  <div><span className="text-slate-300">Who it is for:</span> {card.who_it_is_for}</div>
+                                  <div className="mt-1"><span className="text-slate-300">Problem it solves:</span> {card.problem_it_solves}</div>
+                                </div>
+                                <div className="mt-4 flex items-center gap-3">
+                                  <button
+                                    type="button"
+                                    className="text-blue-300 text-sm underline"
+                                    onClick={() => setProductModal(card)}
+                                  >
+                                    View details
+                                  </button>
+                                  {!canViewDetail && access?.visibility_level !== 'public_summary' ? (
+                                    <button
+                                      type="button"
+                                      className="text-xs px-2 py-1 rounded bg-blue-600 text-white"
+                                      onClick={() => alert('Request sent. The business will review your access request.')}
+                                    >
+                                      Request deeper access
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-slate-400">No products or services listed yet.</div>
+                      )}
+
+                      {(productsRoadmap && (productsRoadmap.is_public || isOwner)) ? (
+                        <div className="mt-6">
+                          <div className="text-sm font-semibold text-slate-200 mb-2">What we’re building next</div>
+                          {productsRoadmap.upcoming_products.length ? (
+                            <div className="flex flex-wrap gap-2 text-xs text-slate-300 mb-3">
+                              {productsRoadmap.upcoming_products.map((u) => (
+                                <span key={u} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">
+                                  {u}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                          {productsRoadmap.roadmap_ideas ? (
+                            <div className="text-slate-300 whitespace-pre-wrap text-sm mb-2">{productsRoadmap.roadmap_ideas}</div>
+                          ) : null}
+                          {productsRoadmap.expansion_plans ? (
+                            <div className="text-slate-300 whitespace-pre-wrap text-sm mb-2">{productsRoadmap.expansion_plans}</div>
+                          ) : null}
+                          {productsRoadmap.new_markets ? (
+                            <div className="text-slate-300 whitespace-pre-wrap text-sm">{productsRoadmap.new_markets}</div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </section>
+
                 {sectionOrder.map((k) => {
                   // Intro is handled above (defensive skip).
                   if (k === 'intro') return null
@@ -2092,143 +2899,123 @@ function BusinessProfileViewPageInner() {
                   // Social links are displayed in the sidebar under "View and Connect with {name}" - skip in main content
                   // IMPORTANT: Social section must NOT be rendered in main content - it only appears in sidebar
                   if (k === 'social' || k === 'Social' || String(k).toLowerCase() === 'social') return null
-                  if (k === 'skills') {
-                    const skillsCollapsed = skills.slice(0, 20)
-                    const showAllSkills = skillsExpanded ? skills : skillsCollapsed
-                    return (
-                      <section key={k} className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
-                        <h2 className="text-xl font-semibold mb-2">Products and Services</h2>
-                        <p className="text-slate-400 text-sm mb-4">
-                          Provide a detailed description of what you offer, including customer testimonials or case studies.
-                        </p>
-                        {skills.length ? (
-                          <div className="flex flex-wrap gap-2">
-                            {showAllSkills.map((s, idx) => (
-                              <span
-                                key={`${s}-${idx}`}
-                                className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-slate-200 text-sm"
-                              >
-                                {s}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-slate-400">No products and services added yet.</div>
-                        )}
-                        {skills.length > skillsCollapsed.length ? (
-                          <button
-                            type="button"
-                            className="mt-3 text-blue-300 hover:text-blue-200 text-sm font-medium"
-                            onClick={() => setSkillsExpanded((v) => !v)}
-                          >
-                            {skillsExpanded ? 'Show less' : 'Show more'}
-                          </button>
-                        ) : null}
-                      </section>
-                    )
-                  }
-
                   if (k === 'experience') {
-                    const expList = expListExpanded ? experience : experience.slice(0, 2)
+                    // Debug: Log why section might not render
+                    if (!hasCultureValues) {
+                      console.log('[View Profile] Culture & Values section skipped: no culture values', {
+                        hasCultureValues,
+                        cultureDecisions: !!cultureDecisions,
+                        cultureDecisionsValue: cultureDecisions,
+                        cultureDecisionsLength: cultureDecisions.length,
+                        cultureFeedback: !!cultureFeedback,
+                        cultureFeedbackValue: cultureFeedback,
+                        cultureFeedbackLength: cultureFeedback.length,
+                        cultureConflict: !!cultureConflict,
+                        cultureConflictValue: cultureConflict,
+                        cultureConflictLength: cultureConflict.length,
+                        cultureSuccess: !!cultureSuccess,
+                        cultureSuccessValue: cultureSuccess,
+                        cultureSuccessLength: cultureSuccess.length,
+                      })
+                      return null
+                    }
+                    // Check section visibility - default to true if not explicitly set to false
+                    // If culture values exist, we should show the section unless explicitly hidden
+                    const isVisible = sectionVisibility.experience !== false // Default to true if undefined/null
+                    if (!isVisible) {
+                      console.log('[View Profile] Culture & Values section skipped: visibility set to false', {
+                        sectionVisibilityExperience: sectionVisibility.experience,
+                        allSectionVisibility: JSON.stringify(sectionVisibility),
+                        note: 'Enable the "Public" toggle in the editor to show this section',
+                      })
+                      return null
+                    }
+                    console.log('[View Profile] Rendering Culture & Values section', {
+                      hasCultureValues,
+                      cultureDecisionsLength: cultureDecisions.length,
+                      cultureFeedbackLength: cultureFeedback.length,
+                      cultureConflictLength: cultureConflict.length,
+                      cultureSuccessLength: cultureSuccess.length,
+                      sectionVisibilityExperience: sectionVisibility.experience,
+                      isVisible,
+                    })
                     return (
-                      <section key={k} className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
-                        <h2 className="text-xl font-semibold mb-4">Experience</h2>
-                        {experience.length ? (
-                          <div className="space-y-3">
-                            {expList.map((e, idx) => (
-                              <div key={idx} className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
-                                <div className="font-semibold">{e?.role || e?.title || 'Role'}</div>
-                                <div className="text-slate-300 text-sm mt-1">
-                                  {(e?.company || e?.organisation || 'Company') +
-                                    (e?.startDate || e?.endDate ? ` • ${e?.startDate || ''} – ${e?.endDate || ''}` : '')}
-                                </div>
-                                {normalizeDisplayText(String(e?.description || '')) ? (
-                                  <div className="mt-3">
-                                    <div
-                                      className="text-slate-300 whitespace-pre-wrap text-sm"
-                                      style={expExpanded[idx] ? undefined : clampStyle(5)}
-                                    >
-                                      {normalizeDisplayText(String(e.description))}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
-                                      onClick={() => setExpExpanded((p) => ({ ...p, [idx]: !p[idx] }))}
-                                    >
-                                      {expExpanded[idx] ? 'Show less' : 'Show more'}
-                                    </button>
-                                  </div>
-                                ) : null}
-                                
-                                {(() => {
-                                  // Render attachments for experience entries
-                                  const attachmentIds = Array.isArray(e?.attachmentIds) ? e.attachmentIds.filter((id: any) => {
-                                    const num = typeof id === 'number' ? id : Number(id)
-                                    return Number.isFinite(num) && num > 0
-                                  }) : []
-                                  
-                                  if (attachmentIds.length === 0) return null
-                                  
-                                  return (
-                                    <div className="mt-4">
-                                      <div className="text-xs text-slate-400 mb-2">
-                                        Attached documents:{' '}
-                                        <span className="text-slate-200 font-semibold">{attachmentIds.length}</span>
-                                      </div>
-                                      <div className="space-y-2">
-                                        {attachmentIds.slice(0, 3).map((id: any) => {
-                                          const numId = typeof id === 'number' ? id : Number(id)
-                                          if (!Number.isFinite(numId) || numId <= 0) return null
-                                          const it = tbItemCache[numId]
-                                          if (!it) {
-                                            return (
-                                              <div key={numId} className="rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm text-slate-400">
-                                                Loading document {numId}…
-                                              </div>
-                                            )
-                                          }
-                                          const open = () => {
-                                            const path = String(it?.file_path ?? '')
-                                            if (path) {
-                                              openPath(path, it?.file_type ?? null, String(it?.title || 'Document'))
-                                              return
-                                            }
-                                          }
-                                          return (
-                                            <div key={numId} className="rounded-xl border border-white/10 bg-slate-950/40 p-3 flex items-center gap-3">
-                                              {tbThumb(it)}
-                                              <div className="min-w-0 flex-1">
-                                                <div className="text-sm text-slate-200 truncate">{String(it?.title || 'Document')}</div>
-                                                <div className="text-xs text-slate-400 truncate">{String(it?.item_type || '')}</div>
-                                              </div>
-                                              <button type="button" className="text-xs text-blue-300 underline" onClick={open}>
-                                                Open
-                                              </button>
-                                            </div>
-                                          )
-                                        })}
-                                        {attachmentIds.length > 3 ? (
-                                          <div className="text-xs text-slate-400 px-1">+{attachmentIds.length - 3} more…</div>
-                                        ) : null}
-                                      </div>
-                                    </div>
-                                  )
-                                })()}
+                      <section id="section-culture" key={k} className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                        <h2 className="text-xl font-semibold mb-4">Culture & Values</h2>
+                        <div className="space-y-4">
+                          {cultureDecisions ? (
+                            <div>
+                              <div className="text-slate-200 font-semibold">How decisions are made</div>
+                              <div
+                                className="text-slate-300 whitespace-pre-wrap text-sm mt-2"
+                                style={cultureExpanded.decisions ? undefined : clampStyle(3)}
+                              >
+                                {cultureDecisions}
                               </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-slate-400">No experience added yet.</div>
-                        )}
-                        {experience.length > 2 ? (
-                          <button
-                            type="button"
-                            className="mt-4 text-blue-300 hover:text-blue-200 text-sm font-medium"
-                            onClick={() => setExpListExpanded((v) => !v)}
-                          >
-                            {expListExpanded ? 'Show fewer roles' : 'Show all roles'}
-                          </button>
-                        ) : null}
+                              <button
+                                type="button"
+                                className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
+                                onClick={() => setCultureExpanded((p) => ({ ...p, decisions: !p.decisions }))}
+                              >
+                                {cultureExpanded.decisions ? 'Show less' : 'Show more'}
+                              </button>
+                            </div>
+                          ) : null}
+                          {cultureFeedback ? (
+                            <div>
+                              <div className="text-slate-200 font-semibold">How feedback works</div>
+                              <div
+                                className="text-slate-300 whitespace-pre-wrap text-sm mt-2"
+                                style={cultureExpanded.feedback ? undefined : clampStyle(3)}
+                              >
+                                {cultureFeedback}
+                              </div>
+                              <button
+                                type="button"
+                                className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
+                                onClick={() => setCultureExpanded((p) => ({ ...p, feedback: !p.feedback }))}
+                              >
+                                {cultureExpanded.feedback ? 'Show less' : 'Show more'}
+                              </button>
+                            </div>
+                          ) : null}
+                          {cultureConflict ? (
+                            <div>
+                              <div className="text-slate-200 font-semibold">How conflict is handled</div>
+                              <div
+                                className="text-slate-300 whitespace-pre-wrap text-sm mt-2"
+                                style={cultureExpanded.conflict ? undefined : clampStyle(3)}
+                              >
+                                {cultureConflict}
+                              </div>
+                              <button
+                                type="button"
+                                className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
+                                onClick={() => setCultureExpanded((p) => ({ ...p, conflict: !p.conflict }))}
+                              >
+                                {cultureExpanded.conflict ? 'Show less' : 'Show more'}
+                              </button>
+                            </div>
+                          ) : null}
+                          {cultureSuccess ? (
+                            <div>
+                              <div className="text-slate-200 font-semibold">How success is celebrated</div>
+                              <div
+                                className="text-slate-300 whitespace-pre-wrap text-sm mt-2"
+                                style={cultureExpanded.success ? undefined : clampStyle(3)}
+                              >
+                                {cultureSuccess}
+                              </div>
+                              <button
+                                type="button"
+                                className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
+                                onClick={() => setCultureExpanded((p) => ({ ...p, success: !p.success }))}
+                              >
+                                {cultureExpanded.success ? 'Show less' : 'Show more'}
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
                       </section>
                     )
                   }
@@ -2236,7 +3023,7 @@ function BusinessProfileViewPageInner() {
                   if (k === 'education') {
                     const eduList = eduListExpanded ? education : education.slice(0, 2)
                     return (
-                      <section key={k} className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                      <section id="section-education" key={k} className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
                         <h2 className="text-xl font-semibold mb-4">Education</h2>
                         {education.length ? (
                           <div className="space-y-3">
@@ -2363,7 +3150,7 @@ function BusinessProfileViewPageInner() {
                   if (k === 'referees') {
                     const refList = refListExpanded ? referees : referees.slice(0, 2)
                     return (
-                      <section key={k} className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                      <section id="section-referees" key={k} className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
                         <h2 className="text-xl font-semibold mb-4">Referees</h2>
                         {referees.length ? (
                           <div className="space-y-3">
@@ -2471,7 +3258,7 @@ function BusinessProfileViewPageInner() {
                   if (k === 'attachments') {
                     const aList = attachExpanded ? attachments : attachments.slice(0, 6)
                     return (
-                      <section key={k} className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                      <section id="section-attachments" key={k} className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
                         <h2 className="text-xl font-semibold mb-4">Attachments</h2>
                         {attachments.length ? (
                           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -2574,7 +3361,7 @@ function BusinessProfileViewPageInner() {
                 ) : null}
 
                 {/* Job Vacancies: placed under Connect With Me to sit beside the intro video */}
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                <div id="section-projects" className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="text-slate-200 font-semibold">Job Vacancies</div>
                     {jobs.length > 2 ? (

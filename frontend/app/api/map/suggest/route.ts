@@ -14,12 +14,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ businesses: [] }, { status: 200 })
     }
 
-    // Search for businesses by name
+    // Search for businesses by name (try both business_name and name columns)
+    const searchTerm = q.trim()
     let query = supabase
       .from('business_profiles')
       .select('*')
-      .ilike('business_name', `%${q.trim()}%`)
-      .limit(6)
+      .or(`business_name.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%`)
+      .limit(20) // Show more results
+    
+    // If show_all is true, don't apply any filters (already handled by or clause above)
+    // The show_all parameter is passed but not used here since we want to show all matching businesses
 
     const { data, error } = await query
 
@@ -30,12 +34,12 @@ export async function GET(request: NextRequest) {
 
     const businesses = (data || []).map((b: any) => ({
       id: b.id,
-      name: b.business_name || 'Unnamed Business',
+      name: b.business_name || b.name || 'Unnamed Business',
       slug: b.slug || `business-${b.id}`,
       industry: Array.isArray(b.industry) ? b.industry[0] : (b.industry || null),
-      location: null, // Could be derived from lat/lng with reverse geocoding if needed
-      lat: b.latitude,
-      lng: b.longitude,
+      location: b.location || [b.city, b.state, b.country].filter(Boolean).join(', ') || null,
+      lat: b.latitude || b.lat,
+      lng: b.longitude || b.lng,
     }))
 
     return NextResponse.json({ businesses }, { status: 200 })

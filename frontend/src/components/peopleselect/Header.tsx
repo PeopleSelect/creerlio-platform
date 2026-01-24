@@ -32,9 +32,6 @@ export function Header() {
             <Link href="/peopleselect/for-candidates" className="text-gray-700 hover:text-black transition-colors text-sm font-medium">
               For Candidates
             </Link>
-            <Link href="/peopleselect/about" className="text-gray-700 hover:text-black transition-colors text-sm font-medium">
-              About
-            </Link>
             <Link href="/peopleselect/faq" className="text-gray-700 hover:text-black transition-colors text-sm font-medium">
               FAQ
             </Link>
@@ -81,9 +78,6 @@ export function Header() {
               </Link>
               <Link href="/peopleselect/for-candidates" className="text-gray-700 hover:text-black transition-colors text-sm font-medium">
                 For Candidates
-              </Link>
-              <Link href="/peopleselect/about" className="text-gray-700 hover:text-black transition-colors text-sm font-medium">
-                About
               </Link>
               <Link href="/peopleselect/faq" className="text-gray-700 hover:text-black transition-colors text-sm font-medium">
                 FAQ

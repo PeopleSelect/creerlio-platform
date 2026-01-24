@@ -743,9 +743,36 @@ export default function PortfolioEditor() {
               ) : null}
             </section>
 
-            {introPreviewUrl ? (
-              <section className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
-                <h2 className="text-xl font-semibold mb-4">Introduction Video</h2>
+            <section id="section-intro" className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">Introduction Video</h2>
+                <div className="flex items-center gap-3">
+                  {(introPreviewUrl || typeof portfolio.introVideoId === 'number') && (
+                    <button
+                      type="button"
+                      className="text-sm underline text-slate-300 hover:text-white"
+                      onClick={() => {
+                        setIntroPickId(null)
+                        setIntroPreviewUrl(null)
+                        setPortfolio((prev) => ({ ...prev, introVideoId: null }))
+                        setTimeout(() => {
+                          savePortfolio({ redirect: false, source: 'intro-video-clear' }).catch(() => {})
+                        }, 0)
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-sm underline text-blue-300 hover:text-blue-200"
+                    onClick={openIntroVideoModal}
+                  >
+                    Pick Intro Video
+                  </button>
+                </div>
+              </div>
+              {introPreviewUrl ? (
                 <div className="mx-auto max-w-3xl">
                   <div className="rounded-3xl p-[1px] bg-gradient-to-br from-white/15 via-white/5 to-transparent shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
                     <div className="rounded-3xl overflow-hidden bg-slate-950/60 border border-white/10">
@@ -755,8 +782,12 @@ export default function PortfolioEditor() {
                     </div>
                   </div>
                 </div>
-              </section>
-            ) : null}
+              ) : (
+                <div className="text-slate-400 text-sm">
+                  No intro video selected yet. Use “Pick Intro Video” to choose one from your Talent Bank.
+                </div>
+              )}
+            </section>
 
             {order.map((k) => {
               if (k === 'intro' || k === 'social') return null
@@ -1711,6 +1742,18 @@ export default function PortfolioEditor() {
             })
           }
           setPortfolio((prev) => ({ ...prev, attachments }))
+
+          // If intro video is not set, allow a selected Talent Bank video to populate the intro preview.
+          const hasIntro = typeof (saved as any)?.introVideoId === 'number' || typeof portfolio.introVideoId === 'number'
+          if (!hasIntro) {
+            const firstVideo = selItems.find(
+              (it: any) => it?.file_path && (it?.file_type?.startsWith?.('video') ?? false)
+            )
+            if (firstVideo?.file_path) {
+              const { data: urlData } = await supabase.storage.from('talent-bank').createSignedUrl(firstVideo.file_path, 60 * 30)
+              setIntroPreviewUrl(urlData?.signedUrl ?? null)
+            }
+          }
         }
       }
     } catch (e: any) {
@@ -2513,6 +2556,9 @@ export default function PortfolioEditor() {
     setPortfolio((prev) => ({ ...prev, introVideoId: introPickId }))
     await log('intro video applied', 'P_LAYOUT', { introVideoId: introPickId })
     setIntroModalOpen(false)
+    setTimeout(() => {
+      savePortfolio({ redirect: false, source: 'intro-video' }).catch(() => {})
+    }, 0)
   }
 
   async function applyProjectImport() {
@@ -3425,6 +3471,16 @@ export default function PortfolioEditor() {
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Basic
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('section-intro')
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
+            >
+              Intro Video
             </button>
             <button
               type="button"
@@ -5507,6 +5563,14 @@ export default function PortfolioEditor() {
                 {importError}
               </div>
             )}
+
+            {renderUploadUI({
+              acceptFileTypes: 'video/*',
+              acceptFileTypesValidator: (f) => f.type.startsWith('video/'),
+              acceptContentTypesValidator: (ct) => ct.startsWith('video/'),
+              itemType: 'video',
+              onSuccess: openIntroVideoModal,
+            })}
 
             <div className="grid md:grid-cols-2 gap-4">
               <div className="border rounded max-h-[55vh] overflow-auto">

@@ -15,7 +15,16 @@ interface User {
   is_active: boolean
 }
 
-type TabType = 'overview' | 'vacancies' | 'profile' | 'portfolio' | 'applications' | 'connections' | 'service_connections'
+type TabType = 'overview' | 'vacancies' | 'profile' | 'portfolio' | 'applications' | 'connections' | 'service_connections' | 'previous_connections' | 'calendar'
+
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs)
+    return () => clearTimeout(t)
+  }, [value, delayMs])
+  return debounced
+}
 
 export default function BusinessDashboard() {
   const router = useRouter()
@@ -28,6 +37,29 @@ export default function BusinessDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const isServiceConnections = activeTab === 'service_connections'
   const [userType, setUserType] = useState<string>('business')
+  const [profileEditOpen, setProfileEditOpen] = useState(false)
+  const [profileEditSaving, setProfileEditSaving] = useState(false)
+  const [profileEditError, setProfileEditError] = useState<string | null>(null)
+  const [profileEditSuccess, setProfileEditSuccess] = useState<string | null>(null)
+  const [profileEditDraft, setProfileEditDraft] = useState<{
+    email: string
+    username: string
+    businessName: string
+    location: string
+    city: string
+    state: string
+    country: string
+  }>({ email: '', username: '', businessName: '', location: '', city: '', state: '', country: '' })
+
+  // Location autocomplete state
+  type LocSuggestion = { id: string; label: string; lng: number; lat: number; context?: any[] }
+  const [locQuery, setLocQuery] = useState('')
+  const [locBusy, setLocBusy] = useState(false)
+  const [locError, setLocError] = useState<string | null>(null)
+  const [locOpen, setLocOpen] = useState(false)
+  const [locSuggestions, setLocSuggestions] = useState<LocSuggestion[]>([])
+  const [locActiveIdx, setLocActiveIdx] = useState(0)
+  const locAbort = useRef<AbortController | null>(null)
 
   // Vacancies (Jobs) state
   const [vacanciesLoading, setVacanciesLoading] = useState(false)
@@ -92,6 +124,251 @@ export default function BusinessDashboard() {
     const msg = String(err?.message ?? '')
     const code = String(err?.code ?? '')
     return code === 'PGRST204' || /Could not find the .* column/i.test(msg)
+  }
+
+  useEffect(() => {
+    if (!user) return
+    const businessName =
+      businessProfile?.business_name ||
+      businessProfile?.name ||
+      user.full_name ||
+      ''
+    const businessEmail = businessProfile?.email || user.email || ''
+    setProfileEditDraft({
+      email: businessEmail,
+      username: user.username || '',
+      businessName: businessName || '',
+      location: businessProfile?.location || '',
+      city: businessProfile?.city || '',
+      state: businessProfile?.state || '',
+      country: businessProfile?.country || '',
+    })
+    // Initialize locQuery with the location value
+    setLocQuery(businessProfile?.location || '')
+  }, [user, businessProfile])
+
+  // Debounced location query for autocomplete
+  const locDebounced = useDebouncedValue(locQuery, 300)
+
+  // Location autocomplete search effect
+  useEffect(() => {
+    if (!locDebounced.trim() || !profileEditOpen) {
+      setLocSuggestions([])
+      setLocOpen(false)
+      return
+    }
+
+    if (locAbort.current) {
+      locAbort.current.abort()
+    }
+    const ac = new AbortController()
+    locAbort.current = ac
+
+    setLocBusy(true)
+    setLocError(null)
+
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoiY3JlZXJsaW8iLCJhIjoiY21pY3IxZHljMXFwNTJzb2FydzR4b3F1YSJ9.Is8-GyfEdqwKKEo2cGO65g'
+    if (!token) {
+      setLocError('Mapbox token not configured')
+      setLocBusy(false)
+      return
+    }
+
+    ;(async () => {
+      try {
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locDebounced)}.json?access_token=${token}&limit=6&types=place,locality,neighborhood,postcode,region&country=AU`
+        const res = await fetch(url, { signal: ac.signal })
+        if (ac.signal.aborted) return
+        const json: any = await res.json()
+        const feats = Array.isArray(json?.features) ? json.features : []
+        const suggestions: LocSuggestion[] = feats.map((f: any) => ({
+          id: String(f?.id || ''),
+          label: String(f?.place_name || '').trim(),
+          lng: Array.isArray(f?.center) ? f.center[0] : 0,
+          lat: Array.isArray(f?.center) ? f.center[1] : 0,
+          context: f?.context || []
+        }))
+        if (ac.signal.aborted) return
+        setLocSuggestions(suggestions)
+        setLocOpen(true)
+        setLocActiveIdx(0)
+      } catch (err: any) {
+        if (err.name === 'AbortError') return
+        console.error('Location search error:', err)
+        setLocError(err.message || 'Location search failed')
+      } finally {
+        if (!ac.signal.aborted) setLocBusy(false)
+      }
+    })()
+  }, [locDebounced, profileEditOpen])
+
+  // Parse location suggestion to extract city, state, country
+  const parseLocationSuggestion = (suggestion: LocSuggestion): { city: string; state: string; country: string } => {
+    const context = suggestion.context || []
+    const label = suggestion.label || ''
+    
+    // Try to extract from context array (Mapbox provides structured data)
+    let city = ''
+    let state = ''
+    let country = ''
+    
+    for (const ctx of context) {
+      const id = String(ctx?.id || '')
+      if (id.includes('place')) {
+        city = String(ctx?.text || '')
+      } else if (id.includes('region')) {
+        state = String(ctx?.text || '')
+      } else if (id.includes('country')) {
+        country = String(ctx?.text || '')
+      }
+    }
+    
+    // Fallback: try to parse from label (e.g., "Sydney, New South Wales, Australia")
+    if (!city && !state && !country && label) {
+      const parts = label.split(',').map(p => p.trim())
+      if (parts.length >= 3) {
+        city = parts[0]
+        state = parts[1]
+        country = parts[2]
+      } else if (parts.length === 2) {
+        city = parts[0]
+        state = parts[1]
+        country = 'Australia' // Default to Australia
+      } else if (parts.length === 1) {
+        city = parts[0]
+      }
+    }
+    
+    return { city, state, country: country || 'Australia' }
+  }
+
+  // Handle location selection
+  const handleLocationSelect = (suggestion: LocSuggestion) => {
+    const parsed = parseLocationSuggestion(suggestion)
+    setLocQuery(suggestion.label)
+    setProfileEditDraft((prev) => ({
+      ...prev,
+      location: suggestion.label,
+      city: parsed.city || prev.city,
+      state: parsed.state || prev.state,
+      country: parsed.country || prev.country || 'Australia',
+    }))
+    setLocOpen(false)
+  }
+
+  async function saveProfileBasics() {
+    if (!user?.id) return
+    setProfileEditSaving(true)
+    setProfileEditError(null)
+    setProfileEditSuccess(null)
+    try {
+      const nextEmail = profileEditDraft.email.trim()
+      const nextUsername = profileEditDraft.username.trim()
+      const nextBusinessName = profileEditDraft.businessName.trim()
+      const nextLocation = profileEditDraft.location.trim()
+      const nextCity = profileEditDraft.city.trim()
+      const nextState = profileEditDraft.state.trim()
+      const nextCountry = profileEditDraft.country.trim()
+
+      const emailChanged = nextEmail !== user.email
+      if (!nextEmail) {
+        setProfileEditError('Email is required.')
+        return
+      }
+      if (!nextUsername) {
+        setProfileEditError('Username is required.')
+        return
+      }
+
+      if (nextEmail !== user.email || nextUsername !== user.username) {
+        const authRes = await supabase.auth.updateUser({
+          email: nextEmail,
+          data: { username: nextUsername },
+        })
+        if (authRes.error) {
+          // Handle rate limit error gracefully - still save to business profile
+          const isRateLimitError = authRes.error.message?.toLowerCase().includes('rate limit') || 
+                                   authRes.error.message?.toLowerCase().includes('too many')
+          if (isRateLimitError) {
+            // Still proceed with saving other fields, but show warning about email
+            setProfileEditError('Email change rate limit reached. Your profile email has been saved, but the login email change is temporarily blocked. Please wait a few minutes before trying to change your login email again.')
+          } else {
+            // For other errors, show the error but still try to save business profile
+            setProfileEditError(authRes.error.message || 'Failed to update account email. Your profile has been saved with the new email.')
+          }
+          // Continue to save business profile even if auth update failed
+        } else {
+          // Auth update succeeded, refresh user
+          const { data: { user: refreshedUser } } = await supabase.auth.getUser()
+          if (refreshedUser) {
+            setUser((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    email: refreshedUser.email || nextEmail,
+                    username: (refreshedUser.user_metadata as any)?.username || nextUsername,
+                  }
+                : prev
+            )
+          }
+        }
+      }
+
+      // Always update business profile (even if business name is empty, we still want to save email/location)
+      const profileRes = await supabase
+        .from('business_profiles')
+        .upsert(
+          {
+            user_id: user.id,
+            business_name: nextBusinessName || null,
+            name: nextBusinessName || null,
+            email: nextEmail || null,
+            location: nextLocation || null,
+            city: nextCity || null,
+            state: nextState || null,
+            country: nextCountry || null,
+          },
+          { onConflict: 'user_id' }
+        )
+      if (profileRes.error) {
+        setProfileEditError(profileRes.error.message || 'Failed to update business profile.')
+        return
+      }
+
+      setUser((prev) =>
+        prev
+          ? { ...prev, email: nextEmail, username: nextUsername, full_name: nextBusinessName || prev.full_name }
+          : prev
+      )
+      setBusinessProfile((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              business_name: nextBusinessName || prev.business_name,
+              name: nextBusinessName || prev.name,
+              email: nextEmail || prev.email,
+              location: nextLocation || prev.location,
+              city: nextCity || prev.city,
+              state: nextState || prev.state,
+              country: nextCountry || prev.country,
+            }
+          : prev
+      )
+      setProfileEditOpen(false)
+      const isRateLimitError = profileEditError?.toLowerCase().includes('rate limit')
+      if (isRateLimitError) {
+        // Keep the rate limit error message visible, but also show that profile was saved
+        setProfileEditSuccess('Profile saved successfully. Note: Login email change is temporarily blocked due to rate limit.')
+      } else if (emailChanged) {
+        setProfileEditSuccess('Email updated. Please confirm the change via the new email address to use it for login.')
+        setProfileEditError(null) // Clear any errors if everything succeeded
+      } else {
+        setProfileEditSuccess('Profile updated successfully.')
+        setProfileEditError(null) // Clear any errors if everything succeeded
+      }
+    } finally {
+      setProfileEditSaving(false)
+    }
   }
 
   async function loadVacancies(opts?: { force?: boolean }) {
@@ -233,7 +510,11 @@ export default function BusinessDashboard() {
         // Get fresh user data to ensure we have latest metadata
         const { data: { user: freshUser } } = await supabase.auth.getUser()
         const userMetadata = (freshUser || u).user_metadata || {}
+        const usernameFromMetadata = userMetadata.username || null
         const registeredAsTalentFromMetadata = userMetadata.registration_type === 'talent' || userMetadata.registered_as === 'talent'
+        if (!cancelled && usernameFromMetadata) {
+          setUser((prev) => (prev ? { ...prev, username: usernameFromMetadata } : prev))
+        }
         
         // Extract first name from user metadata (stored during registration)
         const firstNameFromMetadata = userMetadata.first_name || userMetadata.firstName || null
@@ -975,7 +1256,12 @@ export default function BusinessDashboard() {
         await Promise.all([loadConnections(), loadReconnectRequests()])
       } else {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || errorData.message || 'Failed to accept reconnection')
+        console.error('[Accept Reconnect] API error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        })
+        throw new Error(errorData.error || errorData.detail || errorData.message || 'Failed to accept reconnection')
       }
     } catch (err: any) {
       console.error('Error accepting reconnection:', err)
@@ -1445,7 +1731,7 @@ export default function BusinessDashboard() {
         {/* Tabs */}
         <div className="mb-8 border-b border-gray-200">
           <div className="flex items-center gap-2">
-            {(['overview', 'vacancies', 'portfolio', 'applications', 'connections', 'service_connections'] as TabType[]).map((tab) => (
+            {(['overview', 'vacancies', 'portfolio', 'applications', 'connections', 'service_connections', 'previous_connections', 'calendar'] as TabType[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -1459,11 +1745,15 @@ export default function BusinessDashboard() {
                   ? 'Talent Connections'
                   : tab === 'service_connections'
                     ? 'Business Connections'
-                    : tab === 'portfolio'
-                      ? 'View Profile'
-                      : tab === 'vacancies'
-                        ? 'Vacancies'
-                        : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    : tab === 'previous_connections'
+                      ? 'Previous Connections'
+                      : tab === 'portfolio'
+                        ? 'Business Profile'
+                        : tab === 'vacancies'
+                          ? 'Vacancies'
+                          : tab === 'calendar'
+                            ? 'Calendar'
+                            : tab.charAt(0).toUpperCase() + tab.slice(1)}
                 {activeTab === tab && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>
                 )}
@@ -1480,12 +1770,6 @@ export default function BusinessDashboard() {
               className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
             >
               Business Map ↗
-            </Link>
-            <Link
-              href="/dashboard/business/edit"
-              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
-            >
-              Profile Templates ↗
             </Link>
           </div>
         </div>
@@ -1573,10 +1857,20 @@ export default function BusinessDashboard() {
                 {user && (
                   <div className="space-y-2">
                     <p className="text-gray-700"><span className="text-gray-600">Name:</span> {businessProfile?.business_name || businessProfile?.name || user.full_name || user.username}</p>
-                    <p className="text-gray-700"><span className="text-gray-600">Email:</span> {user.email}</p>
+                    <p className="text-gray-700"><span className="text-gray-600">Email:</span> {businessProfile?.email || user.email}</p>
+                    <p className="text-gray-700"><span className="text-gray-600">Username:</span> {user.username}</p>
                     {businessProfile?.industry && (
                       <p className="text-gray-700"><span className="text-gray-600">Industry:</span> {businessProfile.industry}</p>
                     )}
+                    <p className="text-gray-700"><span className="text-gray-600">User Type:</span> {user.user_type ? user.user_type.charAt(0).toUpperCase() + user.user_type.slice(1) : 'Business'}</p>
+                    {businessProfile?.location ? (
+                      <p className="text-gray-700"><span className="text-gray-600">Location:</span> {businessProfile.location}</p>
+                    ) : (businessProfile?.city || businessProfile?.state || businessProfile?.country) ? (
+                      <p className="text-gray-700">
+                        <span className="text-gray-600">Location:</span>{' '}
+                        {[businessProfile?.city, businessProfile?.state, businessProfile?.country].filter(Boolean).join(', ') || 'Not set'}
+                      </p>
+                    ) : null}
                     <div className="pt-2 border-t border-gray-200">
                       <div className="flex items-center justify-between mb-1">
                         <p className="text-gray-600 text-sm">Profile Completion</p>
@@ -1596,90 +1890,20 @@ export default function BusinessDashboard() {
                           Complete your profile to attract more talent
                         </p>
                       )}
-                      <div className="flex gap-3 mt-4">
+                      <div className="mt-4">
                         <button
                           type="button"
                           onClick={() => setActiveTab('profile')}
-                          className="flex-1 px-4 py-2 bg-[#20C997] hover:bg-[#1DB886] text-white text-sm font-medium rounded-lg transition-colors"
+                          className="px-4 py-2 bg-[#20C997] hover:bg-[#1DB886] text-white text-sm font-medium rounded-lg transition-colors"
                         >
                           Edit Profile
                         </button>
-                        <Link
-                          href={`/dashboard/business/view`}
-                          className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-medium rounded-lg transition-colors text-center"
-                        >
-                          View Profile
-                        </Link>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
             </div>
-
-            {/* Business Profile Section */}
-            {!hasBuiltProfile ? (
-              <div className="dashboard-card rounded-xl p-6 border-2 border-[#20C997] bg-blue-50">
-                <div className="flex items-start justify-between gap-6">
-                  <div className="flex-1">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Build Your Business Profile</h2>
-                    <p className="text-gray-700 mb-4">
-                      Create a professional profile to showcase your business, attract talent, and post job vacancies. 
-                      Your profile will be visible to talent searching for opportunities.
-                    </p>
-                    <p className="text-gray-600 text-sm mb-6">
-                      Add your business information, upload images, create an introduction video, and customize your profile layout.
-                    </p>
-                    <Link
-                      href="/dashboard/business/edit"
-                      className="inline-block px-8 py-4 bg-[#20C997] text-white rounded-lg hover:bg-[#1DB886] transition-colors font-semibold text-lg"
-                    >
-                      Build Your Profile →
-                    </Link>
-                  </div>
-                  <div className="text-6xl">🏢</div>
-                </div>
-              </div>
-            ) : businessProfile ? (
-              <div className="dashboard-card rounded-xl p-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Business Profile</h2>
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Industry</h3>
-                    <p className="text-gray-700">{businessProfile.industry || 'Not set'}</p>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Location</h3>
-                    <p className="text-gray-700">{businessProfile.location || businessProfile.city || 'Not set'}</p>
-                  </div>
-                </div>
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <Link
-                    href="/dashboard/business/edit"
-                    className="inline-block px-6 py-3 bg-[#20C997] text-white rounded-lg hover:bg-[#1DB886] transition-colors mr-3"
-                  >
-                    Edit Profile
-                  </Link>
-                  <Link
-                    href="/dashboard/business/view"
-                    className="inline-block px-6 py-3 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    View Profile
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <div className="dashboard-card rounded-xl p-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Create Your Business Profile</h2>
-                <p className="text-gray-600 mb-4">Complete your profile to start attracting talent</p>
-                <Link
-                  href="/dashboard/business/edit"
-                  className="inline-block px-6 py-3 bg-[#20C997] text-white rounded-lg hover:bg-[#1DB886] transition-colors"
-                >
-                  Create Profile
-                </Link>
-              </div>
-            )}
           </>
         )}
 
@@ -1691,30 +1915,176 @@ export default function BusinessDashboard() {
                 <div className="grid md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-2">Email</label>
-                    <p className="text-gray-900">{user.email}</p>
+                    {profileEditOpen ? (
+                      <input
+                        type="email"
+                        value={profileEditDraft.email}
+                        onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, email: e.target.value }))}
+                        className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                      />
+                    ) : (
+                      <p className="text-gray-900">{businessProfile?.email || user.email}</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-2">Username</label>
-                    <p className="text-gray-900">{user.username}</p>
+                    {profileEditOpen ? (
+                      <input
+                        type="text"
+                        value={profileEditDraft.username}
+                        onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, username: e.target.value }))}
+                        className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                      />
+                    ) : (
+                      <p className="text-gray-900">{user.username}</p>
+                    )}
                   </div>
-                  {user.full_name && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-2">Business Name</label>
-                      <p className="text-gray-900">{user.full_name}</p>
-                    </div>
-                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">Business Name</label>
+                    {profileEditOpen ? (
+                      <input
+                        type="text"
+                        value={profileEditDraft.businessName}
+                        onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, businessName: e.target.value }))}
+                        className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                      />
+                    ) : (
+                      <p className="text-gray-900">{user.full_name || businessProfile?.business_name || businessProfile?.name || '—'}</p>
+                    )}
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-2">User Type</label>
                     <p className="text-gray-900 capitalize">{user.user_type}</p>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">Location</label>
+                    {profileEditOpen ? (
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={locQuery}
+                          onChange={(e) => {
+                            setLocQuery(e.target.value)
+                            setProfileEditDraft((prev) => ({ ...prev, location: e.target.value }))
+                          }}
+                          onFocus={() => locSuggestions.length > 0 && setLocOpen(true)}
+                          onBlur={() => {
+                            // Delay closing to allow click on suggestion
+                            setTimeout(() => setLocOpen(false), 200)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault()
+                              setLocActiveIdx((prev) => Math.min(prev + 1, locSuggestions.length - 1))
+                              setLocOpen(true)
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault()
+                              setLocActiveIdx((prev) => Math.max(prev - 1, 0))
+                            } else if (e.key === 'Enter' && locSuggestions[locActiveIdx]) {
+                              e.preventDefault()
+                              handleLocationSelect(locSuggestions[locActiveIdx])
+                            } else if (e.key === 'Escape') {
+                              setLocOpen(false)
+                            }
+                          }}
+                          placeholder="Start typing to search locations..."
+                          className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                        />
+                        {locOpen && locSuggestions.length > 0 && (
+                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+                            {locSuggestions.map((s, idx) => (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => handleLocationSelect(s)}
+                                className={`w-full text-left px-4 py-2 hover:bg-gray-100 transition-colors ${
+                                  idx === locActiveIdx ? 'bg-blue-50' : ''
+                                }`}
+                                style={{ color: '#000' }}
+                              >
+                                {s.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {locBusy && (
+                          <div className="absolute right-2 top-2 text-gray-400 text-sm">Searching...</div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-gray-900">{businessProfile?.location || '—'}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">City</label>
+                    {profileEditOpen ? (
+                      <input
+                        type="text"
+                        value={profileEditDraft.city}
+                        onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, city: e.target.value }))}
+                        className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                      />
+                    ) : (
+                      <p className="text-gray-900">{businessProfile?.city || '—'}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">State</label>
+                    {profileEditOpen ? (
+                      <input
+                        type="text"
+                        value={profileEditDraft.state}
+                        onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, state: e.target.value }))}
+                        className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                      />
+                    ) : (
+                      <p className="text-gray-900">{businessProfile?.state || '—'}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">Country</label>
+                    {profileEditOpen ? (
+                      <input
+                        type="text"
+                        value={profileEditDraft.country}
+                        onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, country: e.target.value }))}
+                        className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                      />
+                    ) : (
+                      <p className="text-gray-900">{businessProfile?.country || '—'}</p>
+                    )}
+                  </div>
                 </div>
+                {profileEditError && <div className="text-sm text-red-600">{profileEditError}</div>}
+                {profileEditSuccess && <div className="text-sm text-green-600">{profileEditSuccess}</div>}
                 <div className="pt-4 border-t border-gray-200">
-                  <Link
-                    href="/dashboard/business/edit"
-                    className="inline-block px-6 py-3 bg-[#20C997] text-white rounded-lg hover:bg-[#1DB886] transition-colors"
-                  >
-                    Edit Profile
-                  </Link>
+                  {profileEditOpen ? (
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={saveProfileBasics}
+                        disabled={profileEditSaving}
+                        className="px-6 py-3 bg-[#20C997] text-white rounded-lg hover:bg-[#1DB886] transition-colors disabled:opacity-60"
+                      >
+                        {profileEditSaving ? 'Saving…' : 'Save Changes'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProfileEditOpen(false)}
+                        className="px-6 py-3 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setProfileEditOpen(true)}
+                      className="px-6 py-3 bg-[#20C997] text-white rounded-lg hover:bg-[#1DB886] transition-colors"
+                    >
+                      Edit Profile
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -2398,6 +2768,15 @@ export default function BusinessDashboard() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
+                                router.push(`/dashboard/business/calendar?schedule_meeting=true&talent_id=${r.talent_id}&connection_id=${r.id}`)
+                              }}
+                              className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg font-semibold transition-colors"
+                            >
+                              Meeting
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
                                 // Include the connection request ID so we can load shared sections
                                 router.push(`/portfolio/view?talent_id=${r.talent_id}&request_id=${r.id}&shared=true`)
                               }}
@@ -2444,80 +2823,6 @@ export default function BusinessDashboard() {
                 )}
               </div>
 
-              {/* Previous Connections - Talents who withdrew their connection */}
-              {connWithdrawn.length > 0 && (
-                <div className="border border-gray-800 rounded-lg p-4 md:col-span-2 bg-gradient-to-br from-slate-900/50 to-amber-900/10">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                    <h3 className="text-white font-semibold">Previous Connections</h3>
-                    <span className="text-amber-400/80 text-xs ml-2">({connWithdrawn.length} withdrawn)</span>
-                  </div>
-                  <p className="text-gray-400 text-xs mb-4">
-                    These talents previously connected with you but the connection has ended. You can request to reconnect by sending them a message.
-                  </p>
-                  <div className="space-y-3">
-                    {connWithdrawn.map((r) => {
-                      const withdrawnAt = r.responded_at ? new Date(r.responded_at) : new Date(r.created_at)
-
-                      return (
-                        <div
-                          key={r.id}
-                          className="border border-amber-800/30 bg-amber-900/10 rounded-lg p-3 hover:border-amber-600/50 transition-colors"
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1">
-                              <p className="text-gray-200 text-sm font-medium">
-                                {r.talent_name && r.talent_name.trim() ? (
-                                  r.talent_name
-                                ) : (
-                                  <span className="text-yellow-400 italic animate-pulse">Loading name...</span>
-                                )}
-                              </p>
-                              <p className="text-gray-500 text-xs mt-1">
-                                Originally connected {r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}
-                              </p>
-                              <p className="text-amber-400/70 text-xs mt-0.5">
-                                Connection ended {withdrawnAt.toLocaleDateString()}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  const businessName = businessProfile?.business_name || businessProfile?.name || 'Our business'
-                                  setReconnectModal({
-                                    open: true,
-                                    connection: r,
-                                    message: `Hi ${r.talent_name || 'there'},\n\n${businessName} would like to reconnect with you. We may have new opportunities that could be a great fit for your skills and experience.\n\nWould you be interested in reconnecting?`
-                                  })
-                                }}
-                                disabled={sendingOpportunity === r.id}
-                                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded-lg font-semibold transition-colors disabled:opacity-60"
-                              >
-                                Request Reconnect
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setConnectionSummaryModal({
-                                    open: true,
-                                    connection: r
-                                  })
-                                }}
-                                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg font-semibold transition-colors"
-                              >
-                                View Summary
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Messaging UI - shown when a talent is selected */}
@@ -2612,6 +2917,85 @@ export default function BusinessDashboard() {
               </div>
             )}
 
+          </div>
+        )}
+
+        {activeTab === 'previous_connections' && (
+          <div className="dashboard-card rounded-xl p-6">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Previous Connections</h2>
+                <p className="text-gray-600 text-sm">
+                  These talents previously connected with you but the connection has ended. You can request to reconnect by sending them a message.
+                </p>
+              </div>
+            </div>
+
+            {connWithdrawn.length === 0 ? (
+              <p className="text-gray-600">No previous connections.</p>
+            ) : (
+              <div className="space-y-3">
+                {connWithdrawn.map((r) => {
+                  const withdrawnAt = r.responded_at ? new Date(r.responded_at) : new Date(r.created_at)
+
+                  return (
+                    <div
+                      key={r.id}
+                      className="border border-amber-200 bg-amber-50 rounded-lg p-3 hover:border-amber-300 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <p className="text-gray-900 text-sm font-medium">
+                            {r.talent_name && r.talent_name.trim() ? (
+                              r.talent_name
+                            ) : (
+                              <span className="text-amber-600 italic animate-pulse">Loading name...</span>
+                            )}
+                          </p>
+                          <p className="text-gray-600 text-xs mt-1">
+                            Originally connected {r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}
+                          </p>
+                          <p className="text-amber-600 text-xs mt-0.5">
+                            Connection ended {withdrawnAt.toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const businessName = businessProfile?.business_name || businessProfile?.name || 'Our business'
+                              setReconnectModal({
+                                open: true,
+                                connection: r,
+                                message: `Hi ${r.talent_name || 'there'},\n\n${businessName} would like to reconnect with you. We may have new opportunities that could be a great fit for your skills and experience.\n\nWould you be interested in reconnecting?`
+                              })
+                            }}
+                            disabled={sendingOpportunity === r.id}
+                            className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded-lg font-semibold transition-colors disabled:opacity-60"
+                          >
+                            Request Reconnect
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setConnectionSummaryModal({
+                                open: true,
+                                connection: r
+                              })
+                            }}
+                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg font-semibold transition-colors"
+                          >
+                            View Summary
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -2996,6 +3380,29 @@ export default function BusinessDashboard() {
                 Request Reconnect
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Calendar Tab */}
+      {activeTab === 'calendar' && (
+        <div className="dashboard-card rounded-xl p-6">
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Calendar</h2>
+              <p className="text-gray-600 text-sm mt-1">
+                View and manage your meetings, interviews, and interactions with talent.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/business/calendar"
+              className="px-4 py-2 bg-[#20C997] hover:bg-[#1ab885] text-white rounded-lg font-semibold transition-colors"
+            >
+              Open Full Calendar →
+            </Link>
+          </div>
+          <div className="text-center py-12 text-gray-600">
+            <p>Click "Open Full Calendar" to view your complete calendar with all scheduled events.</p>
           </div>
         </div>
       )}

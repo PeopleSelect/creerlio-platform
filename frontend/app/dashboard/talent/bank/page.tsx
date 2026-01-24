@@ -1932,13 +1932,21 @@ export default function TalentBankPage() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
-      <header className="px-6 py-4 border-b border-slate-800 flex justify-between">
+      <header className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
         <Link href="/dashboard/talent" className="font-bold text-xl">
           Talent Bank
         </Link>
-        <button onClick={() => router.push('/dashboard/talent')}>
-          Back
-        </button>
+        <div className="flex items-center gap-4">
+          <Link
+            href="/resume/upload"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-sm font-medium transition-colors"
+          >
+            Upload Resume
+          </Link>
+          <button onClick={() => router.push('/dashboard/talent')} className="px-4 py-2 text-sm">
+            Back
+          </button>
+        </div>
       </header>
 
       <main className="p-6 space-y-6">

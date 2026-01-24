@@ -77,12 +77,22 @@ ${text}`
 
       let errorMessage = scrubbedMessage
       if (response.status === 401) {
-        errorMessage = 'Authentication failed. Please check your OpenAI API key.'
+        errorMessage = 'Authentication failed. Please check your OpenAI API key. The key may be invalid, expired, or you may need to restart the Next.js dev server for the environment variable to load.'
       } else if (response.status === 429) {
         errorMessage = 'Rate limit exceeded. Please try again later.'
       } else if (response.status === 402) {
         errorMessage = 'Payment required. Please check your OpenAI account billing.'
       }
+      
+      // Log more details for debugging (without exposing the key)
+      console.error('[AI Polish] OpenAI API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorType: errorData.error?.type,
+        errorCode: errorData.error?.code,
+        hasApiKey: !!openaiApiKey,
+        apiKeyPrefix: openaiApiKey ? openaiApiKey.substring(0, 7) + '...' : 'none'
+      })
 
       return NextResponse.json(
         { success: false, error: errorMessage },

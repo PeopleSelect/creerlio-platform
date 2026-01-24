@@ -123,6 +123,7 @@ function TalentMapPageInner() {
   const [activeStyle, setActiveStyle] = useState<MapStyle>('dark')
   const [filtersCollapsed, setFiltersCollapsed] = useState(false)
   const [panelsCollapsed, setPanelsCollapsed] = useState(false)
+  const [resultsCollapsed, setResultsCollapsed] = useState(false)
   const [mapResizeTrigger, setMapResizeTrigger] = useState(0)
 
   const [locQuery, setLocQuery] = useState('')
@@ -295,7 +296,15 @@ function TalentMapPageInner() {
     } catch {
       // ignore
     }
-  }, [radiusKm])
+    // Update map zoom when radius changes if we have a search center
+    if (searchCenter) {
+      setFlyTo({ 
+        lng: searchCenter.lng, 
+        lat: searchCenter.lat, 
+        zoom: zoomForRadiusKm(radiusKm) 
+      })
+    }
+  }, [radiusKm, searchCenter])
 
   async function fetchRouteSuggestions(q: string) {
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
@@ -345,25 +354,56 @@ function TalentMapPageInner() {
   }, [routeQueryDebounced, routeSuggestionsOpen])
 
   async function fetchLocSuggestions(q: string) {
+    console.log('[LocationSuggestions] fetchLocSuggestions CALLED with:', {
+      q,
+      showAllBusinesses,
+      locOpen,
+      currentSuggestionsCount: locSuggestions.length
+    })
+    
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
     const qq = q.trim()
-    if (!qq || qq.length < 2) {
+    // Allow suggestions with just 1 character for better UX
+    if (!qq || qq.length < 1) {
+      console.log('[LocationSuggestions] Query too short, clearing suggestions')
       setLocSuggestions([])
       setLocActiveIdx(0)
       return
     }
-    if (!token) return
+    if (!token) {
+      console.warn('[LocationSuggestions] Mapbox token missing')
+      return
+    }
     locAbort.current?.abort()
     const ac = new AbortController()
     locAbort.current = ac
+    
+    console.log('[LocationSuggestions] Making Mapbox API call for:', qq)
     try {
       const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(qq)}.json`)
       u.searchParams.set('access_token', token)
       u.searchParams.set('limit', '6')
       u.searchParams.set('types', 'place,locality,neighborhood,postcode,region')
       u.searchParams.set('country', 'AU')
+      
+      console.log('[LocationSuggestions] Fetching from:', u.toString().replace(token, 'TOKEN_HIDDEN'))
       const res = await fetch(u.toString(), { signal: ac.signal })
-      const json: any = await res.json().catch(() => null)
+      
+      if (!res.ok) {
+        console.error('[LocationSuggestions] API response not OK:', res.status, res.statusText)
+        throw new Error(`API error: ${res.status}`)
+      }
+      
+      const json: any = await res.json().catch((parseErr) => {
+        console.error('[LocationSuggestions] JSON parse error:', parseErr)
+        return null
+      })
+      
+      console.log('[LocationSuggestions] API response received:', {
+        hasJson: !!json,
+        featuresCount: Array.isArray(json?.features) ? json.features.length : 0
+      })
+      
       const feats = Array.isArray(json?.features) ? json.features : []
       const next: LocSuggestion[] = feats
         .map((f: any) => {
@@ -377,18 +417,51 @@ function TalentMapPageInner() {
         })
         .filter(Boolean)
         .slice(0, 6) as any
+      
+      console.log('[LocationSuggestions] Fetched suggestions:', {
+        query: qq,
+        count: next.length,
+        showAllBusinesses,
+        locOpen,
+        suggestions: next.map(s => s.label)
+      })
+      
+      // Always set suggestions and open dropdown if we have results
+      // This must happen regardless of showAllBusinesses state
+      console.log('[LocationSuggestions] Setting suggestions state with', next.length, 'items')
       setLocSuggestions(next)
       setLocActiveIdx(0)
-    } catch {
-      // silent fail (UX rule)
-      setLocSuggestions([])
-      setLocActiveIdx(0)
+      
+      // CRITICAL: Always open dropdown when we have suggestions
+      // This ensures it works when showAllBusinesses is false
+      if (next.length > 0) {
+        console.log('[LocationSuggestions] Opening dropdown - we have', next.length, 'suggestions')
+        setLocOpen(true)
+      } else {
+        console.log('[LocationSuggestions] No suggestions found for query:', qq)
+      }
+    } catch (err: any) {
+      // Log error for debugging but don't show to user
+      console.error('[LocationSuggestions] Error fetching suggestions:', {
+        error: err,
+        name: err?.name,
+        message: err?.message,
+        showAllBusinesses
+      })
+      // Only clear if it's not an abort error (user is still typing)
+      if (err?.name !== 'AbortError') {
+        console.log('[LocationSuggestions] Clearing suggestions due to error (not abort)')
+        setLocSuggestions([])
+        setLocActiveIdx(0)
+      } else {
+        console.log('[LocationSuggestions] Ignoring abort error (user still typing)')
+      }
     }
   }
 
   async function fetchBizSuggestions(q: string) {
     const qq = q.trim()
-    if (!qq || qq.length < 2) {
+    if (!qq || qq.length < 1) {
       setBizSuggestions([])
       setBizActiveIdx(0)
       return
@@ -416,8 +489,8 @@ function TalentMapPageInner() {
           lat: typeof r?.lat === 'number' ? r.lat : r?.lat == null ? null : Number(r.lat),
           lng: typeof r?.lng === 'number' ? r.lng : r?.lng == null ? null : Number(r.lng),
         }))
-        .filter((b) => b.id && b.slug)
-        .slice(0, 6)
+        .filter((b) => b.id && b.name)
+        .slice(0, 20) // Show more business suggestions
       setBizSuggestions(next)
       setBizActiveIdx(0)
     } catch {
@@ -427,10 +500,68 @@ function TalentMapPageInner() {
   }
 
   useEffect(() => {
-    if (!locOpen) return
-    fetchLocSuggestions(locDebounced).catch(() => {})
+    // Fetch location suggestions whenever there's input, regardless of showAllBusinesses state
+    // This ensures autocomplete works even when "Show all businesses" is unchecked
+    const trimmed = locDebounced.trim()
+    console.log('[LocationSuggestions] useEffect triggered:', {
+      locDebounced: trimmed,
+      locQuery,
+      showAllBusinesses,
+      locOpen,
+      suggestionsCount: locSuggestions.length
+    })
+    
+    if (trimmed.length > 0) {
+      // Always open dropdown when fetching suggestions - this is critical
+      setLocOpen(true)
+      console.log('[LocationSuggestions] Calling fetchLocSuggestions with:', trimmed)
+      fetchLocSuggestions(locDebounced).catch((err) => {
+        console.error('[LocationSuggestions] Error in fetchLocSuggestions:', err)
+      })
+    } else {
+      // Only clear suggestions if debounced input is empty AND current input is also empty
+      // This prevents clearing while user is still typing
+      if (locQuery.trim().length === 0) {
+        console.log('[LocationSuggestions] Clearing suggestions - both debounced and current input are empty')
+        setLocSuggestions([])
+        setLocOpen(false)
+      } else {
+        console.log('[LocationSuggestions] Keeping suggestions - user is still typing')
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locDebounced, locOpen])
+  }, [locDebounced])
+
+  // CRITICAL FIX: Force dropdown open when we have suggestions and input
+  // This ensures it works even when showAllBusinesses is false or other state interferes
+  useEffect(() => {
+    const hasSuggestions = locSuggestions.length > 0
+    const hasInput = locQuery.trim().length > 0
+    const shouldBeOpen = hasSuggestions && hasInput
+    
+    console.log('[LocationSuggestions] Force-open useEffect check:', {
+      hasSuggestions,
+      hasInput,
+      shouldBeOpen,
+      currentLocOpen: locOpen,
+      showAllBusinesses,
+      suggestions: locSuggestions.map(s => s.label)
+    })
+    
+    if (shouldBeOpen && !locOpen) {
+      console.log('[LocationSuggestions] FORCING dropdown open via useEffect - we have suggestions but locOpen is false', {
+        suggestionsCount: locSuggestions.length,
+        locQuery,
+        showAllBusinesses
+      })
+      // Use a small timeout to ensure this happens after any other state updates
+      const timeoutId = setTimeout(() => {
+        console.log('[LocationSuggestions] Actually setting locOpen to true now')
+        setLocOpen(true)
+      }, 0)
+      return () => clearTimeout(timeoutId)
+    }
+  }, [locSuggestions, locQuery, locOpen, showAllBusinesses])
 
   const [bizOpen, setBizOpen] = useState(false)
   const [bizSuggestions, setBizSuggestions] = useState<BizSuggestion[]>([])
@@ -592,6 +723,50 @@ function TalentMapPageInner() {
             localStorage.setItem('creerlio_talent_map_user_id', currentUserId || '')
           }
         } catch {}
+
+        // Auto-fill location from user's profile if available
+        if (!cancelled && !locQuery && !searchCenter) {
+          try {
+            const { data: profileData, error: profileError } = await supabase
+              .from('business_profiles')
+              .select('location, city, state, country, latitude, longitude, lat, lng')
+              .eq('user_id', currentUserId)
+              .single()
+            
+            if (profileError) {
+              console.warn('[TalentMap] Error loading user profile location:', profileError)
+            } else if (profileData) {
+              // Prefer full location string, otherwise construct from city/state/country
+              const locationStr = profileData.location || 
+                [profileData.city, profileData.state, profileData.country].filter(Boolean).join(', ')
+              
+              if (locationStr) {
+                setLocQuery(locationStr)
+                // Try both lat/lng and latitude/longitude column names
+                const lat = profileData.latitude || profileData.lat
+                const lng = profileData.longitude || profileData.lng
+                
+                // If we have lat/lng, set search center directly
+                if (lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng)) {
+                  const currentRadius = Number(window.localStorage.getItem(RADIUS_KEY)) || 5
+                  setSearchCenter({ 
+                    lng: Number(lng), 
+                    lat: Number(lat), 
+                    label: locationStr 
+                  })
+                  setFlyTo({ 
+                    lng: Number(lng), 
+                    lat: Number(lat), 
+                    zoom: zoomForRadiusKm(currentRadius) 
+                  })
+                }
+              }
+            }
+          } catch (profileErr) {
+            // Silently fail - location auto-fill is optional
+            console.warn('[TalentMap] Could not load user profile location:', profileErr)
+          }
+        }
       } catch (e: any) {
         if (!cancelled) setError(e?.message ?? 'Failed to load Talent Map.')
       } finally {
@@ -625,6 +800,13 @@ function TalentMapPageInner() {
     } else {
       setMapFitBounds(null)
     }
+    // Force a business reload when showAllBusinesses changes
+    // This ensures businesses reappear when toggled back on
+    if (showAllBusinesses) {
+      // Clear searchCenter temporarily to trigger full reload
+      // The map component will fetch all businesses when showAllBusinesses is true
+      setFlyTo(null)
+    }
   }, [showAllBusinesses, searchCenter, committedRouteQuery])
 
   const headerRight = useMemo(() => {
@@ -641,14 +823,9 @@ function TalentMapPageInner() {
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
       <header className="sticky top-0 z-50 backdrop-blur bg-slate-950/70 border-b border-white/10">
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-white hover:text-blue-400 transition-colors">
-              Creerlio
-            </Link>
-            <span className="text-slate-400">/</span>
-            <h1 className="text-lg font-semibold text-white">Talent Map</h1>
-          </div>
-          {headerRight}
+          <Link href="/dashboard/talent" className="text-slate-300 hover:text-blue-400 transition-colors">
+            ← Back to Talent Dashboard
+          </Link>
         </div>
       </header>
 
@@ -722,13 +899,20 @@ function TalentMapPageInner() {
                         emitDebugLog({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3',location:'talent-map/page.tsx:showAllBusinesses',message:'toggle show all businesses',data:{nextChecked},timestamp:Date.now()})
                         // #endregion
                         setShowAllBusinesses(nextChecked)
+                        // When toggling off, clear search center to ensure proper filtering
+                        // When toggling on, ensure we fetch all businesses
+                        if (!nextChecked && !searchCenter) {
+                          // If turning off and no location, businesses will be empty (expected)
+                          // The map component will handle this via the showAllBusinesses prop
+                        } else if (nextChecked) {
+                          // When turning on, clear any location filters to show all businesses
+                          // The map component will fetch all businesses when showAllBusinesses is true
+                          setMapFitBounds(AU_BOUNDS)
+                        }
                       }}
                     />
                     <span className="leading-snug">
                       <span className="font-semibold text-white">Show all businesses in Creerlio</span>
-                      <span className="block text-xs text-slate-400 mt-1.5">
-                        Ignores filters (still respects business discoverability). Useful for exploration and verification.
-                      </span>
                     </span>
                   </label>
                 </div>
@@ -736,96 +920,155 @@ function TalentMapPageInner() {
                   <label className="block text-sm font-medium text-slate-200 mb-2.5">
                     Within {radiusKm} km of…
                   </label>
-                  <div className="flex items-center gap-2.5">
-                    <div className="relative flex-1">
-                      <input
-                        value={locQuery}
-                        onChange={(e) => {
-                          setLocQuery(e.target.value)
+                  <div className="relative">
+                    <input
+                      value={locQuery}
+                      onInput={(e) => {
+                        // This fires even if onChange doesn't
+                        console.log('[LocationSuggestions] Input onInput event fired')
+                      }}
+                      onChange={(e) => {
+                        const newValue = e.target.value
+                        console.log('[LocationSuggestions] Input onChange FIRED:', {
+                          newValue,
+                          newValueLength: newValue.length,
+                          showAllBusinesses,
+                          currentLocOpen: locOpen,
+                          currentSuggestionsCount: locSuggestions.length,
+                          timestamp: Date.now()
+                        })
+                        setLocQuery(newValue)
+                        // Always open suggestions when typing, regardless of showAllBusinesses
+                        // This ensures autocomplete works in both states
+                        if (newValue.trim().length > 0) {
+                          // Force open the dropdown immediately when typing
+                          console.log('[LocationSuggestions] Setting locOpen to true immediately in onChange, showAllBusinesses:', showAllBusinesses)
                           setLocOpen(true)
-                        }}
-                        onFocus={() => setLocOpen(true)}
-                        onBlur={() => setTimeout(() => setLocOpen(false), 120)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') {
-                            setLocOpen(false)
-                            return
+                          // Don't clear existing suggestions while typing - let the debounced effect handle it
+                        } else {
+                          // Only clear when input is completely empty
+                          console.log('[LocationSuggestions] Input is empty, clearing suggestions')
+                          setLocSuggestions([])
+                          setLocOpen(false)
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        console.log('[LocationSuggestions] Input onKeyDown:', {
+                          key: e.key,
+                          value: e.currentTarget.value,
+                          showAllBusinesses
+                        })
+                      }}
+                      onFocus={(e) => {
+                        console.log('[LocationSuggestions] Input onFocus FIRED:', {
+                          value: e.target.value,
+                          showAllBusinesses,
+                          hasSuggestions: locSuggestions.length > 0
+                        })
+                        // Open suggestions on focus if there's any input or suggestions available
+                        const hasInput = e.target.value.trim().length > 0
+                        const hasSuggestions = locSuggestions.length > 0
+                        if (hasInput || hasSuggestions) {
+                          console.log('[LocationSuggestions] Opening dropdown on focus')
+                          setLocOpen(true)
+                        }
+                      }}
+                      onClick={(e) => {
+                        console.log('[LocationSuggestions] Input onClick FIRED:', {
+                          value: e.currentTarget.value,
+                          showAllBusinesses
+                        })
+                      }}
+                      onBlur={() => {
+                        // Delay closing to allow clicks on suggestions
+                        // Use a longer timeout to ensure suggestions are clickable
+                        setTimeout(() => {
+                          setLocOpen(false)
+                        }, 300)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          setLocOpen(false)
+                          return
+                        }
+                        if (!locOpen || !locSuggestions.length) {
+                          if (e.key === 'Enter' && locQuery.trim()) {
+                            geocodeAndFly()
                           }
-                          if (!locOpen || !locSuggestions.length) {
-                            if (e.key === 'Enter') geocodeAndFly()
-                            return
+                          return
+                        }
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault()
+                          setLocActiveIdx((i) => Math.min(locSuggestions.length - 1, i + 1))
+                          return
+                        }
+                        if (e.key === 'ArrowUp') {
+                          e.preventDefault()
+                          setLocActiveIdx((i) => Math.max(0, i - 1))
+                          return
+                        }
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          const pick = locSuggestions[locActiveIdx]
+                          if (pick) {
+                            applyLocSuggestion(pick)
+                          } else if (locQuery.trim()) {
+                            geocodeAndFly()
                           }
-                          if (e.key === 'ArrowDown') {
-                            e.preventDefault()
-                            setLocActiveIdx((i) => Math.min(locSuggestions.length - 1, i + 1))
-                            return
-                          }
-                          if (e.key === 'ArrowUp') {
-                            e.preventDefault()
-                            setLocActiveIdx((i) => Math.max(0, i - 1))
-                            return
-                          }
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            const pick = locSuggestions[locActiveIdx]
-                            if (pick) applyLocSuggestion(pick)
-                            return
-                          }
-                        }}
-                        className="w-full px-4 py-2.5 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
-                        placeholder="Suburb, city, or region…"
-                        role="combobox"
-                        aria-autocomplete="list"
-                        aria-expanded={locOpen}
-                        aria-controls="loc-suggestions"
-                      />
-                      {locOpen && locSuggestions.length ? (
-                        <div
-                          id="loc-suggestions"
-                          role="listbox"
-                          className="absolute left-0 right-0 mt-1.5 rounded-lg border border-white/10 bg-slate-950/98 backdrop-blur shadow-2xl overflow-hidden z-20"
-                        >
-                          {locSuggestions.map((s, idx) => (
-                            <button
-                              key={s.id}
-                              type="button"
-                              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                                idx === locActiveIdx ? 'bg-blue-500/20 text-white' : 'bg-transparent text-slate-200 hover:bg-white/5'
-                              }`}
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => applyLocSuggestion(s)}
-                              role="option"
-                              aria-selected={idx === locActiveIdx}
-                            >
-                              {s.label}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={geocodeAndFly}
-                      disabled={locBusy || !locQuery.trim()}
-                      className="px-5 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm shrink-0"
-                    >
-                      {locBusy ? 'Searching…' : 'Go'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={useCurrentLocation}
-                      disabled={locBusy}
-                      className="px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-slate-200 hover:bg-white/10 text-sm shrink-0"
-                    >
-                      Use my location
-                    </button>
+                          return
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
+                      placeholder="Suburb, city, or region…"
+                      role="combobox"
+                      aria-autocomplete="list"
+                      aria-expanded={locOpen}
+                      aria-controls="loc-suggestions"
+                    />
+                    {/* Debug: Log render state */}
+                    {(() => {
+                      const shouldShow = locOpen && locSuggestions.length > 0
+                      if (locQuery.trim().length > 0) {
+                        console.log('[LocationSuggestions] Render check:', {
+                          locOpen,
+                          suggestionsCount: locSuggestions.length,
+                          shouldShow,
+                          showAllBusinesses,
+                          locQuery
+                        })
+                      }
+                      return null
+                    })()}
+                    {locOpen && locSuggestions.length > 0 ? (
+                      <div
+                        id="loc-suggestions"
+                        role="listbox"
+                        className="absolute left-0 right-0 mt-1.5 rounded-lg border border-white/10 bg-slate-950/98 backdrop-blur shadow-2xl overflow-hidden z-50"
+                      >
+                        {locSuggestions.map((s, idx) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                              idx === locActiveIdx ? 'bg-blue-500/20 text-white' : 'bg-transparent text-slate-200 hover:bg-white/5'
+                            }`}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => applyLocSuggestion(s)}
+                            role="option"
+                            aria-selected={idx === locActiveIdx}
+                          >
+                            {s.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
                     <span className="font-medium">Radius: {radiusKm} km</span>
                     <input
                       type="range"
                       min={5}
-                      max={4000}
+                      max={100}
                       step={5}
                       value={radiusKm}
                       onChange={(e) => {
@@ -874,270 +1117,6 @@ function TalentMapPageInner() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-2.5">Search</label>
-                  <div className="flex items-center gap-2.5">
-                    <div className="relative flex-1">
-                      <input
-                        value={filters.q}
-                        onChange={(e) => {
-                          const v = e.target.value
-                          setFilters((p) => ({ ...p, q: v }))
-                          setBizOpen(true)
-                        }}
-                        onFocus={() => setBizOpen(true)}
-                        onBlur={() => setTimeout(() => setBizOpen(false), 120)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') {
-                            setBizOpen(false)
-                            return
-                          }
-                          if (!bizOpen || !bizSuggestions.length) {
-                            if (e.key === 'Enter' && filters.q.trim()) {
-                              // Trigger search on Enter when no suggestions
-                              e.preventDefault()
-                              return
-                            }
-                            return
-                          }
-                          if (e.key === 'ArrowDown') {
-                            e.preventDefault()
-                            setBizActiveIdx((i) => Math.min(bizSuggestions.length - 1, i + 1))
-                            return
-                          }
-                          if (e.key === 'ArrowUp') {
-                            e.preventDefault()
-                            setBizActiveIdx((i) => Math.max(0, i - 1))
-                            return
-                          }
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            const pick = bizSuggestions[bizActiveIdx]
-                            if (pick) applyBizSuggestion(pick)
-                            return
-                          }
-                        }}
-                        className="w-full px-4 py-2.5 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
-                        placeholder="Business name or industry…"
-                        role="combobox"
-                        aria-autocomplete="list"
-                        aria-expanded={bizOpen}
-                        aria-controls="biz-suggestions"
-                      />
-                      {bizOpen && (bizSuggestions.length || filters.q.trim().length >= 2) ? (
-                        <div
-                          id="biz-suggestions"
-                          role="listbox"
-                          className="absolute left-0 right-0 mt-2 rounded-xl border border-white/10 bg-slate-950/95 backdrop-blur shadow-xl overflow-hidden z-20"
-                        >
-                          {bizIndustrySuggestions.length ? (
-                            <div className="border-b border-white/10">
-                              <div className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-slate-400">Industries</div>
-                              {bizIndustrySuggestions.map((ind) => (
-                                <button
-                                  key={ind}
-                                  type="button"
-                                  className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
-                                  onMouseDown={(e) => e.preventDefault()}
-                                  onClick={() => applyIndustrySuggestion(ind)}
-                                  role="option"
-                                  aria-selected={filters.industries.includes(ind)}
-                                >
-                                  {ind}
-                                </button>
-                              ))}
-                            </div>
-                          ) : null}
-                          {bizSuggestions.length ? (
-                            bizSuggestions.map((s, idx) => (
-                              <button
-                                key={s.id}
-                                type="button"
-                                className={`w-full text-left px-3 py-2 ${
-                                  idx === bizActiveIdx ? 'bg-white/10 text-white' : 'bg-transparent text-slate-200 hover:bg-white/5'
-                                }`}
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => applyBizSuggestion(s)}
-                                role="option"
-                                aria-selected={idx === bizActiveIdx}
-                              >
-                                <div className="text-sm font-semibold truncate">{s.name}</div>
-                                <div className="text-[11px] text-slate-400 truncate">
-                                  {[s.industry, s.location].filter(Boolean).join(' • ') || `/${s.slug}`}
-                                </div>
-                              </button>
-                            ))
-                          ) : (
-                            <div className="px-3 py-2 text-sm text-slate-400">No suggestions yet</div>
-                          )}
-                        </div>
-                      ) : null}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Trigger search when Go is clicked
-                        if (filters.q.trim()) {
-                          // Search will trigger via useEffect on filters change
-                        }
-                      }}
-                      disabled={!filters.q.trim()}
-                      className="px-5 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm shrink-0"
-                      title="Search businesses"
-                    >
-                      Go
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-2.5">Industries</label>
-                  <div className="flex items-center gap-2.5">
-                    <div className="relative flex-1">
-                      <input
-                        type="text"
-                        value={industryInput}
-                        onChange={(e) => {
-                          setIndustryInput(e.target.value)
-                          setIndustryInputOpen(true)
-                        }}
-                        onFocus={() => setIndustryInputOpen(true)}
-                        onBlur={() => setTimeout(() => setIndustryInputOpen(false), 120)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') {
-                            setIndustryInputOpen(false)
-                            return
-                          }
-                          if (!industryInputOpen || !industrySuggestions.length) {
-                            if (e.key === 'Enter' && industryInput.trim()) {
-                              const match = INDUSTRY_OPTIONS.find((opt) => opt.toLowerCase() === industryInput.trim().toLowerCase())
-                              if (match) applyIndustryInputSuggestion(match)
-                            }
-                            return
-                          }
-                          if (e.key === 'ArrowDown') {
-                            e.preventDefault()
-                            setIndustryInputActiveIdx((i) => Math.min(industrySuggestions.length - 1, i + 1))
-                            return
-                          }
-                          if (e.key === 'ArrowUp') {
-                            e.preventDefault()
-                            setIndustryInputActiveIdx((i) => Math.max(0, i - 1))
-                            return
-                          }
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            const pick = industrySuggestions[industryInputActiveIdx]
-                            if (pick) applyIndustryInputSuggestion(pick)
-                            return
-                          }
-                        }}
-                        className="w-full px-3 py-2 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
-                        placeholder="Type industry (e.g., Accounting)..."
-                      />
-                    {industryInputOpen && industrySuggestions.length > 0 && (
-                      <div className="absolute left-0 right-0 mt-1 rounded-lg border border-white/10 bg-slate-950/95 backdrop-blur shadow-xl overflow-hidden z-20">
-                        {industrySuggestions.map((ind, idx) => (
-                          <button
-                            key={ind}
-                            type="button"
-                            className={`w-full text-left px-3 py-2 text-sm ${
-                              idx === industryInputActiveIdx ? 'bg-white/10 text-white' : 'bg-transparent text-slate-200 hover:bg-white/5'
-                            }`}
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => applyIndustryInputSuggestion(ind)}
-                            role="option"
-                            aria-selected={idx === industryInputActiveIdx}
-                          >
-                            {ind}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (industryInput.trim()) {
-                          const match = INDUSTRY_OPTIONS.find((opt) => opt.toLowerCase() === industryInput.trim().toLowerCase())
-                          if (match) applyIndustryInputSuggestion(match)
-                        }
-                      }}
-                      disabled={!industryInput.trim()}
-                      className="px-5 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm shrink-0"
-                      title="Add industry filter"
-                    >
-                      Go
-                    </button>
-                  </div>
-                  {filters.industries.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {filters.industries.map((ind) => (
-                        <span
-                          key={ind}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-blue-500/20 border border-blue-500/40 text-blue-200"
-                        >
-                          {ind}
-                          <button
-                            type="button"
-                            onClick={() => setFilters((p) => ({ ...p, industries: p.industries.filter((x) => x !== ind) }))}
-                            className="hover:text-blue-100"
-                            aria-label={`Remove ${ind}`}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-2.5">Work preference</label>
-                  <select
-                    value={filters.work}
-                    onChange={(e) => setFilters((p) => ({ ...p, work: e.target.value }))}
-                    className="w-full px-3 py-2.5 rounded-lg bg-white text-black text-sm border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
-                  >
-                    <option value="">Any</option>
-                    <option value="remote">Remote</option>
-                    <option value="hybrid">Hybrid</option>
-                    <option value="onsite">Onsite</option>
-                  </select>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="text-sm font-medium text-slate-200">Map Layers</div>
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="accent-blue-500"
-                        checked={toggles.commute}
-                        onChange={(e) => applyToggles({ commute: e.target.checked })}
-                      />
-                      <span>Commute rings & route</span>
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="accent-blue-500"
-                        checked={toggles.schools}
-                        onChange={(e) => applyToggles({ schools: e.target.checked })}
-                      />
-                      <span>Schools overlay</span>
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="accent-blue-500"
-                        checked={toggles.property}
-                        onChange={(e) => applyToggles({ property: e.target.checked })}
-                      />
-                      <span>Real estate overlay</span>
-                    </label>
-                  </div>
-                </div>
 
                 <div className="space-y-3">
                   <div className="text-sm font-medium text-slate-200">Map Style</div>
@@ -1202,100 +1181,127 @@ function TalentMapPageInner() {
 
           {/* RIGHT SIDE: Horizontal layout with Results, Route Intelligence, and Map */}
           <div className="flex-1 flex gap-4">
-            {/* Collapsible Panels Container */}
-            {panelsCollapsed ? (
-              /* Collapsed state - show expand button */
+            {/* Results Panel - Separate collapsible section */}
+            {resultsCollapsed ? (
               <div className="flex-shrink-0">
                 <button
                   type="button"
-                  onClick={() => setPanelsCollapsed(false)}
+                  onClick={() => setResultsCollapsed(false)}
                   className="h-full px-2 py-4 rounded-xl border border-white/10 bg-slate-900/50 backdrop-blur-sm hover:bg-white/5 transition-colors flex flex-col items-center justify-center gap-2"
-                  title="Expand panels"
+                  title="Expand Results"
                 >
                   <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                   <div className="text-white font-semibold text-xs whitespace-nowrap" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                    {results.length} Results • {routeState?.drivingMins ? `${routeState.drivingMins}m drive` : 'Route'}
+                    Results ({results.length})
                   </div>
                 </button>
               </div>
             ) : (
-              <>
-                {/* LEFT COLUMN: Results Panel */}
-                <div className="w-48 flex-shrink-0 rounded-xl p-3 border border-white/10 bg-slate-900/50 backdrop-blur-sm overflow-y-auto relative">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-white font-semibold text-sm">Results</div>
-                    <div className="text-xs text-slate-400">
-                      {results.length}
-                    </div>
-                  </div>
+              <div className="w-48 flex-shrink-0 rounded-xl p-3 border border-white/10 bg-slate-900/50 backdrop-blur-sm overflow-y-auto relative">
+                {/* Collapse button */}
+                <button
+                  type="button"
+                  onClick={() => setResultsCollapsed(true)}
+                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors z-10"
+                  title="Collapse Results"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
 
-                  {results.length === 0 ? (
-                    <div className="text-center py-4 text-slate-400 text-xs">
-                      No businesses found
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {results.map((business: any) => (
-                        <button
-                          key={business.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedBusinessId(business.id)
-                            setSelectBusinessId(business.id)
-                          }}
-                          className={`w-full text-left p-2 rounded border transition-all ${
-                            selectedBusinessId === business.id
-                              ? 'bg-blue-500/20 border-blue-500/50'
-                              : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            {business.intent_visibility && business.intent_status ? (
-                              <span
-                                className={`inline-flex h-2 w-2 rounded-full ${
-                                  business.intent_status === 'actively_building_talent' ? 'bg-emerald-400' :
-                                  business.intent_status === 'future_planning' ? 'bg-blue-400' :
-                                  'bg-slate-400'
-                                }`}
-                                title={`Intent: ${business.intent_status.replace(/_/g, ' ')}`}
-                              />
-                            ) : null}
-                            <div className="font-medium text-white text-xs truncate">{business.name}</div>
-                          </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5 truncate">
-                            {Array.isArray(business.industries) && business.industries.length
-                              ? business.industries[0]
-                              : 'Industry not set'}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-white font-semibold text-sm">Results</div>
+                  <div className="text-xs text-slate-400">
+                    {results.length}
+                  </div>
                 </div>
 
-                {/* MIDDLE COLUMN: Route Intelligence Panel */}
-                <div className="w-72 flex-shrink-0 rounded-xl p-4 border border-white/10 bg-slate-900/50 backdrop-blur-sm overflow-y-auto relative">
-                  {/* Collapse button */}
-                  <button
-                    type="button"
-                    onClick={() => setPanelsCollapsed(true)}
-                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors z-10"
-                    title="Collapse panels"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
+                {results.length === 0 ? (
+                  <div className="text-center py-4 text-slate-400 text-xs">
+                    No businesses found
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {results.map((business: any) => (
+                      <button
+                        key={business.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedBusinessId(business.id)
+                          setSelectBusinessId(business.id)
+                        }}
+                        className={`w-full text-left p-2 rounded border transition-all ${
+                          selectedBusinessId === business.id
+                            ? 'bg-blue-500/20 border-blue-500/50'
+                            : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {business.intent_visibility && business.intent_status ? (
+                            <span
+                              className={`inline-flex h-2 w-2 rounded-full ${
+                                business.intent_status === 'actively_building_talent' ? 'bg-emerald-400' :
+                                business.intent_status === 'future_planning' ? 'bg-blue-400' :
+                                'bg-slate-400'
+                              }`}
+                              title={`Intent: ${business.intent_status.replace(/_/g, ' ')}`}
+                            />
+                          ) : null}
+                          <div className="font-medium text-white text-xs truncate">{business.name}</div>
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 truncate">
+                          {Array.isArray(business.industries) && business.industries.length
+                            ? business.industries[0]
+                            : 'Industry not set'}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-                  <div className="font-semibold text-white mb-3 text-sm">Route Intelligence</div>
+            {/* Route Intelligence Panel - Separate collapsible section */}
+            {panelsCollapsed ? (
+              <div className="flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setPanelsCollapsed(false)}
+                  className="h-full px-2 py-4 rounded-xl border border-white/10 bg-slate-900/50 backdrop-blur-sm hover:bg-white/5 transition-colors flex flex-col items-center justify-center gap-2"
+                  title="Expand Route Intelligence"
+                >
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  <div className="text-white font-semibold text-xs whitespace-nowrap" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                    {routeState?.drivingMins ? `${routeState.drivingMins}m drive` : 'Route Intelligence'}
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <div className="w-72 flex-shrink-0 rounded-xl p-4 border border-white/10 bg-slate-900/50 backdrop-blur-sm overflow-y-auto relative">
+                {/* Collapse button */}
+                <button
+                  type="button"
+                  onClick={() => setPanelsCollapsed(true)}
+                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors z-10"
+                  title="Collapse Route Intelligence"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
 
-                  {!selectedBusiness ? (
-                    <div className="text-center py-6 text-slate-400 text-sm">
-                      Select a business from the Results panel to calculate routes and commute times.
-                    </div>
-                  ) : (
+                <div className="font-semibold text-white mb-3 text-sm">Route Intelligence</div>
+
+                {!selectedBusiness ? (
+                  <div className="text-center py-6 text-slate-400 text-sm">
+                    Select a business from the Results panel to calculate routes and commute times.
+                  </div>
+                ) : (
                     <>
                       <div className="text-xs text-slate-400 mb-3">
                         Point A: {selectedBusiness.properties.name} • Point B: your chosen living location
@@ -1465,7 +1471,6 @@ function TalentMapPageInner() {
                     </>
                   )}
                 </div>
-              </>
             )}
 
             {/* RIGHT COLUMN: Map container - Takes remaining space */}
@@ -1484,6 +1489,7 @@ function TalentMapPageInner() {
                     searchCenter={searchCenter}
                     radiusKm={radiusKm}
                     showAllBusinesses={showAllBusinesses}
+                    radiusBusinessesActive={!!searchCenter}
                     onResults={(items) => setResults(items)}
                     selectedBusinessId={selectedBusinessId}
                     onSelectedBusinessId={(id) => setSelectedBusinessId(id)}

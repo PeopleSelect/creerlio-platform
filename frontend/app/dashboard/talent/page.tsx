@@ -3240,15 +3240,16 @@ export function TalentDashboardShell({
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <Link
-                      href="/portfolio/view"
-                      onClick={() => {
-                        // #region agent log
-                        emitDebugLog({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H12',location:'dashboard/talent/page.tsx:view-profile',message:'view profile click',data:{target:'/portfolio/view'},timestamp:Date.now()})
-                        // #endregion
-                      }}
+                      href="/dashboard/talent/edit"
                       className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
                     >
                       View Profile
+                    </Link>
+                    <Link
+                      href="/portfolio/view"
+                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
+                    >
+                      View Portfolio
                     </Link>
                     <Link
                       href="/portfolio"

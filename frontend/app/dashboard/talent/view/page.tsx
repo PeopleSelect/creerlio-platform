@@ -31,6 +31,90 @@ export default function ViewTalentProfilePage() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  const handleDeleteRegistration = async () => {
+    setIsDeleting(true)
+    try {
+      const { data: sessionRes } = await supabase.auth.getSession()
+      const userId = sessionRes.session?.user?.id
+      if (!userId) {
+        alert('No active session found.')
+        return
+      }
+
+      // Delete talent profile first
+      const { error: profileError } = await supabase
+        .from('talent_profiles')
+        .delete()
+        .eq('user_id', userId)
+
+      if (profileError) {
+        console.error('Error deleting talent profile:', profileError)
+        // Continue anyway - profile might not exist
+      }
+
+      // Delete auth account via backend API (requires admin privileges)
+      const accessToken = sessionRes.session?.access_token
+      if (!accessToken) {
+        alert('Failed to delete account: missing access token. Please sign in again.')
+        return
+      }
+
+      let deleteResponse
+      try {
+        deleteResponse = await fetch('/api/auth/delete-account', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ user_id: userId }),
+        })
+      } catch (fetchError: any) {
+        alert(`Failed to delete account: ${fetchError?.message || 'Failed to fetch'}. Please contact support.`)
+        return
+      }
+
+      if (!deleteResponse.ok) {
+        const errorData = await deleteResponse.json().catch(() => ({}))
+        const errorMsg = errorData?.detail || errorData?.message || 'Unknown error'
+        console.error('Error deleting auth account:', errorData)
+        alert(`Failed to delete account: ${errorMsg}. The account may still exist. Please contact support.`)
+        return
+      }
+
+      const deleteResult = await deleteResponse.json().catch(() => ({}))
+      if (!deleteResult.success) {
+        alert(`Account deletion may have failed: ${deleteResult.message || 'Unknown error'}. Please contact support.`)
+        return
+      }
+
+      // Clear localStorage
+      localStorage.removeItem('creerlio_active_role')
+      localStorage.removeItem('user_type')
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('user_email')
+
+      // Sign out
+      try {
+        await supabase.auth.signOut()
+      } catch (signOutError) {
+        console.log('Sign out attempted')
+      }
+
+      // Redirect to home
+      router.replace('/')
+
+      alert('Your Talent account has been deleted successfully.')
+    } catch (error: any) {
+      console.error('Error deleting registration:', error)
+      alert(`Failed to delete account: ${error?.message || 'Unknown error'}. Please contact support.`)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   useEffect(() => {
     async function loadProfile() {
@@ -310,6 +394,48 @@ export default function ViewTalentProfilePage() {
           >
             Edit Portfolio
           </Link>
+        </div>
+
+        {/* Delete Registration */}
+        <div className="mt-8 pt-8 border-t border-gray-200">
+          {!showDeleteConfirm ? (
+            <div>
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="px-4 py-2 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+              >
+                Delete Registration
+              </button>
+              <p className="mt-2 text-sm text-gray-500">
+                Permanently delete your talent account and all associated data.
+              </p>
+            </div>
+          ) : (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-800 font-medium mb-2">
+                Are you sure you want to delete your account?
+              </p>
+              <p className="text-red-600 text-sm mb-4">
+                This action cannot be undone. All your profile data, portfolio, and connections will be permanently deleted.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleDeleteRegistration}
+                  disabled={isDeleting}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDeleting ? 'Deleting...' : 'Yes, Delete My Account'}
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

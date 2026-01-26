@@ -2220,12 +2220,6 @@ export function TalentDashboardShell({
           >
             Logout
           </button>
-          <button
-            onClick={handleDeleteRegistration}
-            className="px-4 py-2 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-          >
-            Delete Registration
-          </button>
         </div>
       </header>
 

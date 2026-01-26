@@ -794,11 +794,11 @@ export default function BusinessDashboard() {
 
   const createLocation = async () => {
     setLocationError(null)
-    if (!activeBusinessId) {
+    if (!activeBusinessId || !activeBusinessEntry) {
       setLocationError('Select a business before creating a location.')
       return
     }
-    if (activeBusinessEntry && !canManageLocations) {
+    if (!canManageLocations) {
       setLocationError('You do not have permission to create locations for this business.')
       return
     }
@@ -918,7 +918,7 @@ export default function BusinessDashboard() {
 
       setInviteStatus('User assigned to business/location roles.')
     } else {
-      const { error: inviteErr } = await supabase
+      const { data: newInvite, error: inviteErr } = await supabase
         .from('business_user_invites')
         .insert({
           email,
@@ -928,10 +928,15 @@ export default function BusinessDashboard() {
           location_role: inviteLocationRole,
           invited_by: user?.id || null,
         })
+        .select()
+        .single()
 
       if (inviteErr) {
         setTeamError(inviteErr.message || 'Failed to send invite.')
         return
+      }
+      if (newInvite) {
+        setPendingInvites((prev) => [newInvite, ...prev])
       }
       setInviteStatus('Invite sent. The user will receive access after registration.')
     }

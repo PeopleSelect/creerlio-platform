@@ -2344,10 +2344,10 @@ export function TalentDashboardShell({
 
             {/* Talent Map */}
             <div className="mb-8">
-              <div className="flex h-[calc(100vh-12rem)] gap-4 relative">
+              <div className="flex flex-col lg:flex-row gap-4 relative h-auto lg:h-[calc(100vh-12rem)]">
                 {/* LEFT SIDEBAR: Filters */}
-                <aside className={`${talentMapFiltersCollapsed ? 'w-16' : 'w-80'} flex-shrink-0 overflow-y-auto z-20 transition-all duration-300`}>
-                  <div className="rounded-xl p-4 border border-gray-200 bg-white h-full relative">
+                <aside className={`${talentMapFiltersCollapsed ? 'lg:w-16' : 'lg:w-80'} w-full flex-shrink-0 overflow-y-auto z-20 transition-all duration-300`}>
+                  <div className="rounded-xl p-4 border border-gray-200 bg-white h-auto lg:h-full relative">
                     {/* Collapse/Expand Button */}
                       <button
                         type="button"
@@ -2773,14 +2773,14 @@ export function TalentDashboardShell({
                 </aside>
 
                 {/* RIGHT SIDE: Horizontal layout with Route Intelligence and Map */}
-                <div className="flex-1 flex gap-4">
+                <div className="flex-1 flex flex-col lg:flex-row gap-4">
                   {/* Route Intelligence Panel */}
                 {talentMapPanelsCollapsed ? (
                   <div className="flex-shrink-0 flex flex-col gap-2">
                     <button
                       type="button"
                       onClick={() => setTalentMapPanelsCollapsed(false)}
-                      className="h-full px-2 py-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors flex flex-col items-center justify-center gap-2"
+                      className="h-auto lg:h-full px-2 py-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors flex flex-col items-center justify-center gap-2"
                       title="Expand Route Intelligence"
                     >
                       <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2818,7 +2818,7 @@ export function TalentDashboardShell({
                     </div>
                   </div>
                 ) : (
-                  <div className="w-72 flex-shrink-0 rounded-xl p-4 border border-gray-200 bg-white overflow-y-auto relative">
+                  <div className="w-full lg:w-72 flex-shrink-0 rounded-xl p-4 border border-gray-200 bg-white overflow-y-auto relative">
                     <button
                       type="button"
                       onClick={() => setTalentMapPanelsCollapsed(true)}
@@ -3016,7 +3016,7 @@ export function TalentDashboardShell({
                   </div>
                 )}
                   {/* Map Container */}
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 min-h-[60vh] sm:min-h-[70vh] lg:min-h-0">
                     <div className="rounded-xl border border-gray-200 bg-white h-full relative overflow-hidden">
                       {talentMapLoading ? (
                         <div className="h-full flex items-center justify-center">

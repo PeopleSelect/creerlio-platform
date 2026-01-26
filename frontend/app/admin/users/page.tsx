@@ -53,13 +53,21 @@ export default function AdminUsersPage() {
 
   async function loadUsers(userId: string) {
     try {
-      // Get users from both talent and business profiles
-      // Use select('*') to get all available columns, then extract what we need
-      const [talentRes, businessRes] = await Promise.all([
+      // Get users from the base users table (registered users)
+      // plus any talent/business profiles (portfolio builders).
+      // Use select('*') to get all available columns, then extract what we need.
+      const [usersRes, talentRes, businessRes] = await Promise.all([
+        supabase.from('users').select('*'),
         supabase.from('talent_profiles').select('*'),
         supabase.from('business_profiles').select('*')
       ])
       
+      if (usersRes.error) {
+        console.warn('Error loading users table:', usersRes.error)
+        if (usersRes.error.code === '42501' || usersRes.error.message?.includes('policy') || usersRes.error.message?.includes('RLS')) {
+          throw new Error('Permission denied. Admin RLS policies may not be set up for public.users. Please run admin_rls_policies.sql in Supabase SQL Editor.')
+        }
+      }
       if (talentRes.error) {
         console.error('Error loading talent profiles:', talentRes.error)
         if (talentRes.error.code === '42501' || talentRes.error.message?.includes('policy') || talentRes.error.message?.includes('RLS')) {
@@ -75,48 +83,76 @@ export default function AdminUsersPage() {
         throw businessRes.error
       }
       
-      const users: any[] = []
-      const seenUserIds = new Set<string>()
+      const usersById = new Map<string, any>()
+
+      function getUserId(record: any) {
+        return record?.user_id || record?.id
+      }
+
+      // Add base users (registered but may not have started a portfolio)
+      for (const u of (usersRes.data || [])) {
+        const userId = getUserId(u)
+        if (!userId || usersById.has(userId)) continue
+
+        const role = (u.role || u.type || '').toString()
+        const type = role === 'talent' || role === 'business' ? role : 'registered'
+        const name =
+          u.name ||
+          u.full_name ||
+          u.display_name ||
+          u.company_name ||
+          'N/A'
+        const email = u.email || 'N/A'
+
+        usersById.set(userId, {
+          user_id: userId,
+          name,
+          email,
+          type,
+          created_at: u.created_at || u.inserted_at || u.created || null,
+          is_active: u.is_active ?? true
+        })
+      }
       
       // Add talent users - handle various possible column names
       for (const tp of (talentRes.data || [])) {
-        const userId = tp.user_id || tp.id
-        if (userId && !seenUserIds.has(userId)) {
-          // Try different possible name fields
-          const name = tp.name || tp.talent_name || tp.full_name || tp.display_name || 'N/A'
-          const email = tp.email || 'N/A'
-          
-          users.push({
-            user_id: userId,
-            name: name,
-            email: email,
-            type: 'talent',
-            created_at: tp.created_at,
-            is_active: tp.is_active ?? true
-          })
-          seenUserIds.add(userId)
-        }
+        const userId = getUserId(tp)
+        if (!userId) continue
+
+        const existing = usersById.get(userId) || { user_id: userId }
+        const name = tp.name || tp.talent_name || tp.full_name || tp.display_name || existing.name || 'N/A'
+        const email = tp.email || existing.email || 'N/A'
+
+        usersById.set(userId, {
+          ...existing,
+          name,
+          email,
+          type: 'talent',
+          created_at: tp.created_at || existing.created_at || null,
+          is_active: tp.is_active ?? existing.is_active ?? true
+        })
       }
       
       // Add business users - handle various possible column names
       for (const bp of (businessRes.data || [])) {
-        const userId = bp.user_id || bp.id
-        if (userId && !seenUserIds.has(userId)) {
-          // Try different possible name fields
-          const name = bp.name || bp.business_name || bp.company_name || 'N/A'
-          const email = bp.email || 'N/A'
-          
-          users.push({
-            user_id: userId,
-            name: name,
-            email: email,
-            type: 'business',
-            created_at: bp.created_at,
-            is_active: bp.is_active ?? true
-          })
-          seenUserIds.add(userId)
-        }
+        const userId = getUserId(bp)
+        if (!userId) continue
+
+        const existing = usersById.get(userId) || { user_id: userId }
+        const name = bp.name || bp.business_name || bp.company_name || existing.name || 'N/A'
+        const email = bp.email || existing.email || 'N/A'
+
+        usersById.set(userId, {
+          ...existing,
+          name,
+          email,
+          type: 'business',
+          created_at: bp.created_at || existing.created_at || null,
+          is_active: bp.is_active ?? existing.is_active ?? true
+        })
       }
+
+      const users = Array.from(usersById.values())
       
       // Sort by created_at descending
       users.sort((a, b) => {
@@ -276,7 +312,9 @@ export default function AdminUsersPage() {
                         className={`px-2 py-1 rounded text-xs font-semibold ${
                           usr.type === 'talent'
                             ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50'
-                            : 'bg-green-500/20 text-green-400 border border-green-500/50'
+                            : usr.type === 'business'
+                              ? 'bg-green-500/20 text-green-400 border border-green-500/50'
+                              : 'bg-slate-500/20 text-slate-300 border border-slate-500/50'
                         }`}
                       >
                         {usr.type || 'N/A'}

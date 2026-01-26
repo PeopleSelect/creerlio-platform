@@ -12,6 +12,7 @@ DROP POLICY IF EXISTS "Admins can read all business profiles" ON business_profil
 DROP POLICY IF EXISTS "Admins can update all business profiles" ON business_profiles;
 DROP POLICY IF EXISTS "Admins can read all talent bank items" ON talent_bank_items;
 DROP POLICY IF EXISTS "Admins can read all business profile pages" ON business_profile_pages;
+DROP POLICY IF EXISTS "Admins can read all users" ON public.users;
 
 -- ============================================
 -- ADMIN POLICIES FOR TALENT_PROFILES
@@ -49,6 +50,18 @@ USING (
 -- Allow admins to update all business profiles
 CREATE POLICY "Admins can update all business profiles"
 ON business_profiles FOR UPDATE
+USING (
+  (auth.jwt() -> 'user_metadata' ->> 'is_admin')::boolean = true
+  OR (auth.jwt() -> 'user_metadata' ->> 'admin')::boolean = true
+);
+
+-- ============================================
+-- ADMIN POLICIES FOR PUBLIC.USERS
+-- ============================================
+
+-- Allow admins to read all users
+CREATE POLICY "Admins can read all users"
+ON public.users FOR SELECT
 USING (
   (auth.jwt() -> 'user_metadata' ->> 'is_admin')::boolean = true
   OR (auth.jwt() -> 'user_metadata' ->> 'admin')::boolean = true

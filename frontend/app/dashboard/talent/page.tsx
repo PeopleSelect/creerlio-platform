@@ -999,7 +999,7 @@ export function TalentDashboardShell({
 
       const reqRes = await supabase
         .from('talent_connection_requests')
-        .select('id, business_id, status, selected_sections, created_at, responded_at')
+        .select('id, business_id, status, selected_sections, initiated_by, created_at, responded_at')
         .eq('talent_id', talentId)
         .order('created_at', { ascending: false })
 
@@ -3978,16 +3978,24 @@ export function TalentDashboardShell({
                 </h3>
                 <p className="text-gray-600 text-xs mb-3">
                   {connectionMode === 'career'
-                    ? 'Businesses requesting to connect about career opportunities'
-                    : 'Businesses requesting a commercial or service relationship'}
+                    ? 'Incoming and outgoing career connection requests'
+                    : 'Incoming and outgoing business connection requests'}
                 </p>
                 {connLoading ? (
                   <p className="text-gray-600">Loading connection requests…</p>
                 ) : (connectionMode === 'career' ? careerRequests : businessRequests).length === 0 ? (
-                  <p className="text-gray-600 text-sm">No connection requests from businesses yet.</p>
+                  <p className="text-gray-600 text-sm">No pending connection requests yet.</p>
                 ) : (
                   <div className="space-y-3">
                     {(connectionMode === 'career' ? careerRequests : businessRequests).map((r) => (
+                      (() => {
+                        const initiatedByTalent =
+                          r?.initiated_by === 'talent' ||
+                          (!r?.initiated_by &&
+                            r?.selected_sections &&
+                            Array.isArray(r.selected_sections) &&
+                            r.selected_sections.length > 0)
+                        return (
                       <button
                         key={r.id}
                         onClick={() => setSelectedRequest(r)}
@@ -3997,8 +4005,13 @@ export function TalentDashboardShell({
                         <p className="text-gray-600 text-xs mt-1">
                           Request received {new Date(r.created_at).toLocaleString()}
                         </p>
+                        <p className="text-gray-500 text-xs mt-1">
+                          {initiatedByTalent ? 'You requested to connect' : 'Business requested to connect'}
+                        </p>
                         <p className="text-blue-600 text-xs mt-1">Click to view details and respond</p>
                       </button>
+                        )
+                      })()
                     ))}
                   </div>
                 )}

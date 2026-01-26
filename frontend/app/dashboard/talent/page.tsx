@@ -2293,6 +2293,44 @@ export function TalentDashboardShell({
         {/* Tab Content */}
         {activeTab === 'overview' && (
           <>
+            {/* Quick Actions */}
+            <div className="mb-6 dashboard-card rounded-xl p-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Welcome back{talentProfile?.name ? `, ${talentProfile.name.split(' ')[0]}` : ''}!
+                  </h3>
+                  <p className="text-sm text-gray-600">Manage your profile and portfolio</p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href="/dashboard/talent/view"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    View Profile
+                  </Link>
+                  <Link
+                    href="/dashboard/talent/edit"
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Edit Profile
+                  </Link>
+                  <Link
+                    href="/portfolio/view"
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
+                  >
+                    View Portfolio
+                  </Link>
+                  <Link
+                    href="/portfolio"
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Edit Portfolio
+                  </Link>
+                </div>
+              </div>
+            </div>
+
             {/* Talent Map */}
             <div className="mb-8">
               <div className="flex h-[calc(100vh-12rem)] gap-4 relative">

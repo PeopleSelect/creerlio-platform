@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -16,7 +16,7 @@ interface CalendarEvent {
   talentId?: string
 }
 
-export default function BusinessCalendarPage() {
+function BusinessCalendarContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -844,5 +844,21 @@ export default function BusinessCalendarPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function BusinessCalendarPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center py-12">
+            <p className="text-gray-600">Loading calendar...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <BusinessCalendarContent />
+    </Suspense>
   )
 }

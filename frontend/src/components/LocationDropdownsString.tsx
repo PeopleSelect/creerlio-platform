@@ -161,11 +161,13 @@ export default function LocationDropdownsString({
   }
 
   const handleCitySuggestionSelect = (suggestion: { id: string; label: string; lng: number; lat: number }) => {
-    setCityQuery(suggestion.label)
+    // Extract just the city name (first part before comma) instead of full place_name
+    const cityName = suggestion.label.split(',')[0].trim()
+    setCityQuery(cityName)
     setCitySuggestionsOpen(false)
-    onCityChange(suggestion.label)
+    onCityChange(cityName)
     if (onLocationChange) {
-      onLocationChange(suggestion)
+      onLocationChange({ ...suggestion, label: cityName })
     }
   }
 

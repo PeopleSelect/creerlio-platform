@@ -337,7 +337,9 @@ function BusinessMapPageInner() {
             return { lat: t.latitude, lng: t.longitude }
           }
 
-          const locationParts = [t.city, t.state, t.country].filter(Boolean)
+          // Extract just the city name if it contains commas (e.g., "Cooma, New South Wales, Australia" -> "Cooma")
+          const cityName = t.city?.split(',')[0]?.trim() || null
+          const locationParts = [cityName, t.state, t.country].filter(Boolean)
           if (locationParts.length === 0) return null
 
           const locationString = locationParts.join(', ')
@@ -711,7 +713,9 @@ function BusinessMapPageInner() {
         type: 'talent' as const,
         title: t.title || 'Talent',
         description: (() => {
-          const location = t.city && t.state ? `${t.city}, ${t.state}` : t.city || t.state || 'Location not specified'
+          // Extract just the city name if it contains commas (e.g., "Cooma, New South Wales, Australia" -> "Cooma")
+          const cityName = t.city?.split(',')[0]?.trim() || null
+          const location = cityName && t.state ? `${cityName}, ${t.state}` : cityName || t.state || 'Location not specified'
           const intent = t.intent_visibility && t.intent_status ? `Intent: ${t.intent_status.replace(/_/g, ' ')}` : null
           return intent ? `${location} • ${intent}` : location
         })()
@@ -1131,7 +1135,7 @@ function BusinessMapPageInner() {
               {(selectedTalent.city || selectedTalent.state || selectedTalent.country) && (
                 <div>
                   <p className="text-sm text-gray-300">
-                    📍 {[selectedTalent.city, selectedTalent.state, selectedTalent.country].filter(Boolean).join(', ')}
+                    📍 {[selectedTalent.city?.split(',')[0]?.trim(), selectedTalent.state, selectedTalent.country].filter(Boolean).join(', ')}
                     {selectedTalent.distance_km && ` (${selectedTalent.distance_km} km away)`}
                   </p>
                 </div>

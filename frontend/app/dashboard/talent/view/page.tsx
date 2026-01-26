@@ -200,7 +200,9 @@ export default function ViewTalentProfilePage() {
     )
   }
 
-  const locationParts = [profile?.city, profile?.state, profile?.country].filter(Boolean)
+  // Extract just the city name if it contains commas (e.g., "Cooma, New South Wales, Australia" -> "Cooma")
+  const cityName = profile?.city?.split(',')[0]?.trim() || null
+  const locationParts = [cityName, profile?.state, profile?.country].filter(Boolean)
   const locationString = locationParts.length > 0 ? locationParts.join(', ') : profile?.location || 'Not specified'
 
   const skillsArray = Array.isArray(profile?.skills)
@@ -339,7 +341,7 @@ export default function ViewTalentProfilePage() {
                         )}
                         {locationParts.length > 0 && (
                           <p className="text-slate-400 text-sm mt-1">
-                            {profile?.city}{profile?.state ? `, ${profile.state}` : ''}
+                            {cityName}{profile?.state ? `, ${profile.state}` : ''}
                           </p>
                         )}
                       </div>

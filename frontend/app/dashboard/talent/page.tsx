@@ -395,8 +395,10 @@ export function TalentDashboardShell({
           .maybeSingle()
 
         if (profileData && profileData.latitude && profileData.longitude) {
-          const locationParts = [profileData.city, profileData.state, profileData.country].filter(Boolean)
-          const locationLabel = locationParts.length > 0 
+          // Extract just the city name if it contains commas (e.g., "Cooma, New South Wales, Australia" -> "Cooma")
+          const cityName = profileData.city?.split(',')[0]?.trim() || null
+          const locationParts = [cityName, profileData.state, profileData.country].filter(Boolean)
+          const locationLabel = locationParts.length > 0
             ? locationParts.join(', ')
             : profileData.location || 'Your location'
           

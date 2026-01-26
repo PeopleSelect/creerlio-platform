@@ -1814,7 +1814,7 @@ function PortfolioViewPageInner() {
               {(talentSummary.city || talentSummary.state || talentSummary.country) && (
                 <div className="mb-4">
                   <p className="text-sm text-gray-300">
-                    📍 {[talentSummary.city, talentSummary.state, talentSummary.country].filter(Boolean).join(', ')}
+                    📍 {[talentSummary.city?.split(',')[0]?.trim(), talentSummary.state, talentSummary.country].filter(Boolean).join(', ')}
                   </p>
                 </div>
               )}
@@ -1986,7 +1986,7 @@ function PortfolioViewPageInner() {
                   {(talentSummary.city || talentSummary.state || talentSummary.country) && (
                     <div className="mb-4">
                       <p className="text-sm text-gray-300">
-                        📍 {[talentSummary.city, talentSummary.state, talentSummary.country].filter(Boolean).join(', ')}
+                        📍 {[talentSummary.city?.split(',')[0]?.trim(), talentSummary.state, talentSummary.country].filter(Boolean).join(', ')}
                       </p>
                     </div>
                   )}

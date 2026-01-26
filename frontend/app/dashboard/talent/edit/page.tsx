@@ -215,7 +215,9 @@ export default function EditTalentProfilePage() {
       // Geocode location if city, state, or country are provided
       if (updateData.city || updateData.state || updateData.country) {
         try {
-          const locationParts = [updateData.city, updateData.state, updateData.country].filter(Boolean)
+          // Extract just the city name if it contains commas (e.g., "Dubbo, New South Wales, Australia" -> "Dubbo")
+          const cityName = updateData.city?.split(',')[0]?.trim() || null
+          const locationParts = [cityName, updateData.state, updateData.country].filter(Boolean)
           if (locationParts.length > 0) {
             const locationString = locationParts.join(', ')
             const geocodeResult = await geocodeLocation(locationString)
@@ -330,7 +332,9 @@ export default function EditTalentProfilePage() {
       // Geocode location if city, state, or country are provided
       if (updateData.city || updateData.state || updateData.country) {
         try {
-          const locationParts = [updateData.city, updateData.state, updateData.country].filter(Boolean)
+          // Extract just the city name if it contains commas (e.g., "Dubbo, New South Wales, Australia" -> "Dubbo")
+          const cityName = updateData.city?.split(',')[0]?.trim() || null
+          const locationParts = [cityName, updateData.state, updateData.country].filter(Boolean)
           if (locationParts.length > 0) {
             const locationString = locationParts.join(', ')
             const geocodeResult = await geocodeLocation(locationString)

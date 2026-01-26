@@ -128,6 +128,10 @@ export default function BusinessDashboard() {
     }
   }
   const [profileEditOpen, setProfileEditOpen] = useState(false)
+  const [websiteImportOpen, setWebsiteImportOpen] = useState(false)
+  const [websiteImportLoading, setWebsiteImportLoading] = useState(false)
+  const [websiteImportError, setWebsiteImportError] = useState<string | null>(null)
+  const [websiteImportResult, setWebsiteImportResult] = useState<any | null>(null)
   const [profileEditSaving, setProfileEditSaving] = useState(false)
   const [profileEditError, setProfileEditError] = useState<string | null>(null)
   const [profileEditSuccess, setProfileEditSuccess] = useState<string | null>(null)
@@ -803,6 +807,64 @@ export default function BusinessDashboard() {
     } finally {
       setProfileEditSaving(false)
     }
+  }
+
+  const getWebsiteImportUrl = () => {
+    const fromDraft = profileEditOpen ? profileEditDraft.website : ''
+    const fromProfile = businessProfile?.website || ''
+    return String(fromDraft || fromProfile || '').trim()
+  }
+
+  const handleWebsiteImport = async () => {
+    const url = getWebsiteImportUrl()
+    if (!url) {
+      setWebsiteImportError('Add a website URL first, then import.')
+      return
+    }
+    setWebsiteImportLoading(true)
+    setWebsiteImportError(null)
+    try {
+      const res = await fetch('/api/website/metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setWebsiteImportError(data?.error || 'Failed to import website.')
+        return
+      }
+      setWebsiteImportResult(data)
+      setWebsiteImportOpen(true)
+    } catch (err: any) {
+      setWebsiteImportError(err?.message || 'Failed to import website.')
+    } finally {
+      setWebsiteImportLoading(false)
+    }
+  }
+
+  const applyWebsiteImport = () => {
+    if (!websiteImportResult) return
+    const importedName = String(websiteImportResult.name || '').trim()
+    const importedWebsite = String(websiteImportResult.website || '').trim()
+    const importedIndustry = String(websiteImportResult.industry || '').trim()
+    const importedAddress = websiteImportResult.address || {}
+
+    setProfileEditOpen(true)
+    setProfileEditDraft((prev) => ({
+      ...prev,
+      businessName: importedName || prev.businessName,
+      website: importedWebsite || prev.website,
+      industry: importedIndustry || prev.industry,
+      location: importedAddress.full || prev.location,
+      city: importedAddress.city || prev.city,
+      state: importedAddress.state || prev.state,
+      country: importedAddress.country || prev.country,
+    }))
+
+    if (importedIndustry) setIndustryQuery(importedIndustry)
+    if (importedAddress.full) setLocQuery(importedAddress.full)
+    setWebsiteImportOpen(false)
   }
 
   const activeBusinessEntry = businesses.find((b) => b.id === activeBusinessId)
@@ -3252,6 +3314,24 @@ export default function BusinessDashboard() {
                         </p>
                       )}
                     </div>
+                    <div className="md:col-span-2">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={handleWebsiteImport}
+                          disabled={websiteImportLoading}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-60"
+                        >
+                          {websiteImportLoading ? 'Importing…' : 'Import from Website'}
+                        </button>
+                        <span className="text-xs text-gray-500">
+                          Imports website info into a draft preview only.
+                        </span>
+                      </div>
+                      {websiteImportError && (
+                        <p className="text-sm text-red-600 mt-2">{websiteImportError}</p>
+                      )}
+                    </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-2">Role</label>
                       <p className="text-gray-900 capitalize">{activeBusinessRole}</p>
@@ -4942,6 +5022,88 @@ export default function BusinessDashboard() {
                 className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-60"
               >
                 {sendingOpportunity === reconnectModal.connection.id ? 'Sending...' : 'Send Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Website Import Preview Modal */}
+      {websiteImportOpen && websiteImportResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Website Import Preview</h2>
+              <button
+                type="button"
+                onClick={() => setWebsiteImportOpen(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-gray-600 text-sm mb-4">
+              This is a preview of what we found. Applying will fill the edit form only—your profile is not saved until you click Save.
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Business Name</p>
+                <p className="text-gray-900 font-medium">{websiteImportResult.name || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Industry</p>
+                <p className="text-gray-900">{websiteImportResult.industry || '—'}</p>
+              </div>
+              <div className="md:col-span-2">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Description</p>
+                <p className="text-gray-700">{websiteImportResult.description || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Website</p>
+                <p className="text-gray-900">{websiteImportResult.website || websiteImportResult.url || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Phone</p>
+                <p className="text-gray-900">{websiteImportResult.phone || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Email</p>
+                <p className="text-gray-900">{websiteImportResult.email || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Address</p>
+                <p className="text-gray-900">{websiteImportResult.address?.full || '—'}</p>
+              </div>
+              {Array.isArray(websiteImportResult.socialLinks) && websiteImportResult.socialLinks.length > 0 && (
+                <div className="md:col-span-2">
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Social Links</p>
+                  <div className="flex flex-wrap gap-2">
+                    {websiteImportResult.socialLinks.slice(0, 6).map((link: string) => (
+                      <span key={link} className="px-2 py-1 rounded-lg bg-gray-100 text-gray-700 text-xs">
+                        {link}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setWebsiteImportOpen(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={applyWebsiteImport}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+              >
+                Apply to Draft
               </button>
             </div>
           </div>

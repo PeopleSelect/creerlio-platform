@@ -6,7 +6,12 @@
       "Bash(findstr:*)",
       "Bash(taskkill:*)",
       "Bash(npx eslint:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(git push:*)",
+      "Bash(npm run lint)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(grep:*)"
     ]
   }
 }

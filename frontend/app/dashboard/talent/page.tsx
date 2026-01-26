@@ -2224,7 +2224,7 @@ export function TalentDashboardShell({
         {/* Tabs */}
         <div className="mb-8 border-b border-gray-200">
           <div className="flex items-center gap-2">
-            {(['overview', 'portfolio', 'applications', 'connections'] as TabType[]).map((tab) => (
+            {(['overview', 'applications', 'connections'] as TabType[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => {
@@ -2241,7 +2241,7 @@ export function TalentDashboardShell({
                 }`}
               >
                 <span className="flex items-center gap-1.5">
-                  {tab === 'connections' ? 'Career Connections' : tab === 'portfolio' ? 'View Portfolio' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  {tab === 'connections' ? 'Career Connections' : tab.charAt(0).toUpperCase() + tab.slice(1)}
                   {!isBusinessRoute && tab === 'connections' && notifications.filter((n) => !n.is_read).length > 0 && (
                     <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-amber-500 rounded-full animate-pulse">
                       {notifications.filter((n) => !n.is_read).length}

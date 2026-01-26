@@ -284,7 +284,55 @@ export default function AdminUsersPage() {
         </div>
 
         <div className="bg-slate-900/70 border border-white/10 rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Mobile cards */}
+          <div className="block sm:hidden">
+            {usersList.map((usr) => (
+              <button
+                key={usr.user_id}
+                onClick={() => router.push(`/admin/users/${usr.user_id}`)}
+                className="w-full text-left border-b border-white/5 px-4 py-4 hover:bg-slate-800/30 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-white font-semibold truncate">{usr.name || 'N/A'}</p>
+                    <p className="text-gray-400 text-sm truncate">{usr.email || 'N/A'}</p>
+                  </div>
+                  <span
+                    className={`shrink-0 px-2 py-1 rounded text-xs font-semibold ${
+                      usr.type === 'talent'
+                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50'
+                        : usr.type === 'business'
+                          ? 'bg-green-500/20 text-green-400 border border-green-500/50'
+                          : 'bg-slate-500/20 text-slate-300 border border-slate-500/50'
+                    }`}
+                  >
+                    {usr.type || 'N/A'}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
+                  <span className="font-mono">{usr.user_id?.substring(0, 8)}...</span>
+                  <span>
+                    {usr.created_at ? new Date(usr.created_at).toLocaleDateString() : 'N/A'}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-semibold ${
+                      usr.is_active
+                        ? 'bg-green-500/20 text-green-400 border border-green-500/50'
+                        : 'bg-red-500/20 text-red-400 border border-red-500/50'
+                    }`}
+                  >
+                    {usr.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                  <span className="text-blue-400 text-xs">View</span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-800/50 border-b border-white/10">
                 <tr>

@@ -2265,12 +2265,6 @@ export function TalentDashboardShell({
               </button>
             ))}
             <Link
-              href="/search"
-              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
-            >
-              Search ↗
-            </Link>
-            <Link
               href="/dashboard/talent/calendar"
               className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
             >

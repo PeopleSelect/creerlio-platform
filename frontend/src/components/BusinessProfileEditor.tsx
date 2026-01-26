@@ -562,6 +562,11 @@ export default function BusinessProfileEditor() {
   const docUploadRef = useRef<HTMLInputElement | null>(null)
   const replaceUploadRef = useRef<HTMLInputElement | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [websiteImportUrl, setWebsiteImportUrl] = useState('')
+  const [websiteImportLoading, setWebsiteImportLoading] = useState(false)
+  const [websiteImportError, setWebsiteImportError] = useState<string | null>(null)
+  const [websiteImportResult, setWebsiteImportResult] = useState<any | null>(null)
+  const [websiteImportOpen, setWebsiteImportOpen] = useState(false)
   const [projectImportOpen, setProjectImportOpen] = useState(false)
   const [activeProjectIndex, setActiveProjectIndex] = useState<number | null>(null)
   const [projectSelectedIds, setProjectSelectedIds] = useState<Record<number, boolean>>({})
@@ -737,6 +742,12 @@ export default function BusinessProfileEditor() {
       cancelled = true
     }
   }, [userId, businessProfileId, intentLoaded])
+
+  useEffect(() => {
+    if (websiteImportUrl.trim()) return
+    const link = (profile.socialLinks || []).find((s) => String(s?.platform || '').toLowerCase() === 'website')
+    if (link?.url) setWebsiteImportUrl(String(link.url))
+  }, [profile.socialLinks, websiteImportUrl])
 
   const parseCsv = (value: string) =>
     value
@@ -2755,6 +2766,86 @@ export default function BusinessProfileEditor() {
     await ensureMediaUrl(kind, path)
   }
 
+  const getWebsiteImportUrl = () => {
+    if (websiteImportUrl.trim()) return websiteImportUrl.trim()
+    const fromLinks = (profile.socialLinks || []).find((s) => String(s?.platform || '').toLowerCase() === 'website')
+    return String(fromLinks?.url || '').trim()
+  }
+
+  const fetchImageAsFile = async (url: string, name: string) => {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error('Failed to download image')
+    const blob = await res.blob()
+    const ext = blob.type?.split('/')[1] || 'png'
+    return new File([blob], `${name}.${ext}`, { type: blob.type || 'image/png' })
+  }
+
+  const handleWebsiteImport = async () => {
+    const url = getWebsiteImportUrl()
+    setWebsiteImportOpen(true)
+    if (!url) {
+      setWebsiteImportError('Add a website URL first, then import.')
+      return
+    }
+    setWebsiteImportLoading(true)
+    setWebsiteImportError(null)
+    setWebsiteImportResult(null)
+    try {
+      const res = await fetch('/api/website/metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setWebsiteImportError(data?.error || 'Failed to import website.')
+        return
+      }
+      setWebsiteImportResult(data)
+      setWebsiteImportOpen(true)
+    } catch (err: any) {
+      setWebsiteImportError(err?.message || 'Failed to import website.')
+    } finally {
+      setWebsiteImportLoading(false)
+    }
+  }
+
+  const applyWebsiteImport = async () => {
+    if (!websiteImportResult) return
+    const about = String(websiteImportResult.description || '').trim()
+    const services = Array.isArray(websiteImportResult.services) ? websiteImportResult.services : []
+    const summary = about || services.join(', ')
+
+    setProfile((prev) => ({
+      ...prev,
+      bio: about || prev.bio,
+    }))
+    if (summary) {
+      setProductsOverview((prev) => ({
+        ...prev,
+        summary: prev.summary || summary,
+        short_headline: prev.short_headline || 'Products & Services',
+      }))
+    }
+
+    const logoUrl = String(websiteImportResult.logo || '').trim()
+    const bannerUrl = String(websiteImportResult.banner || '').trim()
+    try {
+      if (logoUrl) {
+        const logoFile = await fetchImageAsFile(logoUrl, 'logo')
+        await uploadPortfolioImage('avatar', logoFile)
+      }
+      if (bannerUrl) {
+        const bannerFile = await fetchImageAsFile(bannerUrl, 'banner')
+        await uploadPortfolioImage('banner', bannerFile)
+      }
+    } catch (err: any) {
+      setWebsiteImportError(err?.message || 'Failed to import images.')
+    } finally {
+      setWebsiteImportOpen(false)
+    }
+  }
+
   function nextTempAttachmentId() {
     tempAttachmentIdRef.current -= 1
     return tempAttachmentIdRef.current
@@ -4158,6 +4249,13 @@ export default function BusinessProfileEditor() {
               </label>
             </div>
             <div className="flex gap-2">
+              <button
+                className="text-sm underline text-blue-300 disabled:opacity-60"
+                disabled={websiteImportLoading}
+                onClick={handleWebsiteImport}
+              >
+                {websiteImportLoading ? 'Importing…' : 'Import from website'}
+              </button>
               {!sectionEdit.basic ? (
                 <button className="text-sm underline text-blue-300" onClick={() => setSectionEdit((p) => ({ ...p, basic: true }))}>
                   Edit
@@ -6407,6 +6505,84 @@ export default function BusinessProfileEditor() {
           </button>
         </div>
       </div>
+        </div>
+      )}
+
+      {/* Website import modal */}
+      {websiteImportOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6" onClick={() => setWebsiteImportOpen(false)}>
+          <div className="w-full max-w-3xl bg-white rounded-xl shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-lg font-semibold">Import from Website</div>
+              <button className="text-sm underline" onClick={() => setWebsiteImportOpen(false)}>Close</button>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-4">
+              This fills your draft only. You still need to save the section to update the live profile.
+            </p>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Website URL</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={websiteImportUrl}
+                  onChange={(e) => setWebsiteImportUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded text-gray-900"
+                />
+                <button
+                  type="button"
+                  onClick={handleWebsiteImport}
+                  disabled={websiteImportLoading}
+                  className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-60"
+                >
+                  {websiteImportLoading ? 'Importing…' : 'Fetch'}
+                </button>
+              </div>
+              {websiteImportError && (
+                <p className="text-sm text-red-600 mt-2">{websiteImportError}</p>
+              )}
+            </div>
+
+            {websiteImportResult && (
+              <div className="grid md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">About</p>
+                  <p className="text-gray-700">{websiteImportResult.description || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Services</p>
+                  <p className="text-gray-700">
+                    {Array.isArray(websiteImportResult.services) && websiteImportResult.services.length > 0
+                      ? websiteImportResult.services.join(', ')
+                      : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Logo</p>
+                  <p className="text-gray-700">{websiteImportResult.logo || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Banner</p>
+                  <p className="text-gray-700">{websiteImportResult.banner || '—'}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button className="px-4 py-2 rounded border" onClick={() => setWebsiteImportOpen(false)}>
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-60"
+                onClick={applyWebsiteImport}
+                disabled={!websiteImportResult}
+              >
+                Apply to Draft
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -21,6 +21,14 @@ type Address = {
   street?: string
 }
 
+const extractLinkRel = (html: string, rel: string) => {
+  const regex = new RegExp(`<link[^>]+rel=["'][^"']*${rel}[^"']*["'][^>]*>`, 'i')
+  const match = html.match(regex)
+  if (!match) return null
+  const hrefMatch = match[0].match(/href=["']([^"']+)["']/i)
+  return hrefMatch?.[1]?.trim() || null
+}
+
 const extractMeta = (html: string, key: string) => {
   const regex = new RegExp(
     `<meta[^>]+(?:property|name)=["']${key}["'][^>]*>`,
@@ -73,6 +81,36 @@ const pickBusinessNode = (nodes: any[]) => {
     )
   })
   return preferred || nodes[0] || null
+}
+
+const extractImageUrl = (value: any) => {
+  if (!value) return null
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const url = extractImageUrl(item)
+      if (url) return url
+    }
+  }
+  if (typeof value === 'object') {
+    return value.url || value['@id'] || null
+  }
+  return null
+}
+
+const extractServices = (node: any) => {
+  const services: string[] = []
+  const offers = node?.makesOffer || node?.offers
+  const catalog = node?.hasOfferCatalog
+  const pushName = (val: any) => {
+    const name = String(val?.name || val || '').trim()
+    if (name) services.push(name)
+  }
+  if (Array.isArray(offers)) offers.forEach(pushName)
+  if (offers && !Array.isArray(offers)) pushName(offers)
+  const catalogItems = catalog?.itemListElement || catalog?.itemList || catalog
+  if (Array.isArray(catalogItems)) catalogItems.forEach(pushName)
+  return Array.from(new Set(services))
 }
 
 const buildAddress = (addr: any): Address => {
@@ -134,10 +172,13 @@ export async function POST(req: NextRequest) {
       extractMeta(html, 'twitter:description')
     const image = extractMeta(html, 'og:image') || extractMeta(html, 'twitter:image')
     const siteName = extractMeta(html, 'og:site_name')
+    const icon = extractLinkRel(html, 'icon') || extractLinkRel(html, 'apple-touch-icon')
 
     const jsonLd = extractJsonLd(html).flatMap(normalizeJsonLd)
     const businessNode = pickBusinessNode(jsonLd)
     const address = buildAddress(businessNode?.address)
+    const logo = extractImageUrl(businessNode?.logo) || extractImageUrl(businessNode?.image) || icon || null
+    const services = extractServices(businessNode)
 
     const name =
       businessNode?.name ||
@@ -161,9 +202,12 @@ export async function POST(req: NextRequest) {
       name,
       description,
       image,
+      logo,
+      banner: image,
       phone,
       email,
       industry,
+      services,
       website,
       address,
       socialLinks,

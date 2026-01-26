@@ -101,10 +101,11 @@ const mapStyles: Record<string, string> = {
   streets: 'mapbox://styles/mapbox/streets-v12',
 }
 
+const DEBUG_LOG_ENABLED = process.env.NEXT_PUBLIC_DEBUG_LOG_ENABLED === 'true'
 const DEBUG_ENDPOINT = 'http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc'
 const emitDebugLog = (payload: Record<string, unknown>) => {
+  if (!DEBUG_LOG_ENABLED) return
   fetch(DEBUG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {})
-  fetch('/api/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {})
 }
 
 const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDiscoveryMapProps>((props, ref) => {
@@ -113,6 +114,7 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
   const markersRef = useRef<any[]>([])
   const jobMarkersRef = useRef<any[]>([])
   const pointBMarkerRef = useRef<any>(null)
+  const pointAMarkerRef = useRef<any>(null)
   const routeBoundsRef = useRef<any>(null)
   const routeGeoRef = useRef<any>(null)
   const routePointARef = useRef<[number, number] | null>(null)
@@ -144,6 +146,7 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
   })
   const abortControllerRef = useRef<AbortController | null>(null)
   const lastFetchParamsRef = useRef<string>('')
+  const hasFittedInitialBoundsRef = useRef<boolean>(false)
   const onResultsRef = useRef(props.onResults)
   const onSelectedBusinessChangeRef = useRef(props.onSelectedBusinessChange)
   const onSelectedBusinessIdRef = useRef(props.onSelectedBusinessId)
@@ -152,6 +155,20 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
   const getPointAFromSelection = useCallback(() => {
     if (!props.selectedBusinessId) return null
     const selectId = String(props.selectedBusinessId)
+    const jobId = selectId.startsWith('job:') ? selectId.slice(4) : null
+
+    const jobMatch = (props.jobs || []).find((job) => {
+      if (jobId) return String(job.id) === jobId
+      return String(job.id) === selectId
+    })
+    if (jobMatch?.lat != null && jobMatch?.lng != null) {
+      return {
+        coords: [jobMatch.lng, jobMatch.lat] as [number, number],
+        label: jobMatch.title || jobMatch.business_name || 'Job',
+        selectedBiz: null,
+      }
+    }
+
     const selectedBiz = businesses.find((b) => {
       const bizId = String(b.properties.id)
       return bizId === selectId || Number(bizId) === Number(selectId)
@@ -161,16 +178,6 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
         coords: selectedBiz.geometry.coordinates as [number, number],
         label: selectedBiz.properties?.name || 'Business',
         selectedBiz,
-      }
-    }
-    const jobMatch = (props.jobs || []).find(
-      (job) => String(job.business_profile_id) === selectId
-    )
-    if (jobMatch?.lat != null && jobMatch?.lng != null) {
-      return {
-        coords: [jobMatch.lng, jobMatch.lat] as [number, number],
-        label: jobMatch.business_name || 'Business',
-        selectedBiz: null,
       }
     }
     return null
@@ -426,6 +433,14 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
 
     const useRadius = !!(props.radiusBusinessesActive && props.searchCenter)
 
+    console.log('[BusinessDiscoveryMap] buildBusinessParams:', {
+      showAllBusinesses: props.showAllBusinesses,
+      radiusBusinessesActive: props.radiusBusinessesActive,
+      searchCenter: props.searchCenter,
+      useRadius,
+      filters: props.filters
+    })
+
     if (props.showAllBusinesses && !useRadius) {
       params.set('show_all', '1')
     }
@@ -456,8 +471,8 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
   const fetchBusinesses = useCallback(async () => {
     if (!mapLoaded) return
     
-    // Don't fetch businesses if the global toggle is off
-    if (!props.showAllBusinesses) {
+    // Don't fetch businesses if global toggle is off AND radius search is not active
+    if (!props.showAllBusinesses && !props.radiusBusinessesActive) {
       setBusinesses([])
       onResultsRef.current([])
       return
@@ -485,6 +500,7 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
     setIsLoading(true)
 
     try {
+      console.log('[BusinessDiscoveryMap] Fetching businesses with URL:', `/api/map/businesses?${paramsString}`)
       const response = await fetch(`/api/map/businesses?${paramsString}`, {
         signal: ac.signal,
         cache: 'no-store',
@@ -571,18 +587,20 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
         })
         .filter((f): f is BusinessFeature => f !== null)
 
+      // Debug: Log all features before and after filtering
+      console.log('[BusinessDiscoveryMap] Features created:', {
+        beforeFilter: bizList.length,
+        afterFilter: features.length,
+        allFeatures: features.map(f => ({
+          id: f.properties.id,
+          name: f.properties.name,
+          lat: f.properties.lat,
+          lng: f.properties.lng
+        }))
+      })
+
       setBusinesses(features)
-      
-      // Debug: Log first feature to verify name is set correctly
-      if (features.length > 0) {
-        console.log('[BusinessDiscoveryMap] First feature properties:', {
-          id: features[0].properties.id,
-          name: features[0].properties.name,
-          nameType: typeof features[0].properties.name,
-          industries: features[0].properties.industries
-        })
-      }
-      
+
       // Pass the full BusinessFeature objects so all properties are available in the results
       onResultsRef.current(features)
     } catch (error: any) {
@@ -611,24 +629,76 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
     }
   }, [mapLoaded, props.showAllBusinesses, businesses.length, buildBusinessParams, fetchBusinesses])
 
-  // Clear businesses immediately when showAllBusinesses is toggled off
+  // Clear businesses when both global toggle and radius search are off
   useEffect(() => {
-    if (!props.showAllBusinesses) {
+    if (!props.showAllBusinesses && !props.radiusBusinessesActive) {
       setBusinesses([])
       onResultsRef.current([])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.showAllBusinesses])
+  }, [props.showAllBusinesses, props.radiusBusinessesActive])
 
-  // Ensure toggling showAllBusinesses always refetches fresh data
+  // Ensure toggling showAllBusinesses or radius search always refetches fresh data
   useEffect(() => {
     // Reset cached params so the next toggle forces a refetch
     lastFetchParamsRef.current = ''
-    if (props.showAllBusinesses) {
+    // Reset initial bounds flag so we fit bounds again
+    hasFittedInitialBoundsRef.current = false
+    if (props.showAllBusinesses || props.radiusBusinessesActive) {
       fetchBusinesses()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.showAllBusinesses])
+  }, [props.showAllBusinesses, props.radiusBusinessesActive])
+
+  // Force refetch on component mount to handle navigation back to page
+  useEffect(() => {
+    // Reset refs on mount to ensure fresh data and bounds fitting
+    lastFetchParamsRef.current = ''
+    hasFittedInitialBoundsRef.current = false
+    if (mapLoaded && props.showAllBusinesses) {
+      fetchBusinesses()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapLoaded]) // Only run when mapLoaded changes (i.e., on mount)
+
+  // Fit map bounds to show ALL businesses when showAllBusinesses is true
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !props.showAllBusinesses || businesses.length === 0) return
+
+    // Only fit bounds once per showAllBusinesses toggle to avoid jarring map movement
+    if (hasFittedInitialBoundsRef.current) return
+
+    // Only fit bounds if we have businesses with valid coordinates
+    const businessesWithCoords = businesses.filter(
+      b => b.geometry?.coordinates &&
+           Number.isFinite(b.geometry.coordinates[0]) &&
+           Number.isFinite(b.geometry.coordinates[1])
+    )
+
+    if (businessesWithCoords.length === 0) return
+
+    // Calculate bounds that include ALL businesses
+    const bounds = new mapboxgl.LngLatBounds()
+    businessesWithCoords.forEach(b => {
+      bounds.extend(b.geometry.coordinates as [number, number])
+    })
+
+    // Add padding and fit the map to show all businesses
+    console.log('[BusinessDiscoveryMap] Fitting bounds to all businesses:', {
+      count: businessesWithCoords.length,
+      bounds: bounds.toArray()
+    })
+
+    map.current.fitBounds(bounds, {
+      padding: { top: 50, bottom: 50, left: 50, right: 50 },
+      maxZoom: 12, // Don't zoom in too much
+      duration: 1000
+    })
+
+    // Mark that we've fitted initial bounds
+    hasFittedInitialBoundsRef.current = true
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businesses.length, mapLoaded, props.showAllBusinesses])
 
   // Create/update markers - only recreate when businesses change, not when selection changes
   const updateMarkers = useCallback(() => {
@@ -783,6 +853,8 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
                     title: j.title || 'Untitled Job',
                     business_name: j.business_name || apiBusinessName,
                     location: j.location || null,
+                    location_label: j.location_label || null,
+                    location_name: j.location_name || null,
                     city: j.city || null,
                     state: j.state || null,
                     country: j.country || null,
@@ -965,12 +1037,26 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
           e.preventDefault()
           e.stopPropagation()
 
-          const selectedBusinessId = String(job.business_profile_id || '')
-          if (selectedBusinessId) {
-            onSelectedBusinessIdRef.current(selectedBusinessId)
-            const selectedBusiness = businesses.find((b) => String(b.properties.id) === selectedBusinessId) || null
-            onSelectedBusinessChangeRef.current(selectedBusiness)
+        const jobSelectId = `job:${job.id}`
+        onSelectedBusinessIdRef.current(jobSelectId)
+        const jobBusinessName = job.business_name || job.title || 'Job'
+        const selectedBusiness = {
+          id: jobSelectId,
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [jobLng, jobLat]
+          },
+          properties: {
+            id: jobSelectId,
+            name: jobBusinessName,
+            slug: '',
+            industries: [],
+            lat: jobLat,
+            lng: jobLng
           }
+        } as BusinessFeature
+        onSelectedBusinessChangeRef.current(selectedBusiness)
 
           // Toggle popup
           if ((marker as any)._isPopupOpen) {
@@ -1014,7 +1100,13 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
                   jobs: jobsList.map((j: any) => ({
                     id: j.id,
                     title: j.title || 'Untitled Job',
-                    business_name: j.business_name || apiBusinessName
+                    business_name: j.business_name || apiBusinessName,
+                    location: j.location || null,
+                    location_label: j.location_label || null,
+                    location_name: j.location_name || null,
+                    city: j.city || null,
+                    state: j.state || null,
+                    country: j.country || null,
                   }))
                 })
               } else if (jobsList.length === 1) {
@@ -1281,8 +1373,14 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
         pointBMarkerRef.current.remove()
         pointBMarkerRef.current = null
       }
-      
-      // Restore Point A marker to original position if it was offset
+
+      // Remove Point A marker (for jobs)
+      if (pointAMarkerRef.current) {
+        pointAMarkerRef.current.remove()
+        pointAMarkerRef.current = null
+      }
+
+      // Restore Point A marker to original position if it was offset (for businesses)
       const pointAInfo = getPointAFromSelection()
       if (pointAInfo?.selectedBiz) {
         const existingPointAMarker = markersRef.current.find(
@@ -1344,45 +1442,6 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
         const cyclingMins = cyclingData.routes?.[0]?.duration ? Math.round(cyclingData.routes[0].duration / 60) : undefined
         const cyclingKm = cyclingData.routes?.[0]?.distance ? Math.round(cyclingData.routes[0].distance / 100) / 10 : undefined
 
-        // Calculate perpendicular offset to avoid obstructing route
-        // Calculate bearing from Point A to Point B
-        const calculateBearing = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-          const dLng = (lng2 - lng1) * Math.PI / 180
-          const lat1Rad = lat1 * Math.PI / 180
-          const lat2Rad = lat2 * Math.PI / 180
-          const y = Math.sin(dLng) * Math.cos(lat2Rad)
-          const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng)
-          return Math.atan2(y, x) * 180 / Math.PI
-        }
-
-        // Calculate offset position (perpendicular to route, ~100 meters)
-        const calculateOffsetPosition = (lat: number, lng: number, bearing: number, offsetMeters: number) => {
-          const R = 6371000 // Earth radius in meters
-          const offsetRad = offsetMeters / R
-          const bearingRad = (bearing + 90) * Math.PI / 180 // Perpendicular (90 degrees)
-          const latRad = lat * Math.PI / 180
-          const lngRad = lng * Math.PI / 180
-          
-          const newLat = Math.asin(
-            Math.sin(latRad) * Math.cos(offsetRad) +
-            Math.cos(latRad) * Math.sin(offsetRad) * Math.cos(bearingRad)
-          ) * 180 / Math.PI
-          
-          const newLng = lngRad + Math.atan2(
-            Math.sin(bearingRad) * Math.sin(offsetRad) * Math.cos(latRad),
-            Math.cos(offsetRad) - Math.sin(latRad) * Math.sin(newLat * Math.PI / 180)
-          ) * 180 / Math.PI
-          
-          return [newLng, newLat]
-        }
-
-        const bearing = calculateBearing(pointA[1], pointA[0], latB, lngB)
-        const offsetDistance = 0.0008 // ~100 meters in degrees (approximate)
-        
-        // Offset Point A to the left of route, Point B to the right
-        const pointAOffset = calculateOffsetPosition(pointA[1], pointA[0], bearing, -offsetDistance)
-        const pointBOffset = calculateOffsetPosition(latB, lngB, bearing, offsetDistance)
-
         // Draw the driving route on the map
         if (drivingData.routes?.[0]?.geometry) {
           const routeSourceId = 'route-source'
@@ -1420,19 +1479,45 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
           routePointBRef.current = [lngB, latB]
         }
 
-        // Create or update Point A marker (offset to avoid route)
-        if (selectedBiz) {
-          const existingPointAMarker = markersRef.current.find((m: any) => m._businessId === selectedBiz.properties.id)
-          if (existingPointAMarker) {
-            // Temporarily offset the business marker for route display
-            const pointAMarkerEl = existingPointAMarker.getElement()
-            if (pointAMarkerEl) {
-              // Store original position
-              ;(existingPointAMarker as any)._originalLngLat = existingPointAMarker.getLngLat()
-              // Offset marker position
-              existingPointAMarker.setLngLat([pointAOffset[0], pointAOffset[1]])
-            }
+        // Create Point A marker for jobs (businesses already have their own markers)
+        if (!selectedBiz) {
+          // Job selected - create a dedicated Point A marker
+          if (pointAMarkerRef.current) {
+            pointAMarkerRef.current.remove()
+            pointAMarkerRef.current = null
           }
+
+          const pointAEl = document.createElement('div')
+          pointAEl.style.width = '32px'
+          pointAEl.style.height = '32px'
+          pointAEl.style.borderRadius = '50%'
+          pointAEl.style.backgroundColor = '#3b82f6' // Blue for Point A
+          pointAEl.style.border = '3px solid white'
+          pointAEl.style.boxShadow = '0 2px 8px rgba(0,0,0,0.5)'
+          pointAEl.style.zIndex = '2'
+
+          const pointAPopup = new mapboxgl.Popup({
+            offset: 25,
+            closeButton: false,
+            closeOnClick: false,
+          }).setHTML(`
+            <div style="background: #1e293b; color: white; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid rgba(255,255,255,0.1);">
+              <div style="color: #3b82f6; font-size: 10px; margin-bottom: 2px;">Point A</div>
+              ${pointAInfo.label}
+            </div>
+          `)
+
+          const pointAMarker = new mapboxgl.Marker({
+            element: pointAEl,
+            anchor: 'center',
+            offset: [0, -40],
+          })
+            .setLngLat([pointA[0], pointA[1]]) // Use actual coordinates
+            .setPopup(pointAPopup)
+            .addTo(map.current)
+
+          pointAMarker.togglePopup()
+          pointAMarkerRef.current = pointAMarker
         }
 
         // Create or update draggable Point B marker (offset to avoid route)
@@ -1467,7 +1552,7 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
         const pointBOriginalLngLat = [lngB, latB]
         
         const pointBMarker = new mapboxgl.Marker(markerEl, { draggable: true })
-          .setLngLat([pointBOffset[0], pointBOffset[1]]) // Use offset position for display
+          .setLngLat([lngB, latB]) // Use actual coordinates
           .setPopup(pointBPopup)
           .addTo(map.current)
         
@@ -1515,20 +1600,17 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
             if (!pointAInfo) return
 
             const pointA = pointAInfo.coords
-            
-            // Get the actual dragged position (which is offset)
-            const draggedLngLat = pointBMarker.getLngLat()
-            // Calculate the original position by reversing the offset
-            const reverseBearing = calculateBearing(pointA[1], pointA[0], draggedLngLat.lat, draggedLngLat.lng)
-            const reverseOffset = calculateOffsetPosition(draggedLngLat.lat, draggedLngLat.lng, reverseBearing, -offsetDistance)
-            const newLngLat = { lng: reverseOffset[0], lat: reverseOffset[1] }
 
-            // Recalculate driving route using actual coordinates
+            // Get the dragged position directly
+            const draggedLngLat = pointBMarker.getLngLat()
+            const newLngLat = { lng: draggedLngLat.lng, lat: draggedLngLat.lat }
+
+            // Recalculate driving route
             const drivingUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${pointA[0]},${pointA[1]};${newLngLat.lng},${newLngLat.lat}?geometries=geojson&access_token=${MAPBOX_TOKEN}`
             const drivingRes = await fetch(drivingUrl)
             const drivingData = await drivingRes.json()
 
-            // Recalculate cycling route using actual coordinates
+            // Recalculate cycling route
             const cyclingUrl = `https://api.mapbox.com/directions/v5/mapbox/cycling/${pointA[0]},${pointA[1]};${newLngLat.lng},${newLngLat.lat}?geometries=geojson&access_token=${MAPBOX_TOKEN}`
             const cyclingRes = await fetch(cyclingUrl)
             const cyclingData = await cyclingRes.json()
@@ -1537,26 +1619,9 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
             const newDrivingKm = drivingData.routes?.[0]?.distance ? Math.round(drivingData.routes[0].distance / 100) / 10 : undefined
             const newCyclingMins = cyclingData.routes?.[0]?.duration ? Math.round(cyclingData.routes[0].duration / 60) : undefined
             const newCyclingKm = cyclingData.routes?.[0]?.distance ? Math.round(cyclingData.routes[0].distance / 100) / 10 : undefined
-            
-            // Recalculate offset for new position and update marker display position
-            const newBearing = calculateBearing(pointA[1], pointA[0], newLngLat.lat, newLngLat.lng)
-            const newPointBOffset = calculateOffsetPosition(newLngLat.lat, newLngLat.lng, newBearing, offsetDistance)
-            pointBMarker.setLngLat([newPointBOffset[0], newPointBOffset[1]])
+
+            // Store the new position
             ;(pointBMarker as any)._originalLngLat = [newLngLat.lng, newLngLat.lat]
-            
-            // Update Point A marker offset as well
-            if (pointAInfo.selectedBiz) {
-              const existingPointAMarker = markersRef.current.find(
-                (m: any) => m._businessId === pointAInfo.selectedBiz.properties.id
-              )
-              if (existingPointAMarker) {
-                const pointAOffset = calculateOffsetPosition(pointA[1], pointA[0], newBearing, -offsetDistance)
-                existingPointAMarker.setLngLat([pointAOffset[0], pointAOffset[1]])
-                if (!(existingPointAMarker as any)._originalLngLat) {
-                  ;(existingPointAMarker as any)._originalLngLat = existingPointAMarker.getLngLat()
-                }
-              }
-            }
 
             // Update route on map
             if (drivingData.routes?.[0]?.geometry) {
@@ -1770,7 +1835,9 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
               <div className="space-y-3">
                 {jobListModal.jobs.map((job) => {
                   const locationLabel =
+                    job.location_label ||
                     job.location ||
+                    job.location_name ||
                     [job.city, job.state, job.country].filter(Boolean).join(', ')
 
                   return (

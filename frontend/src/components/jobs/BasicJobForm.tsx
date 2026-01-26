@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import LocationDropdownsString from '@/components/LocationDropdownsString'
+import { useBusinessContext } from '@/components/BusinessContext'
 
 interface BusinessProfile {
   id: string
@@ -17,6 +18,7 @@ interface BasicJobFormProps {
 
 export default function BasicJobForm({ businessProfile }: BasicJobFormProps) {
   const router = useRouter()
+  const { activeBusinessId, activeLocationId } = useBusinessContext()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -41,7 +43,7 @@ export default function BasicJobForm({ businessProfile }: BasicJobFormProps) {
     must_have_5: '',
     must_have_6: '',
     licences: [] as string[],
-    status: 'draft',
+    status: 'published',
   })
 
   const licenceOptions = [
@@ -164,6 +166,12 @@ export default function BasicJobForm({ businessProfile }: BasicJobFormProps) {
         ? `${formData.description}\n\nStart date: ${startDateText}`
         : `Start date: ${startDateText}`
 
+      const isActive = formData.status === 'published'
+      if (!activeLocationId) {
+        setErrors({ submit: 'Select an active location before posting a job.' })
+        setIsSubmitting(false)
+        return
+      }
       // Build base payload without extra_metadata (schema-tolerant)
       const basePayload: any = {
         title: formData.title,
@@ -183,8 +191,15 @@ export default function BasicJobForm({ businessProfile }: BasicJobFormProps) {
         required_skills: [],
         preferred_skills: [],
         status: formData.status,
-        business_profile_id: businessProfileId, // Use ID from users table for RLS
+        is_active: isActive,
+        business_profile_id: businessProfileId, // Legacy RLS
+        business_id: activeBusinessId || null,
+        location_id: activeLocationId,
       }
+      const legacyPayload: any = {
+        ...basePayload,
+      }
+      delete legacyPayload.is_active
 
       // Try to add job_post_type if column exists, otherwise store in tags
       const metadataPayload: any = {
@@ -214,6 +229,7 @@ export default function BasicJobForm({ businessProfile }: BasicJobFormProps) {
         },
         // Try without job_post_type (base payload already has business_profile_id)
         basePayload,
+        legacyPayload,
       ]
 
       let lastErr: any = null

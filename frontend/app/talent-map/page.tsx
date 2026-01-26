@@ -4,14 +4,16 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { INDUSTRY_OPTIONS as CANONICAL_INDUSTRY_OPTIONS } from '@/constants/industries'
 import BusinessDiscoveryMap, {type BusinessFeature, type RouteState } from '@/components/BusinessDiscoveryMap'
 
 export const dynamic = 'force-dynamic'
 
+const DEBUG_LOG_ENABLED = process.env.NEXT_PUBLIC_DEBUG_LOG_ENABLED === 'true'
 const DEBUG_ENDPOINT = 'http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc'
 const emitDebugLog = (payload: Record<string, unknown>) => {
+  if (!DEBUG_LOG_ENABLED) return
   fetch(DEBUG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {})
-  fetch('/api/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {})
 }
 
 async function saveForRelocation(business) {
@@ -31,56 +33,7 @@ async function saveForRelocation(business) {
     alert('Could not save');
   }
 }
-const INDUSTRIES = [
-  "Agriculture",
-  "Architecture",
-  "Automotive",
-  "Aviation",
-  "Banking",
-  "Biotechnology",
-  "Building & Construction",
-  "Business Consulting",
-  "Childcare & Early Education",
-  "Cleaning Services",
-  "Community Services",
-  "Cyber Security",
-  "Defence & Aerospace",
-  "Education & Training",
-  "Electrical & Electronics",
-  "Energy & Utilities",
-  "Engineering",
-  "Environmental Services",
-  "Financial Services",
-  "Food & Beverage",
-  "Government & Public Sector",
-  "Healthcare",
-  "Hospitality",
-  "Human Resources",
-  "Information Technology",
-  "Insurance",
-  "Legal Services",
-  "Logistics & Supply Chain",
-  "Manufacturing",
-  "Marketing & Advertising",
-  "Media & Communications",
-  "Mining & Resources",
-  "Not-for-Profit",
-  "Pharmaceuticals",
-  "Professional Services",
-  "Property & Real Estate",
-  "Recruitment & Staffing",
-  "Retail",
-  "Sales",
-  "Science & Research",
-  "Sports & Recreation",
-  "Telecommunications",
-  "Tourism & Travel",
-  "Transport",
-  "Warehousing",
-  "Wholesale Trade"
-] as const;
-
-const INDUSTRY_OPTIONS = [...INDUSTRIES];
+const INDUSTRY_OPTIONS = [...CANONICAL_INDUSTRY_OPTIONS]
 
 type LocSuggestion = { id: string; label: string; lng: number; lat: number }
 type BizSuggestion = {
@@ -952,13 +905,6 @@ function TalentMapPageInner() {
                           setLocOpen(false)
                         }
                       }}
-                      onKeyDown={(e) => {
-                        console.log('[LocationSuggestions] Input onKeyDown:', {
-                          key: e.key,
-                          value: e.currentTarget.value,
-                          showAllBusinesses
-                        })
-                      }}
                       onFocus={(e) => {
                         console.log('[LocationSuggestions] Input onFocus FIRED:', {
                           value: e.target.value,
@@ -1225,40 +1171,50 @@ function TalentMapPageInner() {
                   </div>
                 ) : (
                   <div className="space-y-1.5">
-                    {results.map((business: any) => (
-                      <button
-                        key={business.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedBusinessId(business.id)
-                          setSelectBusinessId(business.id)
-                        }}
-                        className={`w-full text-left p-2 rounded border transition-all ${
-                          selectedBusinessId === business.id
-                            ? 'bg-blue-500/20 border-blue-500/50'
-                            : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          {business.intent_visibility && business.intent_status ? (
-                            <span
-                              className={`inline-flex h-2 w-2 rounded-full ${
-                                business.intent_status === 'actively_building_talent' ? 'bg-emerald-400' :
-                                business.intent_status === 'future_planning' ? 'bg-blue-400' :
-                                'bg-slate-400'
-                              }`}
-                              title={`Intent: ${business.intent_status.replace(/_/g, ' ')}`}
-                            />
-                          ) : null}
-                          <div className="font-medium text-white text-xs truncate">{business.name}</div>
-                        </div>
-                        <div className="text-[10px] text-slate-400 mt-0.5 truncate">
-                          {Array.isArray(business.industries) && business.industries.length
-                            ? business.industries[0]
-                            : 'Industry not set'}
-                        </div>
-                      </button>
-                    ))}
+                    {results.map((business: any) => {
+                      // Handle both flat objects and BusinessFeature objects with nested properties
+                      const props = business.properties || business
+                      const bizId = props.id || business.id
+                      const bizName = props.name || 'Business'
+                      const bizIndustries = props.industries || []
+                      const intentVisible = props.intentVisible ?? props.intent_visibility
+                      const intentStatus = props.intentStatus ?? props.intent_status
+
+                      return (
+                        <button
+                          key={bizId}
+                          type="button"
+                          onClick={() => {
+                            setSelectedBusinessId(bizId)
+                            setSelectBusinessId(bizId)
+                          }}
+                          className={`w-full text-left p-2 rounded border transition-all ${
+                            selectedBusinessId === bizId
+                              ? 'bg-blue-500/20 border-blue-500/50'
+                              : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {intentVisible && intentStatus ? (
+                              <span
+                                className={`inline-flex h-2 w-2 rounded-full ${
+                                  intentStatus === 'actively_building_talent' ? 'bg-emerald-400' :
+                                  intentStatus === 'future_planning' ? 'bg-blue-400' :
+                                  'bg-slate-400'
+                                }`}
+                                title={`Intent: ${intentStatus.replace(/_/g, ' ')}`}
+                              />
+                            ) : null}
+                            <div className="font-medium text-white text-xs truncate">{bizName}</div>
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5 truncate">
+                            {Array.isArray(bizIndustries) && bizIndustries.length
+                              ? bizIndustries[0]
+                              : 'Industry not set'}
+                          </div>
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -1490,7 +1446,10 @@ function TalentMapPageInner() {
                     radiusKm={radiusKm}
                     showAllBusinesses={showAllBusinesses}
                     radiusBusinessesActive={!!searchCenter}
-                    onResults={(items) => setResults(items)}
+                    onResults={(items) => {
+                      console.log('[TalentMap] onResults received:', items.length, 'businesses', items.map((i: any) => i.properties?.name || i.name))
+                      setResults(items)
+                    }}
                     selectedBusinessId={selectedBusinessId}
                     onSelectedBusinessId={(id) => setSelectedBusinessId(id)}
                     selectBusinessId={selectBusinessId}

@@ -76,9 +76,9 @@ export default function TalentCalendarPage() {
           .eq('status', 'accepted')
 
         // Fetch business names for both sessions and connections
-        const sessionBusinessIds = [...new Set((sessions || []).map(s => s.business_id).filter(Boolean))]
-        const connectionBusinessIds = [...new Set((connections || []).map(c => c.business_id).filter(Boolean))]
-        const allBusinessIds = [...new Set([...sessionBusinessIds, ...connectionBusinessIds])]
+        const sessionBusinessIds = Array.from(new Set((sessions || []).map(s => s.business_id).filter(Boolean) as string[]))
+        const connectionBusinessIds = Array.from(new Set((connections || []).map(c => c.business_id).filter(Boolean) as string[]))
+        const allBusinessIds = Array.from(new Set([...sessionBusinessIds, ...connectionBusinessIds]))
         
         let businessNames: Record<string, string> = {}
         if (allBusinessIds.length > 0) {

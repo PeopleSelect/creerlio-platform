@@ -14,6 +14,8 @@ interface Job {
   description: string | null
   location: string | null
   city: string | null
+  state: string | null
+  country: string | null
   status: string
   created_at: string
 }
@@ -65,6 +67,7 @@ function SearchPageInner() {
   const params = useSearchParams()
   const isEmbedded = params?.get('embedded') === '1'
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [userType, setUserType] = useState<string | null>(null)
   const [activeRole, setActiveRole] = useState<'talent' | 'business' | null>(null)
   
@@ -101,6 +104,7 @@ function SearchPageInner() {
         // Not authenticated
         if (!cancelled) {
           setIsAuthenticated(false)
+          setIsAdmin(false)
           setUserType(null)
           setActiveRole(null)
         }
@@ -109,6 +113,15 @@ function SearchPageInner() {
 
       if (!cancelled) {
         setIsAuthenticated(true)
+      }
+
+      const { data: { user: freshUser } } = await supabase.auth.getUser()
+      const meta = (freshUser || data.session?.user)?.user_metadata || {}
+      const adminEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(',').map(e => e.trim().toLowerCase()) || []
+      const emailLower = (freshUser?.email || email || '').toLowerCase()
+      const hasAdminFlag = meta.is_admin === true || meta.admin === true
+      if (!cancelled) {
+        setIsAdmin(hasAdminFlag || (!!emailLower && adminEmails.includes(emailLower)))
       }
 
       // CRITICAL: Determine actual user type by checking which profile exists
@@ -327,7 +340,7 @@ function SearchPageInner() {
           let lng: number | null = null
 
           // Build location string from available fields
-          const locationStr = [job.location, job.city].filter(Boolean).join(', ')
+          const locationStr = [job.location, job.city, job.state, job.country].filter(Boolean).join(', ')
           
           if (locationStr) {
             // Geocode location string
@@ -554,7 +567,7 @@ function SearchPageInner() {
         // Jobs are stored in Supabase (if table exists). If it's not configured yet, show a calm message.
         let qb: any = supabase
           .from('jobs')
-          .select('id,title,description,location,city,country,status,created_at,business_profile_id')
+          .select('id,title,description,location,city,state,country,status,created_at,business_profile_id')
           .limit(100)
         
         // Build OR conditions - combine keyword and location into one OR clause
@@ -566,6 +579,7 @@ function SearchPageInner() {
         if (loc) {
           allConditions.push(`location.ilike.%${loc}%`)
           allConditions.push(`city.ilike.%${loc}%`)
+          allConditions.push(`state.ilike.%${loc}%`)
           allConditions.push(`country.ilike.%${loc}%`)
         }
         
@@ -574,14 +588,22 @@ function SearchPageInner() {
           qb = qb.or(allConditions.join(','))
         }
         
-        // Prefer published jobs if column exists (try with status filter first)
-        let res: any = await qb.eq('status', 'published')
+        // Prefer published + active jobs if columns exist
+        let res: any = await qb.ilike('status', 'published%').or('is_active.is.true,is_active.is.null')
         
-        // If error, try again without status filter (schema may not have it)
+        // If error, retry without is_active (older schema)
+        if (res.error) {
+          const msg = String(res.error?.message || '')
+          if (/is_active/i.test(msg) || /column.*is_active/i.test(msg)) {
+            res = await qb.ilike('status', 'published%')
+          }
+        }
+        
+        // If still error, try again without status filter (schema may not have it)
         if (res.error) {
           qb = supabase
             .from('jobs')
-            .select('id,title,description,location,city,country,created_at,business_profile_id')
+            .select('id,title,description,location,city,state,country,created_at,business_profile_id')
             .limit(100)
           
           if (allConditions.length > 0) {
@@ -632,6 +654,7 @@ function SearchPageInner() {
               filteredData = filteredData.filter((j: any) =>
                 (j.location || '').toLowerCase().includes(locLower) ||
                 (j.city || '').toLowerCase().includes(locLower) ||
+                (j.state || '').toLowerCase().includes(locLower) ||
                 (j.country || '').toLowerCase().includes(locLower)
               )
             }
@@ -652,6 +675,8 @@ function SearchPageInner() {
           description: typeof j?.description === 'string' ? j.description : null,
           location: typeof j?.location === 'string' ? j.location : null,
           city: typeof j?.city === 'string' ? j.city : null,
+          state: typeof j?.state === 'string' ? j.state : null,
+          country: typeof j?.country === 'string' ? j.country : null,
           status: typeof j?.status === 'string' ? j.status : 'published',
           created_at: typeof j?.created_at === 'string' ? j.created_at : new Date().toISOString(),
         }))
@@ -1021,6 +1046,11 @@ function SearchPageInner() {
                 <Link href="/#business" className="hover:text-[#2B4EA2] transition-colors">Business</Link>
                 <Link href="/search" className="hover:text-[#2B4EA2] transition-colors text-[#2B4EA2]">Search</Link>
                 <Link href="/jobs" className="hover:text-[#2B4EA2] transition-colors">Jobs</Link>
+                {isAdmin && (
+                  <Link href="/admin" className="hover:text-[#2B4EA2] transition-colors">
+                    Admin
+                  </Link>
+                )}
                 {isAuthenticated ? (
                   <>
                     {userType === 'business' ? (

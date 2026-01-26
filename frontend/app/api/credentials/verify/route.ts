@@ -120,11 +120,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Update QR token scan count
+    // Update QR token scan count (fetch current, increment, update)
+    const { data: qrTokenData } = await supabase
+      .from('credential_qr_tokens')
+      .select('scan_count')
+      .eq('credential_id', credential.id)
+      .maybeSingle()
+
     await supabase
       .from('credential_qr_tokens')
       .update({
-        scan_count: supabase.raw('scan_count + 1'),
+        scan_count: (qrTokenData?.scan_count || 0) + 1,
         last_scan_at: new Date().toISOString(),
       })
       .eq('credential_id', credential.id)
@@ -169,9 +175,9 @@ export async function GET(request: NextRequest) {
         status: credential.status,
         trust_level: credential.trust_level,
         issuer: credential.credential_issuers ? {
-          name: credential.credential_issuers.name,
-          logo_url: credential.credential_issuers.logo_url,
-          website_url: credential.credential_issuers.website_url,
+          name: (credential.credential_issuers as any).name,
+          logo_url: (credential.credential_issuers as any).logo_url,
+          website_url: (credential.credential_issuers as any).website_url,
         } : null,
       },
       verification: {

@@ -11,6 +11,7 @@ interface Job {
   description: string | null
   location: string | null
   city: string | null
+  state: string | null
   country: string | null
   employment_type: string | null
   remote_allowed: boolean
@@ -27,6 +28,7 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [jobsError, setJobsError] = useState<string | null>(null)
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set())
@@ -40,17 +42,28 @@ export default function JobsPage() {
     let cancelled = false
     supabase.auth
       .getSession()
-      .then((res: any) => {
+      .then(async (res: any) => {
         const data = res?.data
         const uid = data?.session?.user?.id ?? null
         if (cancelled) return
         setUserId(uid)
         setIsAuthenticated(!!uid)
+        if (!uid) {
+          setIsAdmin(false)
+          return
+        }
+        const { data: { user } } = await supabase.auth.getUser()
+        const meta = user?.user_metadata || {}
+        const email = (user?.email || data?.session?.user?.email || '').toLowerCase()
+        const adminEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(',').map(e => e.trim().toLowerCase()) || []
+        const hasAdminFlag = meta.is_admin === true || meta.admin === true
+        setIsAdmin(hasAdminFlag || (!!email && adminEmails.includes(email)))
       })
       .catch(() => {
         if (cancelled) return
         setUserId(null)
         setIsAuthenticated(false)
+        setIsAdmin(false)
       })
     return () => {
       cancelled = true
@@ -81,14 +94,14 @@ export default function JobsPage() {
       let qb: any = supabase
         .from('jobs')
         .select(
-          'id,title,description,location,city,country,employment_type,remote_allowed,salary_min,salary_max,salary_currency,required_skills,created_at,business_profile_id,status'
+          'id,title,description,location,city,state,country,employment_type,remote_allowed,salary_min,salary_max,salary_currency,required_skills,created_at,business_profile_id,status'
         )
         .limit(200)
 
       // Prefer published jobs if this column exists; if it doesn't, Supabase will return an error and we'll fall back.
       qb = qb.eq('status', 'published')
       if (keyword) qb = qb.or(`title.ilike.%${keyword}%,description.ilike.%${keyword}%`)
-      if (loc) qb = qb.or(`location.ilike.%${loc}%,city.ilike.%${loc}%,country.ilike.%${loc}%`)
+      if (loc) qb = qb.or(`location.ilike.%${loc}%,city.ilike.%${loc}%,state.ilike.%${loc}%,country.ilike.%${loc}%`)
 
       let res: any = await qb
       if (res.error) {
@@ -96,11 +109,11 @@ export default function JobsPage() {
         qb = supabase
           .from('jobs')
           .select(
-            'id,title,description,location,city,country,employment_type,remote_allowed,salary_min,salary_max,salary_currency,required_skills,created_at,business_profile_id'
+            'id,title,description,location,city,state,country,employment_type,remote_allowed,salary_min,salary_max,salary_currency,required_skills,created_at,business_profile_id'
           )
           .limit(200)
         if (keyword) qb = qb.or(`title.ilike.%${keyword}%,description.ilike.%${keyword}%`)
-        if (loc) qb = qb.or(`location.ilike.%${loc}%,city.ilike.%${loc}%,country.ilike.%${loc}%`)
+        if (loc) qb = qb.or(`location.ilike.%${loc}%,city.ilike.%${loc}%,state.ilike.%${loc}%,country.ilike.%${loc}%`)
         res = await qb
       }
 
@@ -116,6 +129,7 @@ export default function JobsPage() {
         description: typeof j?.description === 'string' ? j.description : null,
         location: typeof j?.location === 'string' ? j.location : null,
         city: typeof j?.city === 'string' ? j.city : null,
+        state: typeof j?.state === 'string' ? j.state : null,
         country: typeof j?.country === 'string' ? j.country : null,
         employment_type: typeof j?.employment_type === 'string' ? j.employment_type : null,
         remote_allowed: !!j?.remote_allowed,
@@ -281,6 +295,11 @@ export default function JobsPage() {
               <Link href="/business" className="hover:text-blue-600 transition-colors">Business</Link>
               <Link href="/search" className="hover:text-blue-600 transition-colors">Search</Link>
               <Link href="/jobs" className="hover:text-blue-600 transition-colors">Jobs</Link>
+              {isAdmin && (
+                <Link href="/admin" className="hover:text-blue-600 transition-colors">
+                  Admin
+                </Link>
+              )}
               {isAuthenticated && (
                 <button
                   type="button"

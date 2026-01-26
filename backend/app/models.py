@@ -74,6 +74,60 @@ class BusinessProfile(Base):
     is_active = Column(Boolean, default=True)
 
 
+class Business(Base):
+    """Business entity (owns locations; users are assigned via roles)"""
+    __tablename__ = "businesses"
+
+    id = Column(String(36), primary_key=True, index=True)  # UUID
+    name = Column(String(255), nullable=False, index=True)
+    industry = Column(String(100))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    locations = relationship("Location", back_populates="business")
+
+
+class Location(Base):
+    """Physical/operational location for a business"""
+    __tablename__ = "locations"
+
+    id = Column(String(36), primary_key=True, index=True)  # UUID
+    business_id = Column(String(36), ForeignKey("businesses.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    address = Column(String(500))
+    city = Column(String(100))
+    state = Column(String(100))
+    country = Column(String(100))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    business = relationship("Business", back_populates="locations")
+
+
+class UserBusinessRole(Base):
+    """Role assignment for a user within a business"""
+    __tablename__ = "user_business_roles"
+
+    id = Column(String(36), primary_key=True, index=True)  # UUID
+    user_id = Column(String(36), nullable=False, index=True)
+    business_id = Column(String(36), ForeignKey("businesses.id"), nullable=False, index=True)
+    role = Column(String(50), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "business_id", name="uniq_user_business_role"),)
+
+
+class UserLocationRole(Base):
+    """Role assignment for a user within a location"""
+    __tablename__ = "user_location_roles"
+
+    id = Column(String(36), primary_key=True, index=True)  # UUID
+    user_id = Column(String(36), nullable=False, index=True)
+    location_id = Column(String(36), ForeignKey("locations.id"), nullable=False, index=True)
+    role = Column(String(50), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "location_id", name="uniq_user_location_role"),)
+
+
 class TalentProfile(Base):
     """Talent profile model"""
     __tablename__ = "talent_profiles"
@@ -182,6 +236,8 @@ class Job(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     business_profile_id = Column(Integer, ForeignKey("business_profiles.id"), nullable=False, index=True)
+    business_id = Column(String(36), nullable=True, index=True)  # UUID
+    location_id = Column(String(36), nullable=True, index=True)  # UUID
     
     # Job details
     title = Column(String(255), nullable=False, index=True)
@@ -240,6 +296,8 @@ class Application(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+    business_id = Column(String(36), nullable=True, index=True)  # UUID
+    location_id = Column(String(36), nullable=True, index=True)  # UUID
     talent_profile_id = Column(Integer, ForeignKey("talent_profiles.id"), nullable=False, index=True)
     
     # Application status
@@ -411,6 +469,8 @@ class ResumeDataResponse(BaseModel):
 
 class JobCreate(BaseModel):
     business_profile_id: int
+    business_id: Optional[str] = None
+    location_id: Optional[str] = None
     title: str
     description: Optional[str] = None
     requirements: Optional[str] = None
@@ -441,6 +501,8 @@ class JobCreate(BaseModel):
 class JobResponse(BaseModel):
     id: int
     business_profile_id: int
+    business_id: Optional[str]
+    location_id: Optional[str]
     title: str
     description: Optional[str]
     requirements: Optional[str]
@@ -487,6 +549,8 @@ class ApplicationResponse(BaseModel):
     notes: Optional[str]
     created_at: datetime
     updated_at: datetime
+    business_id: Optional[str] = None
+    location_id: Optional[str] = None
     
     class Config:
         from_attributes = True

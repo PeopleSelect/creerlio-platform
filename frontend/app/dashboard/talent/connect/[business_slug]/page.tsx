@@ -102,9 +102,10 @@ export default function TalentConnectPage({ params }: { params: { business_slug:
         
         // Get the talent_profiles.id (not user_id) - this is what talent_connection_requests.talent_id references
         // Use ensureTalentProfile to create profile if it doesn't exist (allows connections even with incomplete profiles)
+        let tId: string | null = null
         try {
           const talentProfile = await ensureTalentProfile(uid)
-          const tId = String(talentProfile.id) // Use talent_profiles.id, not user_id
+          tId = String(talentProfile.id) // Use talent_profiles.id, not user_id
           if (!cancelled) setTalentId(tId)
         } catch (profileError: any) {
           console.error('[Talent Connect] Error ensuring talent profile:', profileError)
@@ -279,6 +280,12 @@ export default function TalentConnectPage({ params }: { params: { business_slug:
           .from('talent_connection_requests')
           .insert({ talent_id: talentId, business_id: businessId, status: 'pending', selected_sections: selectedList })
         if (ins.error) {
+          const msg = String(ins.error.message || '')
+          const code = String((ins.error as any).code || '')
+          if (code === '23505' || msg.includes('talent_connection_requests_talent_id_business_id_key')) {
+            setError('You are already connected or have a pending connection request with this business.')
+            return
+          }
           setError(ins.error.message)
           return
         }

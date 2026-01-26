@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import LocationDropdownsString from '@/components/LocationDropdownsString'
+import { useBusinessContext } from '@/components/BusinessContext'
 
 interface BusinessProfile {
   id: string
@@ -17,6 +18,7 @@ interface AdvancedJobFormProps {
 
 export default function AdvancedJobForm({ businessProfile }: AdvancedJobFormProps) {
   const router = useRouter()
+  const { activeBusinessId, activeLocationId } = useBusinessContext()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [businessData, setBusinessData] = useState<any>(null)
@@ -66,7 +68,7 @@ export default function AdvancedJobForm({ businessProfile }: AdvancedJobFormProp
     cover_note_optional: false,
     privacy_notice: '',
 
-    status: 'draft',
+    status: 'published',
   })
 
   const licenceOptions = [
@@ -293,6 +295,12 @@ export default function AdvancedJobForm({ businessProfile }: AdvancedJobFormProp
       // Determine remote status
       const remote_allowed = formData.remote_type === 'remote' || formData.remote_type === 'hybrid'
 
+      const isActive = formData.status === 'published'
+      if (!activeLocationId) {
+        setErrors({ submit: 'Select an active location before posting a job.' })
+        setIsSubmitting(false)
+        return
+      }
       // Build base payload without extra_metadata (schema-tolerant)
       const basePayload: any = {
         title: formData.title,
@@ -315,10 +323,17 @@ export default function AdvancedJobForm({ businessProfile }: AdvancedJobFormProp
         experience_level: formData.experience_level || null,
         education_level: formData.education_level || null,
         status: formData.status,
+        is_active: isActive,
         application_url: formData.external_link || null,
         application_email: null,
-        business_profile_id: businessProfileId, // Use ID from users table for RLS
+        business_profile_id: businessProfileId, // Legacy RLS
+        business_id: activeBusinessId || null,
+        location_id: activeLocationId,
       }
+      const legacyPayload: any = {
+        ...basePayload,
+      }
+      delete legacyPayload.is_active
 
       // Store metadata in tags array (schema-tolerant)
       const metadataTags = formData.category ? [formData.category] : []
@@ -364,6 +379,7 @@ export default function AdvancedJobForm({ businessProfile }: AdvancedJobFormProp
         },
         // Try without job_post_type (base payload already has business_profile_id)
         basePayload,
+        legacyPayload,
       ]
 
       let lastErr: any = null

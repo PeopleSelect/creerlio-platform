@@ -76,6 +76,7 @@ export default function BusinessMapPage() {
 function BusinessMapPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const embedded = searchParams?.get('embed') === '1'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -739,47 +740,48 @@ function BusinessMapPageInner() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-8 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-gray-900">
-              Creerlio
-            </Link>
+    <div className={`${embedded ? 'bg-transparent' : 'min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900'} text-white`}>
+      {!embedded && (
+        <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-8 py-4">
+            <div className="flex items-center justify-between">
+              <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-gray-900">
+                Creerlio
+              </Link>
 
-            <nav className="hidden lg:flex items-center gap-x-8 text-sm text-gray-600">
-              <Link href="/talent" className="hover:text-blue-600 transition-colors">Talent</Link>
-              <Link href="/business" className="hover:text-blue-600 transition-colors">Business</Link>
-              <Link href="/search" className="hover:text-blue-600 transition-colors">Search</Link>
-              <Link href="/jobs" className="hover:text-blue-600 transition-colors">Jobs</Link>
-            </nav>
+              <nav className="hidden lg:flex items-center gap-x-8 text-sm text-gray-600">
+                <Link href="/talent" className="hover:text-blue-600 transition-colors">Talent</Link>
+                <Link href="/business" className="hover:text-blue-600 transition-colors">Business</Link>
+                <Link href="/search" className="hover:text-blue-600 transition-colors">Search</Link>
+                <Link href="/jobs" className="hover:text-blue-600 transition-colors">Jobs</Link>
+              </nav>
 
-            <div className="flex gap-3">
-              <Link
-                href="/login/talent?mode=signup&redirect=/dashboard/talent"
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
-              >
-                Create Talent Account
-              </Link>
-              <Link
-                href="/login/business?mode=signup&redirect=/dashboard/business"
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
-              >
-                Create Business Account
-              </Link>
-              <Link
-                href="/login/talent?mode=signin&redirect=/dashboard/talent"
-                className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
-              >
-                Sign In
-              </Link>
+              <div className="flex gap-3">
+                <Link
+                  href="/login/talent?mode=signup&redirect=/dashboard/talent"
+                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+                >
+                  Create Talent Account
+                </Link>
+                <Link
+                  href="/login/business?mode=signup&redirect=/dashboard/business"
+                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+                >
+                  Create Business Account
+                </Link>
+                <Link
+                  href="/login/talent?mode=signin&redirect=/dashboard/talent"
+                  className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+                >
+                  Sign In
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
-      <div className="max-w-7xl mx-auto px-8 py-6">
+      <div className={`${embedded ? 'px-0 py-0' : 'max-w-7xl mx-auto px-8 py-6'}`}>
         {/* Map and Filters Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           {/* Filters Section - 1/4 width */}

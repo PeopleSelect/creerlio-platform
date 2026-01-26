@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { INDUSTRY_OPTIONS, INDUSTRY_SET } from '@/constants/industries'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -8,10 +9,11 @@ import BusinessProfileShareConfig, { ShareConfig } from '@/components/BusinessPr
 import { buildSharedPayload, createPortfolioSnapshot } from '@/lib/portfolioSnapshots'
 import { TemplateId } from '@/components/portfolioTemplates'
 
+const DEBUG_LOG_ENABLED = process.env.NEXT_PUBLIC_DEBUG_LOG_ENABLED === 'true'
 const DEBUG_ENDPOINT = 'http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc'
 const emitDebugLog = (payload: Record<string, unknown>) => {
+  if (!DEBUG_LOG_ENABLED) return
   fetch(DEBUG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {})
-  fetch('/api/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {})
 }
 
 type BusinessIntentStatus = 'actively_building_talent' | 'future_planning' | 'not_hiring'
@@ -490,6 +492,14 @@ export default function BusinessProfileEditor() {
     attachments: [],
     projects: []
   })
+
+  const [industryOpen, setIndustryOpen] = useState(false)
+  const [industryActiveIdx, setIndustryActiveIdx] = useState(0)
+  const industrySuggestions = useMemo(() => {
+    const q = String(profile.title || '').trim().toLowerCase()
+    if (!q) return INDUSTRY_OPTIONS.slice(0, 8) as unknown as string[]
+    return INDUSTRY_OPTIONS.filter((x) => x.toLowerCase().includes(q)).slice(0, 8) as unknown as string[]
+  }, [profile.title])
 
   const [newSkill, setNewSkill] = useState('')
   type BulkSection = 'skills' | 'experience' | 'education' | 'referees' | 'attachments' | 'projects'
@@ -3713,6 +3723,11 @@ export default function BusinessProfileEditor() {
         alert('Please sign in to save your profile.')
         return false
       }
+      const trimmedIndustry = typeof profile.title === 'string' ? profile.title.trim() : ''
+      if (trimmedIndustry && !INDUSTRY_SET.has(trimmedIndustry)) {
+        alert('Please select a valid industry from the list.')
+        return false
+      }
 
       const usersRowExists = await ensureUsersRow(uid)
       if (!usersRowExists) {
@@ -4229,14 +4244,71 @@ export default function BusinessProfileEditor() {
               disabled={!sectionEdit.basic}
               className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
             />
-            <input
-              type="text"
-              placeholder="Industry"
-              value={profile.title}
-              onChange={(e) => setProfile((prev) => ({ ...prev, title: e.target.value }))}
-              disabled={!sectionEdit.basic}
-              className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Industry"
+                value={profile.title}
+                onChange={(e) => {
+                  const nextValue = e.target.value
+                  setProfile((prev) => ({ ...prev, title: nextValue }))
+                  setIndustryOpen(true)
+                  setIndustryActiveIdx(0)
+                }}
+                onFocus={() => {
+                  if (industrySuggestions.length > 0) setIndustryOpen(true)
+                }}
+                onBlur={() => setTimeout(() => setIndustryOpen(false), 150)}
+                onKeyDown={(e) => {
+                  if (!industryOpen || industrySuggestions.length === 0) return
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    setIndustryActiveIdx((i) => Math.min(industrySuggestions.length - 1, i + 1))
+                    return
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    setIndustryActiveIdx((i) => Math.max(0, i - 1))
+                    return
+                  }
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    const pick = industrySuggestions[industryActiveIdx]
+                    if (pick) {
+                      setProfile((prev) => ({ ...prev, title: pick }))
+                      setIndustryOpen(false)
+                    }
+                  }
+                }}
+                disabled={!sectionEdit.basic}
+                className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={industryOpen}
+              />
+              {industryOpen && industrySuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 mt-1.5 rounded-lg border border-slate-800 bg-slate-950 shadow-lg overflow-hidden z-20">
+                  {industrySuggestions.map((opt, idx) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                        idx === industryActiveIdx ? 'bg-slate-800 text-white' : 'bg-slate-950 text-slate-200 hover:bg-slate-900'
+                      }`}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setProfile((prev) => ({ ...prev, title: opt }))
+                        setIndustryOpen(false)
+                      }}
+                      role="option"
+                      aria-selected={idx === industryActiveIdx}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <CollapsibleTextarea
               value={profile.bio}
               onChange={(e) => setProfile((prev) => ({ ...prev, bio: e.target.value }))}

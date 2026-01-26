@@ -73,7 +73,7 @@ export async function POST(
       try {
         // Call FastAPI backend to generate summary
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
-        const summaryResponse = await fetch(`${backendUrl}/api/video-chat/${sessionId}/generate-summary?email=${encodeURIComponent(session.user.email || '')}`, {
+        const summaryResponse = await fetch(`${backendUrl}/api/video-chat/${sessionId}/generate-summary?email=${encodeURIComponent(user.email || '')}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'

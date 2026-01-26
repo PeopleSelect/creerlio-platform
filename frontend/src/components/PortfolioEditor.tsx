@@ -2220,7 +2220,7 @@ export default function PortfolioEditor() {
         console.error('[Issuer Search] Error:', error)
         // Fallback to jurisdiction as issuer
         const issuerOptions = [selected.jurisdiction, selected.issuing_authority || selected.jurisdiction].filter(Boolean)
-        setLicenceIssuerSuggestions(prev => ({ ...prev, [index]: [...new Set(issuerOptions)] }))
+        setLicenceIssuerSuggestions(prev => ({ ...prev, [index]: Array.from(new Set(issuerOptions as string[])) }))
         
         // Auto-select issuer if available
         const defaultIssuer = selected.issuing_authority || selected.jurisdiction
@@ -2271,7 +2271,7 @@ export default function PortfolioEditor() {
     } catch (err) {
       console.error('[Issuer Search] Exception:', err)
       const issuerOptions = [selected.jurisdiction, selected.issuing_authority || selected.jurisdiction].filter(Boolean)
-      setLicenceIssuerSuggestions(prev => ({ ...prev, [index]: [...new Set(issuerOptions)] }))
+      setLicenceIssuerSuggestions(prev => ({ ...prev, [index]: Array.from(new Set(issuerOptions as string[])) }))
       
       const defaultIssuer = selected.issuing_authority || selected.jurisdiction
       if (defaultIssuer) {

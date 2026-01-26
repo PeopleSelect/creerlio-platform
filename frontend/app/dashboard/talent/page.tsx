@@ -10,10 +10,11 @@ import BusinessDiscoveryMap, {type BusinessFeature, type RouteState, type Busine
 
 const SearchMap = dynamic(() => import('@/components/SearchMap'), { ssr: false })
 
+const DEBUG_LOG_ENABLED = process.env.NEXT_PUBLIC_DEBUG_LOG_ENABLED === 'true'
 const DEBUG_ENDPOINT = 'http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc'
 const emitDebugLog = (payload: Record<string, unknown>) => {
+  if (!DEBUG_LOG_ENABLED) return
   fetch(DEBUG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {})
-  fetch('/api/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {})
 }
 
 export default function TalentDashboard() {
@@ -200,7 +201,7 @@ export function TalentDashboardShell({
   
   // Talent Map state
   const [talentMapLoading, setTalentMapLoading] = useState(true)
-  const [talentMapActiveStyle, setTalentMapActiveStyle] = useState<'dark' | 'light' | 'satellite' | 'streets'>('dark')
+  const [talentMapActiveStyle, setTalentMapActiveStyle] = useState<'dark' | 'light' | 'satellite' | 'streets'>('streets')
   const [talentMapFiltersCollapsed, setTalentMapFiltersCollapsed] = useState(false)
   const [talentMapPanelsCollapsed, setTalentMapPanelsCollapsed] = useState(false)
   const [talentMapResultsCollapsed, setTalentMapResultsCollapsed] = useState(false)
@@ -214,7 +215,7 @@ export function TalentDashboardShell({
   // Restore search state from sessionStorage on mount
   const [talentMapShowAllBusinesses, setTalentMapShowAllBusinesses] = useState<boolean>(true)
   const [talentMapShowAllJobs, setTalentMapShowAllJobs] = useState<boolean>(false)
-  const [talentMapRadiusSearchType, setTalentMapRadiusSearchType] = useState<'jobs' | 'business'>('business') // New: controls what the radius filter searches for
+  const [talentMapRadiusSearchType, setTalentMapRadiusSearchType] = useState<'jobs' | 'business' | null>(null) // controls what the radius filter searches for
   const [talentMapResults, setTalentMapResults] = useState<BusinessFeature[]>([])
   const [talentMapJobResults, setTalentMapJobResults] = useState<any[]>([])
   
@@ -228,7 +229,9 @@ export function TalentDashboardShell({
         
         if (state.showAllBusinesses !== undefined) setTalentMapShowAllBusinesses(state.showAllBusinesses)
         if (state.showAllJobs !== undefined) setTalentMapShowAllJobs(state.showAllJobs)
-        if (state.radiusSearchType) setTalentMapRadiusSearchType(state.radiusSearchType)
+        if (Object.prototype.hasOwnProperty.call(state, 'radiusSearchType')) {
+          setTalentMapRadiusSearchType(state.radiusSearchType)
+        }
         if (state.radiusKm) setTalentMapRadiusKm(state.radiusKm)
         if (state.searchCenter) setTalentMapSearchCenter(state.searchCenter)
         if (state.searchLocation) setTalentMapLocQuery(state.searchLocation)
@@ -427,9 +430,10 @@ export function TalentDashboardShell({
 
   // Fetch jobs when filters change
   useEffect(() => {
+    if (activeTab !== 'overview') return
     const fetchJobs = async () => {
-      // Fetch jobs only when "Show all jobs" is checked
-      const shouldFetchJobs = talentMapShowAllJobs
+      // Fetch jobs when "Show all jobs" is checked or radius search is active for jobs
+      const shouldFetchJobs = talentMapShowAllJobs || (talentMapRadiusSearchType === 'jobs' && !!talentMapSearchCenter)
       
       if (!shouldFetchJobs) {
         setTalentMapJobResults([])
@@ -444,7 +448,8 @@ export function TalentDashboardShell({
 
       try {
         const params = new URLSearchParams()
-        const useRadius = talentMapRadiusSearchType === 'jobs' && !!talentMapSearchCenter
+        const useRadius =
+          talentMapRadiusSearchType === 'jobs' && !!talentMapSearchCenter && !talentMapShowAllJobs
         if (useRadius && talentMapSearchCenter) {
           params.set('lat', String(talentMapSearchCenter.lat))
           params.set('lng', String(talentMapSearchCenter.lng))
@@ -511,10 +516,30 @@ export function TalentDashboardShell({
     }
 
     fetchJobs()
-  }, [talentMapShowAllJobs, talentMapSearchCenter, talentMapRadiusKm, talentMapRadiusSearchType])
+  }, [activeTab, talentMapShowAllJobs, talentMapSearchCenter, talentMapRadiusKm, talentMapRadiusSearchType])
 
   // Memoize stable filters object to prevent infinite re-renders
   const talentMapFilters = useMemo(() => ({ q: '', industries: [] as string[], work: '' }), [])
+
+  // Memoize jobs array to prevent infinite re-renders
+  const memoizedMapJobs = useMemo(() => {
+    const shouldShowJobs =
+      (talentMapShowAllJobs || talentMapRadiusSearchType === 'jobs') &&
+      talentMapJobResults.length > 0
+
+    if (!shouldShowJobs) return []
+
+    return talentMapJobResults.map((job: any) => {
+      // If job already has coordinates, use them
+      if (job?.lat != null && job?.lng != null) return job
+      // If we have a search center (user searched a location), use that
+      if (talentMapSearchCenter) {
+        return { ...job, lat: talentMapSearchCenter.lat, lng: talentMapSearchCenter.lng }
+      }
+      // Default to center of Australia for global "show all jobs" with no location set
+      return { ...job, lat: -25.2744, lng: 133.7751 }
+    })
+  }, [talentMapJobResults, talentMapShowAllJobs, talentMapRadiusSearchType, talentMapSearchCenter])
 
   // Memoize callback props to prevent re-renders
   const handleTalentMapToggle = useCallback((next: Partial<typeof talentMapToggles>) => {
@@ -523,6 +548,9 @@ export function TalentDashboardShell({
 
   const handleTalentMapSelectedBusinessId = useCallback((id: string | null) => {
     setTalentMapSelectedBusinessId(id)
+    if (id && id.startsWith('job:')) {
+      setTalentMapPanelsCollapsed(false)
+    }
   }, [])
 
   // Handle search
@@ -714,104 +742,6 @@ export function TalentDashboardShell({
           }
         }
 
-        // Fetch job applications for this user
-        try {
-          // Get talent profile ID - applications table uses talent_profile_id, not user_id
-          const talentProfileId = tpRes.data?.id
-          if (!talentProfileId) {
-            console.log('[TalentDashboard] No talent profile ID, skipping applications fetch')
-            setApplications([])
-          } else {
-            // Fetch applications first, then fetch jobs separately to avoid relationship ambiguity
-            const { data: appsData, error: appsError } = await supabase
-              .from('applications')
-              .select('id, job_id, status, cover_letter, created_at')
-              .eq('talent_profile_id', talentProfileId)
-              .order('created_at', { ascending: false })
-            
-            if (!appsError && appsData && appsData.length > 0) {
-                // Fetch jobs separately to avoid relationship ambiguity
-                const jobIds = appsData.map((app: any) => app.job_id).filter(Boolean)
-                
-                if (jobIds.length > 0) {
-                  const { data: jobsData } = await supabase
-                    .from('jobs')
-                    .select('id, title, description, location, city, country, employment_type, business_profile_id')
-                    .in('id', jobIds)
-                  
-                  // Create a map of job data
-                  const jobMap = new Map()
-                  if (jobsData) {
-                    jobsData.forEach((job: any) => {
-                      jobMap.set(String(job.id), job)
-                    })
-                  }
-                  
-                  // Fetch business profiles for the jobs
-                  const businessIds = new Set<string>()
-                  jobsData?.forEach((job: any) => {
-                    if (job.business_profile_id) {
-                      businessIds.add(String(job.business_profile_id))
-                    }
-                  })
-                  
-                  let businessMap = new Map()
-                  if (businessIds.size > 0) {
-                    const { data: businesses } = await supabase
-                      .from('business_profiles')
-                      .select('id, name, business_name')
-                      .in('id', Array.from(businessIds))
-                    
-                    if (businesses) {
-                      businesses.forEach((b: any) => {
-                        businessMap.set(String(b.id), b)
-                      })
-                    }
-                  }
-                  
-                  // Combine applications with job and business data
-                  const appsWithDetails = appsData.map((app: any) => {
-                    const job = jobMap.get(String(app.job_id))
-                    const business = job?.business_profile_id ? businessMap.get(String(job.business_profile_id)) : null
-                    
-                    return {
-                      ...app,
-                      jobs: job ? {
-                        ...job,
-                        business_profiles: business || null
-                      } : null
-                    }
-                  })
-                  
-                  setApplications(appsWithDetails)
-                } else {
-                  setApplications(appsData)
-                }
-            } else if (appsError) {
-              // Table might not exist or RLS might block - try simpler query
-              console.log('[TalentDashboard] Could not fetch applications with joins:', appsError.message)
-              
-              // Fallback: try without joins
-              const { data: simpleData, error: simpleError } = await supabase
-                .from('applications')
-                .select('id, job_id, status, cover_letter, created_at')
-                .eq('talent_profile_id', talentProfileId)
-                .order('created_at', { ascending: false })
-              
-              if (!simpleError && simpleData) {
-                setApplications(simpleData)
-              } else {
-                console.log('[TalentDashboard] Could not fetch applications:', simpleError?.message || 'Unknown error')
-                setApplications([])
-              }
-            } else {
-              setApplications([])
-            }
-          }
-        } catch (appsErr: any) {
-          console.log('[TalentDashboard] Error fetching applications:', appsErr)
-          setApplications([])
-        }
       } finally {
         if (!cancelled) setIsLoading(false)
       }
@@ -1781,13 +1711,6 @@ export function TalentDashboardShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isBusinessRoute])
 
-  useEffect(() => {
-    if (activeTab === 'overview') {
-      loadSavedTemplates()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab])
-
   // Intentional: keep portfolio tab in-dashboard to show profile summary + actions.
 
   // Legacy backend (axios) auth + profile fetch removed. Supabase session is now the source of truth.
@@ -2154,9 +2077,18 @@ export function TalentDashboardShell({
     return Math.round((completedFields / fields.length) * 100)
   }
 
-  const handleLogout = () => {
-    // Logout removed - just navigate home
-    router.push('/')
+  const handleLogout = async () => {
+    try {
+      localStorage.removeItem('creerlio_active_role')
+      localStorage.removeItem('user_type')
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('user_email')
+      await supabase.auth.signOut()
+    } catch (error) {
+      console.error('Error signing out:', error)
+    } finally {
+      window.location.assign('/')
+    }
   }
 
   const handleDeleteRegistration = async () => {
@@ -2451,11 +2383,12 @@ export function TalentDashboardShell({
                             <div className="space-y-1">
                               <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer">
                                 <input
-                                  type="radio"
-                                  name="radiusSearchType"
+                                  type="checkbox"
                                   className="accent-blue-500"
                                   checked={talentMapRadiusSearchType === 'business'}
-                                  onChange={() => setTalentMapRadiusSearchType('business')}
+                                  onChange={(e) =>
+                                    setTalentMapRadiusSearchType(e.target.checked ? 'business' : null)
+                                  }
                                 />
                                 <span className="leading-snug">
                                   <span className="font-semibold text-gray-900">Show Business</span>
@@ -2463,11 +2396,12 @@ export function TalentDashboardShell({
                               </label>
                               <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer">
                                 <input
-                                  type="radio"
-                                  name="radiusSearchType"
+                                  type="checkbox"
                                   className="accent-blue-500"
                                   checked={talentMapRadiusSearchType === 'jobs'}
-                                  onChange={() => setTalentMapRadiusSearchType('jobs')}
+                                  onChange={(e) =>
+                                    setTalentMapRadiusSearchType(e.target.checked ? 'jobs' : null)
+                                  }
                                 />
                                 <span className="leading-snug">
                                   <span className="font-semibold text-gray-900">Show Jobs</span>
@@ -2593,22 +2527,28 @@ export function TalentDashboardShell({
                     <div className="flex items-center justify-between mb-3">
                       <div className="text-gray-900 font-semibold text-sm">Results</div>
                       <div className="text-xs text-gray-500">
-                        {talentMapShowAllJobs && !talentMapShowAllBusinesses 
-                          ? talentMapJobResults.length 
-                          : !talentMapShowAllJobs && talentMapShowAllBusinesses
-                          ? talentMapResults.length
-                          : talentMapResults.length + talentMapJobResults.length
-                        } found
+                        {(() => {
+                          const jobsActive = talentMapShowAllJobs || talentMapRadiusSearchType === 'jobs'
+                          const businessesActive =
+                            talentMapShowAllBusinesses || talentMapRadiusSearchType === 'business'
+                          if (jobsActive && !businessesActive) return `${talentMapJobResults.length} found`
+                          if (!jobsActive && businessesActive) return `${talentMapResults.length} found`
+                          if (!jobsActive && !businessesActive) return `0 found`
+                          return `${talentMapResults.length + talentMapJobResults.length} found`
+                        })()}
                       </div>
                     </div>
                     {(() => {
-                      // Show only jobs if "Show all jobs" is checked and "Show all businesses" is not
-                      const showOnlyJobs = talentMapShowAllJobs && !talentMapShowAllBusinesses
-                      // Show only businesses if "Show all businesses" is checked and "Show all jobs" is not
-                      const showOnlyBusinesses = talentMapShowAllBusinesses && !talentMapShowAllJobs
-                      // Show both if both are checked
-                      const showBoth = talentMapShowAllJobs && talentMapShowAllBusinesses
-                      const showNone = !talentMapShowAllJobs && !talentMapShowAllBusinesses
+                      const jobsActive = talentMapShowAllJobs || talentMapRadiusSearchType === 'jobs'
+                      const businessesActive =
+                        talentMapShowAllBusinesses || talentMapRadiusSearchType === 'business'
+                      // Show only jobs if job filters are active and business filters are not
+                      const showOnlyJobs = jobsActive && !businessesActive
+                      // Show only businesses if business filters are active and job filters are not
+                      const showOnlyBusinesses = businessesActive && !jobsActive
+                      // Show both if both are active
+                      const showBoth = jobsActive && businessesActive
+                      const showNone = !jobsActive && !businessesActive
                       
                       const hasResults = showNone
                         ? false
@@ -2725,35 +2665,25 @@ export function TalentDashboardShell({
                               key={jobId}
                               type="button"
                               onClick={() => {
-                                const businessId = job.business_profile_id || null
-                                if (businessId) {
-                                  const businessIdString = String(businessId)
-                                  setTalentMapSelectedBusinessId(businessIdString)
-                                  setTalentMapSelectBusinessId(businessIdString)
-                                  const fromResults = talentMapResults.find(
-                                    (biz) => String(biz?.properties?.id) === businessIdString
-                                  )
-                                  if (fromResults) {
-                                    setTalentMapSelectedBusiness(fromResults)
-                                  } else {
-                                    setTalentMapSelectedBusiness({
-                                      id: businessIdString,
-                                      type: 'Feature',
-                                      geometry: {
-                                        type: 'Point',
-                                        coordinates: [job.lng ?? 0, job.lat ?? 0]
-                                      },
-                                      properties: {
-                                        id: businessIdString,
-                                        name: job.business_name || 'Business',
-                                        slug: '',
-                                        industries: [],
-                                        lat: job.lat ?? 0,
-                                        lng: job.lng ?? 0
-                                      }
-                                    })
+                                const jobSelectId = `job:${job.id}`
+                                setTalentMapSelectedBusinessId(jobSelectId)
+                                setTalentMapSelectBusinessId(null)
+                                setTalentMapSelectedBusiness({
+                                  id: jobSelectId,
+                                  type: 'Feature',
+                                  geometry: {
+                                    type: 'Point',
+                                    coordinates: [job.lng ?? 0, job.lat ?? 0]
+                                  },
+                                  properties: {
+                                    id: jobSelectId,
+                                    name: job.business_name || job.title || 'Job',
+                                    slug: '',
+                                    industries: [],
+                                    lat: job.lat ?? 0,
+                                    lng: job.lng ?? 0
                                   }
-                                }
+                                })
                                 // Zoom to job location and open popup
                                 if (job.id && (job.lat != null && job.lng != null)) {
                                   const zoom = getZoomFromRadius(talentMapRadiusKm)
@@ -3069,40 +2999,7 @@ export function TalentDashboardShell({
                           intentStatus=""
                           intentCompatibility={false}
                           fitBounds={talentMapMapFitBounds}
-                          jobs={(() => {
-                            // Pass jobs to map only when "Show all jobs" is checked
-                            const shouldShowJobs = talentMapShowAllJobs && talentMapJobResults.length > 0
-                            
-                            if (talentMapJobResults.length > 0) {
-                              console.log('[TalentDashboard] Job results available:', {
-                                count: talentMapJobResults.length,
-                                showAllJobs: talentMapShowAllJobs,
-                                radiusSearchType: talentMapRadiusSearchType,
-                                hasSearchCenter: !!talentMapSearchCenter,
-                                shouldShowJobs,
-                                jobs: talentMapJobResults.slice(0, 3).map((j: any) => ({
-                                  id: j.id,
-                                  title: j.title,
-                                  lat: j.lat,
-                                  lng: j.lng,
-                                  hasCoords: !!(j.lat && j.lng)
-                                }))
-                              })
-                            }
-                            
-                            if (!shouldShowJobs) return []
-
-                            const useRadius = talentMapRadiusSearchType === 'jobs' && !!talentMapSearchCenter
-
-                            return talentMapJobResults.map((job: any) => {
-                              if (job?.lat != null && job?.lng != null) return job
-                              if (useRadius && talentMapSearchCenter) {
-                                return { ...job, lat: talentMapSearchCenter.lat, lng: talentMapSearchCenter.lng }
-                              }
-                              // Default to center of Australia for global "show all jobs"
-                              return { ...job, lat: -25.2744, lng: 133.7751 }
-                            })
-                          })()}
+                          jobs={memoizedMapJobs}
                         />
                       )}
                       <div className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur-sm border border-gray-200 text-gray-900 text-sm font-medium shadow-lg z-10">
@@ -4214,156 +4111,6 @@ export function TalentDashboardShell({
                 )}
               </div>
 
-              {/* Declined Requests */}
-              <div className="border border-gray-200 rounded-lg p-4 md:col-span-2">
-                <h3 className="text-gray-900 font-semibold mb-3">
-                  {connectionMode === 'career' ? 'Declined Career Requests' : 'Declined Business Requests'}
-                </h3>
-                <p className="text-gray-600 text-xs mb-3">Declined connection requests (automatically deleted after 30 days)</p>
-                {connLoading ? (
-                  <p className="text-gray-600">Loading declined requests…</p>
-                ) : (connectionMode === 'career' ? careerDeclined : businessDeclined).length === 0 ? (
-                  <p className="text-gray-600 text-sm">No declined connection requests.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {(connectionMode === 'career' ? careerDeclined : businessDeclined).map((r) => {
-                      const respondedAt = r.responded_at ? new Date(r.responded_at) : new Date(r.created_at)
-                      const now = new Date()
-                      const daysSinceDeclined = Math.floor((now.getTime() - respondedAt.getTime()) / (1000 * 60 * 60 * 24))
-                      const daysRemaining = Math.max(0, 30 - daysSinceDeclined)
-                      
-                      return (
-                        <div
-                          key={r.id}
-                          className="border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-colors"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <p className="text-gray-900 text-sm font-medium">{r.business_name || 'Business'}</p>
-                              <p className="text-gray-600 text-xs mt-1">
-                                Declined {respondedAt.toLocaleString()}
-                              </p>
-                              {daysRemaining > 0 ? (
-                                <p className="text-orange-600 text-xs mt-1">
-                                  Will be deleted in {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'}
-                                </p>
-                              ) : (
-                                <p className="text-red-600 text-xs mt-1">
-                                  Expired - will be deleted soon
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => {
-                                  router.push(`/dashboard/business/view?id=${r.business_id}&from_connection_request=${r.id}&review_declined=true`)
-                                }}
-                                className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs"
-                              >
-                                Review Business
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  if (!confirm(`Permanently delete this declined connection request? This action cannot be undone.`)) {
-                                    return
-                                  }
-                                  try {
-                                    const { error } = await supabase
-                                      .from('talent_connection_requests')
-                                      .delete()
-                                      .eq('id', r.id)
-                                    
-                                    if (error) throw error
-                                    
-                                    // Remove from local state
-                                    setConnDeclined((prev) => prev.filter((req) => req.id !== r.id))
-                                  } catch (err: any) {
-                                    console.error('Error deleting declined request:', err)
-                                    alert(err.message || 'Failed to delete declined request. Please try again.')
-                                  }
-                                }}
-                                className="px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 disabled:opacity-60 text-xs"
-                              >
-                                Delete Now
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Previous Connections - Businesses where either party withdrew */}
-              {(connectionMode === 'career' ? careerWithdrawn : businessWithdrawn).length > 0 && (
-                <div className="border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4 md:col-span-2">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                    <h3 className="text-amber-900 font-semibold">Previous Connections</h3>
-                    <span className="text-amber-600/80 text-xs ml-2">({(connectionMode === 'career' ? careerWithdrawn : businessWithdrawn).length} withdrawn)</span>
-                  </div>
-                  <p className="text-amber-800 text-xs mb-4">
-                    These are businesses you were previously connected with. The connection has ended.
-                    You can request to reconnect - if accepted, your previous messages and video chat history will be restored.
-                  </p>
-                  <div className="space-y-3">
-                    {(connectionMode === 'career' ? careerWithdrawn : businessWithdrawn).map((r) => {
-                      const withdrawnAt = r.responded_at ? new Date(r.responded_at) : new Date(r.created_at)
-                      const connectedAt = r.created_at ? new Date(r.created_at) : null
-
-                      return (
-                        <div
-                          key={r.id}
-                          className="bg-white border border-amber-200 rounded-lg p-4 shadow-sm hover:border-amber-400 transition-colors"
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1">
-                              <p className="text-gray-900 font-medium">{r.business_name || 'Business'}</p>
-                              {connectedAt && (
-                                <p className="text-gray-500 text-xs mt-1">
-                                  Originally connected {connectedAt.toLocaleDateString()}
-                                </p>
-                              )}
-                              <p className="text-amber-600 text-xs mt-0.5">
-                                Connection ended {withdrawnAt.toLocaleDateString()}
-                              </p>
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setReconnectModal({
-                                    open: true,
-                                    connection: r,
-                                    message: `Hi,\n\nI would like to reconnect with ${r.business_name || 'your business'}. I was previously connected and would appreciate the opportunity to work together again.\n\nThank you for considering my request.`
-                                  })
-                                }}
-                                disabled={requestingReconnect === r.id}
-                                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg font-semibold transition-colors disabled:opacity-60"
-                              >
-                                Request Reconnect
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setConnectionSummaryModal({
-                                    open: true,
-                                    connection: r
-                                  })
-                                }}
-                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-lg transition-colors"
-                              >
-                                View Summary
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
             </div>
             )}
@@ -4453,6 +4200,157 @@ export function TalentDashboardShell({
                     </p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Declined Requests */}
+            <div className="mt-6 border border-gray-200 rounded-lg p-4 md:col-span-2">
+              <h3 className="text-gray-900 font-semibold mb-3">
+                {connectionMode === 'career' ? 'Declined Career Requests' : 'Declined Business Requests'}
+              </h3>
+              <p className="text-gray-600 text-xs mb-3">Declined connection requests (automatically deleted after 30 days)</p>
+              {connLoading ? (
+                <p className="text-gray-600">Loading declined requests…</p>
+              ) : (connectionMode === 'career' ? careerDeclined : businessDeclined).length === 0 ? (
+                <p className="text-gray-600 text-sm">No declined connection requests.</p>
+              ) : (
+                <div className="space-y-3">
+                  {(connectionMode === 'career' ? careerDeclined : businessDeclined).map((r) => {
+                    const respondedAt = r.responded_at ? new Date(r.responded_at) : new Date(r.created_at)
+                    const now = new Date()
+                    const daysSinceDeclined = Math.floor((now.getTime() - respondedAt.getTime()) / (1000 * 60 * 60 * 24))
+                    const daysRemaining = Math.max(0, 30 - daysSinceDeclined)
+                    
+                    return (
+                      <div
+                        key={r.id}
+                        className="border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-colors"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <p className="text-gray-900 text-sm font-medium">{r.business_name || 'Business'}</p>
+                            <p className="text-gray-600 text-xs mt-1">
+                              Declined {respondedAt.toLocaleString()}
+                            </p>
+                            {daysRemaining > 0 ? (
+                              <p className="text-orange-600 text-xs mt-1">
+                                Will be deleted in {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'}
+                              </p>
+                            ) : (
+                              <p className="text-red-600 text-xs mt-1">
+                                Expired - will be deleted soon
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                router.push(`/dashboard/business/view?id=${r.business_id}&from_connection_request=${r.id}&review_declined=true`)
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs"
+                            >
+                              Review Business
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`Permanently delete this declined connection request? This action cannot be undone.`)) {
+                                  return
+                                }
+                                try {
+                                  const { error } = await supabase
+                                    .from('talent_connection_requests')
+                                    .delete()
+                                    .eq('id', r.id)
+                                  
+                                  if (error) throw error
+                                  
+                                  // Remove from local state
+                                  setConnDeclined((prev) => prev.filter((req) => req.id !== r.id))
+                                } catch (err: any) {
+                                  console.error('Error deleting declined request:', err)
+                                  alert(err.message || 'Failed to delete declined request. Please try again.')
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 disabled:opacity-60 text-xs"
+                            >
+                              Delete Now
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Previous Connections - Businesses where either party withdrew */}
+            {(connectionMode === 'career' ? careerWithdrawn : businessWithdrawn).length > 0 && (
+              <div className="mt-6 border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4 md:col-span-2">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                  <h3 className="text-amber-900 font-semibold">Previous Connections</h3>
+                  <span className="text-amber-600/80 text-xs ml-2">({(connectionMode === 'career' ? careerWithdrawn : businessWithdrawn).length} withdrawn)</span>
+                </div>
+                <p className="text-amber-800 text-xs mb-4">
+                  These are businesses you were previously connected with. The connection has ended.
+                  You can request to reconnect - if accepted, your previous messages and video chat history will be restored.
+                </p>
+                <div className="space-y-3">
+                  {(connectionMode === 'career' ? careerWithdrawn : businessWithdrawn).map((r) => {
+                    const withdrawnAt = r.responded_at ? new Date(r.responded_at) : new Date(r.created_at)
+                    const connectedAt = r.created_at ? new Date(r.created_at) : null
+
+                    return (
+                      <div
+                        key={r.id}
+                        className="bg-white border border-amber-200 rounded-lg p-4 shadow-sm hover:border-amber-400 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <p className="text-gray-900 font-medium">{r.business_name || 'Business'}</p>
+                            {connectedAt && (
+                              <p className="text-gray-500 text-xs mt-1">
+                                Originally connected {connectedAt.toLocaleDateString()}
+                              </p>
+                            )}
+                            <p className="text-amber-600 text-xs mt-0.5">
+                              Connection ended {withdrawnAt.toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReconnectModal({
+                                  open: true,
+                                  connection: r,
+                                  message: `Hi,\n\nI would like to reconnect with ${r.business_name || 'your business'}. I was previously connected and would appreciate the opportunity to work together again.\n\nThank you for considering my request.`
+                                })
+                              }}
+                              disabled={requestingReconnect === r.id}
+                              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg font-semibold transition-colors disabled:opacity-60"
+                            >
+                              Request Reconnect
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setConnectionSummaryModal({
+                                  open: true,
+                                  connection: r
+                                })
+                              }}
+                              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-lg transition-colors"
+                            >
+                              View Summary
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
 

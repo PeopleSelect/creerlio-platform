@@ -41,7 +41,11 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('business_profiles')
       .select('*')
-      .eq('is_active', true) // Only show active businesses
+
+    // Show businesses where is_active is true OR null (not explicitly deactivated)
+    // This handles businesses that were created before the is_active column existed
+    // Use .or() to include both true and null values
+    query = query.or('is_active.eq.true,is_active.is.null')
 
     // If show_all is false, only show businesses that match filters
     // If show_all is true AND no location is provided, ignore filters and show all businesses

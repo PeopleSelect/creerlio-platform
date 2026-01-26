@@ -19,6 +19,8 @@ from dotenv import load_dotenv
 
 from app.models import (
     BusinessProfile,
+    Business,
+    Location,
     TalentProfile,
     ResumeData,
     User,
@@ -28,6 +30,14 @@ from app.models import (
     TalentBankItemCreate,
     TalentBankItemResponse,
 )
+from app.permissions import (
+    BUSINESS_WRITE_ROLES,
+    BUSINESS_READ_ROLES,
+    LOCATION_WRITE_ROLES,
+    LOCATION_READ_ROLES,
+    has_business_role,
+    has_location_role,
+)
 from app.ai_service import AIService
 try:
     from app.pdf_generator import PDFGenerator
@@ -36,6 +46,7 @@ except ImportError:
     PDF_GENERATOR_AVAILABLE = False
     PDFGenerator = None
 from app.mapping_service import MappingService
+from industry_constants import INDUSTRY_SET
 from app.database import get_db, init_db
 from app.supabase_client import get_supabase, get_supabase_client
 from app.auth import (
@@ -599,6 +610,13 @@ async def update_my_business_profile(
         db.flush()
         user.business_profile_id = business.id
     
+    # Validate industry selection if provided
+    if "industry" in profile_data:
+        industry_value = profile_data.get("industry")
+        if industry_value:
+            if industry_value not in INDUSTRY_SET:
+                raise HTTPException(status_code=400, detail="Invalid industry selection")
+
     # Update allowed fields only
     allowed_fields = ["name", "description", "industry", "website", "address", "city", "state", "country", "location", "phone"]
     for field in allowed_fields:
@@ -648,12 +666,40 @@ async def create_job(job_data: dict, db=Depends(get_db)):
         # Validate required fields
         if not job_data.get("title"):
             raise HTTPException(status_code=400, detail="Title is required")
-        if not job_data.get("business_profile_id"):
-            raise HTTPException(status_code=400, detail="business_profile_id is required")
-        
+        if not job_data.get("business_profile_id") and not job_data.get("business_id") and not job_data.get("location_id"):
+            raise HTTPException(status_code=400, detail="business_profile_id or business_id or location_id is required")
+
+        # Resolve business/location for multi-location model
+        location_id = job_data.get("location_id")
+        business_id = job_data.get("business_id")
+        if location_id and not business_id:
+            location = db.query(Location).filter(Location.id == location_id).first()
+            if location:
+                business_id = location.business_id
+        if business_id and not location_id:
+            location = (
+                db.query(Location)
+                .filter(Location.business_id == business_id)
+                .order_by(Location.created_at.asc())
+                .first()
+            )
+            if location:
+                location_id = location.id
+
+        # Optional permission check when actor_user_id is provided
+        actor_user_id = job_data.get("actor_user_id")
+        if actor_user_id:
+            actor_id = str(actor_user_id)
+            if location_id and not has_location_role(db, actor_id, location_id, LOCATION_WRITE_ROLES):
+                raise HTTPException(status_code=403, detail="Insufficient location permissions")
+            if business_id and not has_business_role(db, actor_id, business_id, BUSINESS_WRITE_ROLES):
+                raise HTTPException(status_code=403, detail="Insufficient business permissions")
+
         # Create job with defaults
         job = Job(
-            business_profile_id=job_data["business_profile_id"],
+            business_profile_id=job_data.get("business_profile_id"),
+            business_id=business_id,
+            location_id=location_id,
             title=job_data["title"],
             description=job_data.get("description"),
             requirements=job_data.get("requirements"),
@@ -918,14 +964,16 @@ async def create_application(
         if existing:
             raise HTTPException(status_code=400, detail="You have already applied to this job")
         
-        # Create application
+        # Create application (inherit business/location from job)
         application = Application(
             job_id=job.id,
             talent_profile_id=talent_profile.id,
             status="applied",
             cover_letter=application_data.get("cover_letter"),
             notes=application_data.get("notes"),
-            extra_metadata=application_data.get("extra_metadata")
+            extra_metadata=application_data.get("extra_metadata"),
+            business_id=getattr(job, "business_id", None),
+            location_id=getattr(job, "location_id", None),
         )
         
         db.add(application)
@@ -1009,8 +1057,14 @@ async def get_job_applications(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    # Verify ownership
-    if not user.business_profile_id or user.business_profile_id != job.business_profile_id:
+    # Verify permissions (prefer location/business roles when available)
+    if getattr(job, "location_id", None):
+        if not has_location_role(db, str(user.id), job.location_id, LOCATION_READ_ROLES):
+            raise HTTPException(status_code=403, detail="You don't have permission to view applications for this job")
+    elif getattr(job, "business_id", None):
+        if not has_business_role(db, str(user.id), job.business_id, BUSINESS_READ_ROLES):
+            raise HTTPException(status_code=403, detail="You don't have permission to view applications for this job")
+    elif not user.business_profile_id or user.business_profile_id != job.business_profile_id:
         raise HTTPException(status_code=403, detail="You don't have permission to view applications for this job")
     
     # Get applications

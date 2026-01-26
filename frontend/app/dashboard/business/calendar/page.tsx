@@ -76,9 +76,9 @@ export default function BusinessCalendarPage() {
           .eq('status', 'accepted')
 
         // Fetch talent names for both sessions and connections
-        const sessionTalentIds = [...new Set((sessions || []).map(s => s.talent_id).filter(Boolean))]
-        const connectionTalentIds = [...new Set((connections || []).map(c => c.talent_id).filter(Boolean))]
-        const allTalentIds = [...new Set([...sessionTalentIds, ...connectionTalentIds])]
+        const sessionTalentIds = Array.from(new Set((sessions || []).map(s => s.talent_id).filter(Boolean) as string[]))
+        const connectionTalentIds = Array.from(new Set((connections || []).map(c => c.talent_id).filter(Boolean) as string[]))
+        const allTalentIds = Array.from(new Set([...sessionTalentIds, ...connectionTalentIds]))
         
         let talentNames: Record<string, string> = {}
         if (allTalentIds.length > 0) {
@@ -242,7 +242,7 @@ export default function BusinessCalendarPage() {
         .not('started_at', 'is', null)
 
       // Update events
-      const sessionTalentIds = [...new Set((sessions || []).map(s => s.talent_id).filter(Boolean))]
+      const sessionTalentIds = Array.from(new Set((sessions || []).map(s => s.talent_id).filter(Boolean) as string[]))
       let talentNames: Record<string, string> = {}
       if (sessionTalentIds.length > 0) {
         const { data: talents } = await supabase

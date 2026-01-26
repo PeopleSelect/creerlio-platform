@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import VideoChat from '@/components/VideoChat'
+import { useBusinessContext } from '@/components/BusinessContext'
+import LocationDropdownsString from '@/components/LocationDropdownsString'
 
 interface User {
   id: string
@@ -15,7 +17,19 @@ interface User {
   is_active: boolean
 }
 
-type TabType = 'overview' | 'vacancies' | 'profile' | 'portfolio' | 'applications' | 'connections' | 'service_connections' | 'previous_connections' | 'calendar'
+type TabType =
+  | 'overview'
+  | 'vacancies'
+  | 'profile'
+  | 'portfolio'
+  | 'applications'
+  | 'connections'
+  | 'service_connections'
+  | 'previous_connections'
+  | 'calendar'
+  | 'locations'
+  | 'business_map'
+  | 'team'
 
 function useDebouncedValue<T>(value: T, delayMs: number) {
   const [debounced, setDebounced] = useState(value)
@@ -30,13 +44,88 @@ export default function BusinessDashboard() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [userFirstName, setUserFirstName] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [businessProfile, setBusinessProfile] = useState<any>(null)
   const [hasBuiltProfile, setHasBuiltProfile] = useState<boolean>(false)
   const [applications, setApplications] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState<TabType>('overview')
+  const [connectionsMenuOpen, setConnectionsMenuOpen] = useState(false)
+  const [vacanciesMenuOpen, setVacanciesMenuOpen] = useState(false)
+  const handleLocationProfileDropdowns = (next: { city?: string | null; state?: string | null; country?: string | null }) => {
+    setLocationEditDraft((prev) => ({
+      ...prev,
+      city: next.city !== undefined ? (next.city || '') : prev.city,
+      state: next.state !== undefined ? (next.state || '') : prev.state,
+      country: next.country !== undefined ? (next.country || '') : prev.country,
+    }))
+  }
+  const handleNewLocationDropdowns = (next: { city?: string | null; state?: string | null; country?: string | null }) => {
+    setNewLocation((prev) => ({
+      ...prev,
+      city: next.city !== undefined ? (next.city || '') : prev.city,
+      state: next.state !== undefined ? (next.state || '') : prev.state,
+      country: next.country !== undefined ? (next.country || '') : prev.country,
+    }))
+  }
   const isServiceConnections = activeTab === 'service_connections'
   const [userType, setUserType] = useState<string>('business')
+  const {
+    businesses,
+    locations,
+    activeBusinessId,
+    activeLocationId,
+    setBusinesses,
+    setLocations,
+    setActiveBusinessId,
+    setActiveLocationId,
+  } = useBusinessContext()
+  const [teamMembers, setTeamMembers] = useState<any[]>([])
+  const [pendingInvites, setPendingInvites] = useState<any[]>([])
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteBusinessRole, setInviteBusinessRole] = useState('viewer')
+  const [inviteLocationRole, setInviteLocationRole] = useState('viewer')
+  const [inviteLocationId, setInviteLocationId] = useState<string | null>(null)
+  const [teamError, setTeamError] = useState<string | null>(null)
+  const [teamLoading, setTeamLoading] = useState(false)
+  const [teamActionError, setTeamActionError] = useState<string | null>(null)
+  const [teamActionLoading, setTeamActionLoading] = useState<string | null>(null)
+  const [memberLocationRoleDraft, setMemberLocationRoleDraft] = useState<
+    Record<string, { locationId: string; role: string }>
+  >({})
+  const [inviteEditDraft, setInviteEditDraft] = useState<
+    Record<string, { locationId: string; businessRole: string; locationRole: string }>
+  >({})
+  const [inviteStatus, setInviteStatus] = useState<string | null>(null)
+  const [newLocation, setNewLocation] = useState({ name: '', city: '', state: '', country: '' })
+  const [locationSaving, setLocationSaving] = useState(false)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const [locationEditDraft, setLocationEditDraft] = useState({ name: '', city: '', state: '', country: '' })
+  const [locationEditSaving, setLocationEditSaving] = useState(false)
+  const [locationEditError, setLocationEditError] = useState<string | null>(null)
+  const [locationDeleteError, setLocationDeleteError] = useState<string | null>(null)
+  const [locationDeleteLoading, setLocationDeleteLoading] = useState<string | null>(null)
+  const [onboardingMode, setOnboardingMode] = useState<'new' | 'existing'>('new')
+  const [onboardingBusinessName, setOnboardingBusinessName] = useState('')
+  const [onboardingIndustry, setOnboardingIndustry] = useState('')
+  const [onboardingLocationName, setOnboardingLocationName] = useState('')
+  const [onboardingCity, setOnboardingCity] = useState('')
+  const [onboardingState, setOnboardingState] = useState('')
+  const [onboardingCountry, setOnboardingCountry] = useState('')
+  const [onboardingSearch, setOnboardingSearch] = useState('')
+  const [onboardingResults, setOnboardingResults] = useState<any[]>([])
+  const [onboardingSelectedBusiness, setOnboardingSelectedBusiness] = useState<any | null>(null)
+  const [onboardingError, setOnboardingError] = useState<string | null>(null)
+  const [onboardingBusy, setOnboardingBusy] = useState(false)
+  const handleOnboardingLocation = (next: { city?: string | null; state?: string | null; country?: string | null }) => {
+    setOnboardingCity((prev) => (next.city !== undefined ? (next.city || '').trim() : prev))
+    setOnboardingState((prev) => (next.state !== undefined ? (next.state || '').trim() : prev))
+    setOnboardingCountry((prev) => (next.country !== undefined ? (next.country || '').trim() : prev))
+    if (!onboardingLocationName.trim() && next.city) {
+      const nextCity = (next.city || '').trim()
+      if (nextCity) setOnboardingLocationName(nextCity)
+    }
+  }
   const [profileEditOpen, setProfileEditOpen] = useState(false)
   const [profileEditSaving, setProfileEditSaving] = useState(false)
   const [profileEditError, setProfileEditError] = useState<string | null>(null)
@@ -88,6 +177,335 @@ export default function BusinessDashboard() {
     connection: null
   }) // Modal for viewing connection summary
 
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+
+    const mapBusinessRoleToLocation = (role: string) => {
+      if (role === 'super_admin' || role === 'business_admin' || role === 'location_admin') return 'location_admin'
+      if (role === 'manager') return 'manager'
+      return 'viewer'
+    }
+
+    const loadAccess = async () => {
+      const { data: businessRoleRows, error: businessErr } = await supabase
+        .from('user_business_roles')
+        .select('business_id, role, businesses(id, name)')
+        .eq('user_id', user.id)
+
+      if (cancelled) return
+      if (businessErr) {
+        console.error('[BusinessDashboard] Failed to load business roles:', businessErr)
+        return
+      }
+
+      const businessAccess = (businessRoleRows || []).map((row: any) => ({
+        id: String(row.business_id),
+        name: row.businesses?.name || 'Business',
+        role: row.role || 'viewer'
+      }))
+
+      setBusinesses(businessAccess)
+
+      const businessIds = businessAccess.map((b) => b.id)
+      const roleByBusiness = new Map(businessAccess.map((b) => [b.id, b.role]))
+
+      let locationRoleRows: any[] = []
+      const locationRoleRes = await supabase
+        .from('user_location_roles')
+        .select('location_id, role, locations(id, name, city, state, country, business_id)')
+        .eq('user_id', user.id)
+
+      if (locationRoleRes.error) {
+        const fallbackRes = await supabase
+          .from('user_location_roles')
+          .select('location_id, role')
+          .eq('user_id', user.id)
+        if (!fallbackRes.error) {
+          const locationIds = (fallbackRes.data || []).map((r: any) => r.location_id).filter(Boolean)
+          const { data: locationsById } = locationIds.length
+            ? await supabase
+                .from('locations')
+                .select('id, name, city, state, country, business_id')
+                .in('id', locationIds)
+            : { data: [] }
+          const locationMap = new Map((locationsById || []).map((l: any) => [String(l.id), l]))
+          locationRoleRows = (fallbackRes.data || []).map((r: any) => ({
+            ...r,
+            locations: locationMap.get(String(r.location_id)) || null,
+          }))
+        } else {
+          console.error('[BusinessDashboard] Failed to load location roles:', locationRoleRes.error)
+        }
+      } else {
+        locationRoleRows = locationRoleRes.data || []
+      }
+
+      if (cancelled) return
+
+      const locationAccess: any[] = []
+      const seenLocationIds = new Set<string>()
+
+      ;(locationRoleRows || []).forEach((row: any) => {
+        const loc = row.locations
+        if (!loc) return
+        const locId = String(row.location_id)
+        if (seenLocationIds.has(locId)) return
+        seenLocationIds.add(locId)
+        locationAccess.push({
+          id: locId,
+          business_id: String(loc.business_id),
+          name: loc.name || 'Location',
+          city: loc.city || null,
+          state: loc.state || null,
+          country: loc.country || null,
+          role: row.role || 'viewer',
+        })
+      })
+
+      if (businessIds.length > 0) {
+        const { data: locationsByBusiness } = await supabase
+          .from('locations')
+          .select('id, name, city, state, country, business_id')
+          .in('business_id', businessIds)
+
+        if (!cancelled) {
+          ;(locationsByBusiness || []).forEach((loc: any) => {
+            const locId = String(loc.id)
+            if (seenLocationIds.has(locId)) return
+            seenLocationIds.add(locId)
+            const businessRole = roleByBusiness.get(String(loc.business_id)) || 'viewer'
+            locationAccess.push({
+              id: locId,
+              business_id: String(loc.business_id),
+              name: loc.name || 'Location',
+              city: loc.city || null,
+              state: loc.state || null,
+              country: loc.country || null,
+              role: mapBusinessRoleToLocation(businessRole),
+            })
+          })
+        }
+      }
+
+      // Fallback: if no locations resolved but we have an active location id, fetch it directly
+      if (locationAccess.length === 0 && activeLocationId) {
+        const { data: activeLoc } = await supabase
+          .from('locations')
+          .select('id, name, city, state, country, business_id')
+          .eq('id', activeLocationId)
+          .maybeSingle()
+        if (activeLoc) {
+          locationAccess.push({
+            id: String(activeLoc.id),
+            business_id: String(activeLoc.business_id),
+            name: activeLoc.name || 'Location',
+            city: activeLoc.city || null,
+            state: activeLoc.state || null,
+            country: activeLoc.country || null,
+            role: 'location_admin',
+          })
+        }
+      }
+
+      const mergedLocations = new Map<string, any>()
+      ;[...locations, ...locationAccess].forEach((loc: any) => {
+        if (!loc?.id) return
+        mergedLocations.set(String(loc.id), loc)
+      })
+      const deDupedByFields = new Map<string, any>()
+      Array.from(mergedLocations.values()).forEach((loc: any) => {
+        const key = [
+          String(loc.business_id || ''),
+          String(loc.name || '').trim().toLowerCase(),
+          String(loc.city || '').trim().toLowerCase(),
+          String(loc.state || '').trim().toLowerCase(),
+          String(loc.country || '').trim().toLowerCase(),
+        ].join('|')
+        if (!deDupedByFields.has(key)) deDupedByFields.set(key, loc)
+      })
+      const nextLocations = locationAccess.length > 0
+        ? Array.from(new Map(locationAccess.map((l: any) => [String(l.id), l])).values())
+        : Array.from(deDupedByFields.values())
+      setLocations(nextLocations)
+
+      // If business roles didn't load (RLS or legacy data), derive businesses from locations
+      if (businessAccess.length === 0 && effectiveLocations.length > 0) {
+        const locationBusinessIds = Array.from(new Set(effectiveLocations.map((l) => String(l.business_id))))
+        const { data: businessRows } = await supabase
+          .from('businesses')
+          .select('id, name')
+          .in('id', locationBusinessIds)
+        if (!cancelled) {
+          setBusinesses(
+            (businessRows || []).map((row: any) => ({
+              id: String(row.id),
+              name: row.name || 'Business',
+              role: 'location_admin',
+            }))
+          )
+        }
+      }
+
+      const effectiveBusinessIds = businessAccess.length > 0
+        ? businessIds
+        : Array.from(new Set(effectiveLocations.map((l) => String(l.business_id))))
+      const firstBusiness = effectiveBusinessIds[0] || null
+      const nextBusinessId =
+        activeBusinessId && effectiveBusinessIds.includes(activeBusinessId) ? activeBusinessId : firstBusiness
+      if (nextBusinessId !== activeBusinessId) setActiveBusinessId(nextBusinessId)
+
+      const candidateLocations = effectiveLocations.filter((l: any) =>
+        nextBusinessId ? l.business_id === nextBusinessId : true
+      )
+      const locationIds = candidateLocations.map((l: any) => l.id)
+      const firstLocation = candidateLocations[0]?.id || null
+      const nextLocationId =
+        activeLocationId && locationIds.includes(activeLocationId) ? activeLocationId : firstLocation
+
+      if (nextLocationId !== activeLocationId) setActiveLocationId(nextLocationId)
+      if (!inviteLocationId) setInviteLocationId(nextLocationId)
+    }
+
+    loadAccess()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!activeBusinessId || !user?.id) return
+    let cancelled = false
+    setTeamLoading(true)
+    setTeamError(null)
+
+    const loadTeam = async () => {
+      const { data: teamRows, error: teamErr } = await supabase
+        .from('user_business_roles')
+        .select('user_id, role, users(id, email, full_name)')
+        .eq('business_id', activeBusinessId)
+
+      if (cancelled) return
+      if (teamErr) {
+        setTeamError(teamErr.message || 'Failed to load team members.')
+        setTeamLoading(false)
+        return
+      }
+
+      let locationRows = locations.filter((l) => l.business_id === activeBusinessId)
+      if (locationRows.length === 0) {
+        const { data: locRows } = await supabase
+          .from('locations')
+          .select('id, name, city, state, country, business_id')
+          .eq('business_id', activeBusinessId)
+        if (!cancelled && Array.isArray(locRows) && locRows.length > 0) {
+          const businessRoleForActive = businesses.find((b) => b.id === activeBusinessId)?.role || 'viewer'
+          const mappedRole =
+            businessRoleForActive === 'super_admin' || businessRoleForActive === 'business_admin' || businessRoleForActive === 'location_admin'
+              ? 'location_admin'
+              : businessRoleForActive === 'manager'
+                ? 'manager'
+                : 'viewer'
+          const nextLocations = locRows.map((loc: any) => ({
+            id: String(loc.id),
+            business_id: String(loc.business_id),
+            name: loc.name || 'Location',
+            city: loc.city || null,
+            state: loc.state || null,
+            country: loc.country || null,
+            role: mappedRole,
+          }))
+          locationRows = nextLocations
+          setLocations((prev) => {
+            const seen = new Set(prev.map((l) => String(l.id)))
+            const merged = [...prev]
+            nextLocations.forEach((l: any) => {
+              if (!seen.has(String(l.id))) merged.push(l)
+            })
+            return merged
+          })
+        }
+      }
+      const locationIds = locationRows.map((l) => l.id)
+      const { data: locRoles } = locationIds.length
+        ? await supabase
+            .from('user_location_roles')
+            .select('user_id, location_id, role')
+            .in('location_id', locationIds)
+        : { data: [] }
+
+      if (cancelled) return
+
+      const locRolesByUser = new Map<string, any[]>()
+      ;(locRoles || []).forEach((r: any) => {
+        const userId = String(r.user_id)
+        const entry = locRolesByUser.get(userId) || []
+        entry.push({ location_id: r.location_id, role: r.role })
+        locRolesByUser.set(userId, entry)
+      })
+
+      const members = (teamRows || []).map((row: any) => {
+        const userInfo = row.users || {}
+        return {
+          user_id: String(row.user_id),
+          email: userInfo.email || 'Unknown',
+          full_name: userInfo.full_name || userInfo.email || null,
+          business_role: row.role || 'viewer',
+          location_roles: locRolesByUser.get(String(row.user_id)) || [],
+        }
+      })
+      setTeamMembers(members)
+
+      const { data: inviteRows } = await supabase
+        .from('business_user_invites')
+        .select('*')
+        .eq('business_id', activeBusinessId)
+        .order('created_at', { ascending: false })
+
+      if (!cancelled) {
+        setPendingInvites(inviteRows || [])
+        setTeamLoading(false)
+      }
+    }
+
+    loadTeam()
+    return () => {
+      cancelled = true
+    }
+  }, [activeBusinessId, locations, user?.id])
+
+  useEffect(() => {
+    const activeLocation = locations.find((l) => l.id === activeLocationId)
+    if (!activeLocation) return
+    setLocationEditDraft({
+      name: activeLocation.name || '',
+      city: activeLocation.city || '',
+      state: activeLocation.state || '',
+      country: activeLocation.country || '',
+    })
+  }, [activeLocationId, locations])
+
+  useEffect(() => {
+    if (onboardingMode !== 'existing') return
+    if (!onboardingSearch.trim()) {
+      setOnboardingResults([])
+      return
+    }
+    const run = async () => {
+      const { data, error } = await supabase
+        .from('businesses')
+        .select('id, name, industry')
+        .ilike('name', `%${onboardingSearch.trim()}%`)
+        .limit(10)
+      if (error) {
+        console.error('[Business Onboarding] search error:', error)
+        return
+      }
+      setOnboardingResults(data || [])
+    }
+    run()
+  }, [onboardingSearch, onboardingMode])
+
   // Reconnection requests from talents (for withdrawn connections)
   const [reconnectRequests, setReconnectRequests] = useState<any[]>([])
   const [reconnectLoading, setReconnectLoading] = useState(false)
@@ -99,6 +517,7 @@ export default function BusinessDashboard() {
   const [consentReqs, setConsentReqs] = useState<any[]>([])
   const [consentBusyId, setConsentBusyId] = useState<string | null>(null)
   const didAutoLoadConsentRef = useRef(false)
+  const didAttemptAdminPromoteRef = useRef(false)
 
   useEffect(() => {
     // Set active role context for mixed-profile accounts
@@ -265,10 +684,6 @@ export default function BusinessDashboard() {
       const nextEmail = profileEditDraft.email.trim()
       const nextUsername = profileEditDraft.username.trim()
       const nextBusinessName = profileEditDraft.businessName.trim()
-      const nextLocation = profileEditDraft.location.trim()
-      const nextCity = profileEditDraft.city.trim()
-      const nextState = profileEditDraft.state.trim()
-      const nextCountry = profileEditDraft.country.trim()
 
       const emailChanged = nextEmail !== user.email
       if (!nextEmail) {
@@ -314,7 +729,7 @@ export default function BusinessDashboard() {
         }
       }
 
-      // Always update business profile (even if business name is empty, we still want to save email/location)
+      // Always update business profile (business-level fields only)
       const profileRes = await supabase
         .from('business_profiles')
         .upsert(
@@ -323,10 +738,10 @@ export default function BusinessDashboard() {
             business_name: nextBusinessName || null,
             name: nextBusinessName || null,
             email: nextEmail || null,
-            location: nextLocation || null,
-            city: nextCity || null,
-            state: nextState || null,
-            country: nextCountry || null,
+            location: null,
+            city: null,
+            state: null,
+            country: null,
           },
           { onConflict: 'user_id' }
         )
@@ -371,6 +786,500 @@ export default function BusinessDashboard() {
     }
   }
 
+  const activeBusinessEntry = businesses.find((b) => b.id === activeBusinessId)
+  const activeBusinessRole = activeBusinessEntry?.role || 'viewer'
+  const currentUserBusinessRole =
+    teamMembers.find((m) => String(m.user_id) === String(user?.id || ''))?.business_role || activeBusinessRole
+  const canManageLocations = ['super_admin', 'business_admin'].includes(currentUserBusinessRole)
+
+  const createLocation = async () => {
+    setLocationError(null)
+    if (!activeBusinessId) {
+      setLocationError('Select a business before creating a location.')
+      return
+    }
+    if (activeBusinessEntry && !canManageLocations) {
+      setLocationError('You do not have permission to create locations for this business.')
+      return
+    }
+    if (!newLocation.name.trim()) {
+      setLocationError('Location name is required.')
+      return
+    }
+    setLocationSaving(true)
+    const { data, error } = await supabase
+      .from('locations')
+      .insert({
+        business_id: activeBusinessId,
+        name: newLocation.name.trim(),
+        city: newLocation.city.trim() || null,
+        state: newLocation.state.trim() || null,
+        country: newLocation.country.trim() || null,
+      })
+      .select('id, name, city, state, country, business_id')
+      .single()
+
+    if (error) {
+      setLocationError(error.message || 'Failed to create location.')
+      setLocationSaving(false)
+      return
+    }
+
+    if (data) {
+      setLocations((prev) => [
+        ...prev,
+        {
+          id: String(data.id),
+          business_id: String(data.business_id),
+          name: data.name || 'Location',
+          city: data.city || null,
+          state: data.state || null,
+          country: data.country || null,
+          role: 'location_admin',
+        },
+      ])
+      setActiveLocationId(String(data.id))
+      setNewLocation({ name: '', city: '', state: '', country: '' })
+    }
+    setLocationSaving(false)
+  }
+
+  const removeLocation = async (locationId: string) => {
+    if (!activeBusinessId) return
+    if (!canManageLocations) {
+      setLocationDeleteError('You do not have permission to remove locations for this business.')
+      return
+    }
+    if (locationId === activeLocationId) {
+      setLocationDeleteError('Switch active location before removing this one.')
+      return
+    }
+    setLocationDeleteError(null)
+    setLocationDeleteLoading(locationId)
+    const { error } = await supabase.from('locations').delete().eq('id', locationId)
+    if (error) {
+      setLocationDeleteError(error.message || 'Failed to remove location.')
+    } else {
+      setLocations((prev) => prev.filter((l) => String(l.id) !== String(locationId)))
+    }
+    setLocationDeleteLoading(null)
+  }
+
+  const inviteUser = async () => {
+    if (!activeBusinessId) {
+      setTeamError('Select a business before inviting users.')
+      return
+    }
+    if (!inviteEmail.trim()) {
+      setTeamError('Email is required.')
+      return
+    }
+    if (inviteBusinessRole !== 'super_admin' && !inviteLocationId) {
+      setTeamError('Select a location for non-super-admin invites.')
+      return
+    }
+    setTeamError(null)
+    setInviteStatus(null)
+    const email = inviteEmail.trim().toLowerCase()
+
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id, email')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (existingUser?.id) {
+      const { error: businessRoleErr } = await supabase
+        .from('user_business_roles')
+        .upsert({
+          user_id: existingUser.id,
+          business_id: activeBusinessId,
+          role: inviteBusinessRole,
+        })
+
+      if (businessRoleErr) {
+        setTeamError(businessRoleErr.message || 'Failed to assign business role.')
+        return
+      }
+
+      if (inviteLocationId) {
+        const { error: locationRoleErr } = await supabase
+          .from('user_location_roles')
+          .upsert({
+            user_id: existingUser.id,
+            location_id: inviteLocationId,
+            role: inviteLocationRole,
+          })
+        if (locationRoleErr) {
+          setTeamError(locationRoleErr.message || 'Failed to assign location role.')
+          return
+        }
+      }
+
+      setInviteStatus('User assigned to business/location roles.')
+    } else {
+      const { error: inviteErr } = await supabase
+        .from('business_user_invites')
+        .insert({
+          email,
+          business_id: activeBusinessId,
+          location_id: inviteLocationId,
+          business_role: inviteBusinessRole,
+          location_role: inviteLocationRole,
+          invited_by: user?.id || null,
+        })
+
+      if (inviteErr) {
+        setTeamError(inviteErr.message || 'Failed to send invite.')
+        return
+      }
+      setInviteStatus('Invite sent. The user will receive access after registration.')
+    }
+
+    setInviteEmail('')
+  }
+
+  const updateMemberBusinessRole = async (userId: string, nextRole: string) => {
+    if (!activeBusinessId) return
+    setTeamActionError(null)
+    setTeamActionLoading(userId)
+    const { error } = await supabase
+      .from('user_business_roles')
+      .update({ role: nextRole })
+      .eq('user_id', userId)
+      .eq('business_id', activeBusinessId)
+    if (error) {
+      setTeamActionError(error.message || 'Failed to update role.')
+    } else {
+      setTeamMembers((prev) =>
+        prev.map((m) => (m.user_id === userId ? { ...m, business_role: nextRole } : m))
+      )
+    }
+    setTeamActionLoading(null)
+  }
+
+  const assignMemberLocationRole = async (userId: string) => {
+    if (!activeBusinessId) return
+    const draft = memberLocationRoleDraft[userId]
+    if (!draft?.locationId) {
+      setTeamActionError('Select a location to assign.')
+      return
+    }
+    setTeamActionError(null)
+    setTeamActionLoading(userId)
+    const { error } = await supabase
+      .from('user_location_roles')
+      .upsert({
+        user_id: userId,
+        location_id: draft.locationId,
+        role: draft.role || 'viewer',
+      })
+    if (error) {
+      setTeamActionError(error.message || 'Failed to assign location role.')
+    } else {
+      setTeamMembers((prev) =>
+        prev.map((m) => {
+          if (m.user_id !== userId) return m
+          const nextRoles = Array.isArray(m.location_roles) ? [...m.location_roles] : []
+          const idx = nextRoles.findIndex((r: any) => String(r.location_id) === String(draft.locationId))
+          if (idx >= 0) {
+            nextRoles[idx] = { ...nextRoles[idx], role: draft.role }
+          } else {
+            nextRoles.push({ location_id: draft.locationId, role: draft.role })
+          }
+          return { ...m, location_roles: nextRoles }
+        })
+      )
+    }
+    setTeamActionLoading(null)
+  }
+
+  const removeTeamMember = async (userId: string) => {
+    if (!activeBusinessId) return
+    if (userId === user?.id) {
+      setTeamActionError('You cannot remove yourself.')
+      return
+    }
+    setTeamActionError(null)
+    setTeamActionLoading(userId)
+    const businessLocationIds = locations
+      .filter((l) => l.business_id === activeBusinessId)
+      .map((l) => l.id)
+    if (businessLocationIds.length > 0) {
+      await supabase
+        .from('user_location_roles')
+        .delete()
+        .eq('user_id', userId)
+        .in('location_id', businessLocationIds)
+    }
+    const { error } = await supabase
+      .from('user_business_roles')
+      .delete()
+      .eq('user_id', userId)
+      .eq('business_id', activeBusinessId)
+    if (error) {
+      setTeamActionError(error.message || 'Failed to remove member.')
+    } else {
+      setTeamMembers((prev) => prev.filter((m) => m.user_id !== userId))
+    }
+    setTeamActionLoading(null)
+  }
+
+  const updatePendingInvite = async (inviteId: string) => {
+    const draft = inviteEditDraft[inviteId]
+    if (!draft) return
+    setTeamActionError(null)
+    setTeamActionLoading(inviteId)
+    const { error } = await supabase
+      .from('business_user_invites')
+      .update({
+        business_role: draft.businessRole,
+        location_role: draft.locationRole,
+        location_id: draft.locationId || null,
+      })
+      .eq('id', inviteId)
+    if (error) {
+      setTeamActionError(error.message || 'Failed to update invite.')
+    } else {
+      setPendingInvites((prev) =>
+        prev.map((inv) =>
+          inv.id === inviteId
+            ? {
+                ...inv,
+                business_role: draft.businessRole,
+                location_role: draft.locationRole,
+                location_id: draft.locationId || null,
+              }
+            : inv
+        )
+      )
+    }
+    setTeamActionLoading(null)
+  }
+
+  const removePendingInvite = async (inviteId: string) => {
+    setTeamActionError(null)
+    setTeamActionLoading(inviteId)
+    const { error } = await supabase
+      .from('business_user_invites')
+      .delete()
+      .eq('id', inviteId)
+    if (error) {
+      setTeamActionError(error.message || 'Failed to remove invite.')
+    } else {
+      setPendingInvites((prev) => prev.filter((inv) => inv.id !== inviteId))
+    }
+    setTeamActionLoading(null)
+  }
+
+  const saveLocationProfile = async () => {
+    if (!activeLocationId) {
+      setLocationEditError('Select a location to update.')
+      return
+    }
+    setLocationEditError(null)
+    setLocationEditSaving(true)
+    const payload = {
+      name: locationEditDraft.name.trim(),
+      city: locationEditDraft.city.trim() || null,
+      state: locationEditDraft.state.trim() || null,
+      country: locationEditDraft.country.trim() || null,
+    }
+    const { data, error } = await supabase
+      .from('locations')
+      .update(payload)
+      .eq('id', activeLocationId)
+      .select('id, name, city, state, country, business_id')
+      .single()
+    if (error) {
+      setLocationEditError(error.message || 'Failed to update location.')
+      setLocationEditSaving(false)
+      return
+    }
+    if (data) {
+      setLocations((prev) =>
+        prev.map((l) =>
+          l.id === String(data.id)
+            ? {
+                ...l,
+                name: data.name || l.name,
+                city: data.city || null,
+                state: data.state || null,
+                country: data.country || null,
+              }
+            : l
+        )
+      )
+    }
+    setLocationEditSaving(false)
+  }
+
+  const createBusinessWithLocation = async () => {
+    if (!user?.id) return
+    setOnboardingError(null)
+    if (!onboardingBusinessName.trim()) {
+      setOnboardingError('Business name is required.')
+      return
+    }
+    if (!onboardingLocationName.trim()) {
+      setOnboardingError('Location name is required.')
+      return
+    }
+    setOnboardingBusy(true)
+
+    const newBusinessId = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : undefined
+    const { error: businessErr } = await supabase
+      .from('businesses')
+      .insert({
+        id: newBusinessId,
+        name: onboardingBusinessName.trim(),
+        industry: onboardingIndustry.trim() || null,
+      })
+
+    const businessId = newBusinessId
+    if (businessErr || !businessId) {
+      setOnboardingError(businessErr?.message || 'Failed to create business.')
+      setOnboardingBusy(false)
+      return
+    }
+
+    const businessRoleRes = await supabase.from('user_business_roles').upsert({
+      user_id: user.id,
+      business_id: businessId,
+      role: 'business_admin',
+    })
+    if (businessRoleRes.error) {
+      setOnboardingError(businessRoleRes.error.message || 'Failed to assign business role.')
+      setOnboardingBusy(false)
+      return
+    }
+
+    const { data: location, error: locationErr } = await supabase
+      .from('locations')
+      .insert({
+        business_id: businessId,
+        name: onboardingLocationName.trim(),
+        city: onboardingCity.trim() || null,
+        state: onboardingState.trim() || null,
+        country: onboardingCountry.trim() || null,
+      })
+      .select('id, name, city, state, country, business_id')
+      .single()
+
+    if (locationErr || !location) {
+      setOnboardingError(locationErr?.message || 'Failed to create location.')
+      setOnboardingBusy(false)
+      return
+    }
+
+    const locationRoleRes = await supabase.from('user_location_roles').upsert({
+      user_id: user.id,
+      location_id: location.id,
+      role: 'location_admin',
+    })
+    if (locationRoleRes.error) {
+      setOnboardingError(locationRoleRes.error.message || 'Failed to assign location role.')
+      setOnboardingBusy(false)
+      return
+    }
+
+    setOnboardingBusy(false)
+    setBusinesses((prev) => {
+      const exists = prev.some((b: any) => String(b.id) === String(businessId))
+      if (exists) return prev
+      return [
+        ...prev,
+        {
+          id: businessId,
+          name: onboardingBusinessName.trim(),
+          industry: onboardingIndustry.trim() || null,
+          role: 'business_admin',
+        },
+      ]
+    })
+    setLocations((prev) => {
+      const exists = prev.some((l: any) => String(l.id) === String(location.id))
+      if (exists) return prev
+      return [...prev, location]
+    })
+    setActiveBusinessId(String(businessId))
+    setActiveLocationId(String(location.id))
+    setOnboardingBusinessName('')
+    setOnboardingIndustry('')
+    setOnboardingLocationName('')
+    setOnboardingCity('')
+    setOnboardingState('')
+    setOnboardingCountry('')
+  }
+
+  const requestAccessOrCreateLocation = async () => {
+    if (!user?.id) return
+    if (!onboardingSelectedBusiness) {
+      setOnboardingError('Select a business first.')
+      return
+    }
+    setOnboardingError(null)
+    setOnboardingBusy(true)
+
+    const targetBusinessId = String(onboardingSelectedBusiness.id)
+    const hasBusinessAccess = businesses.some((b) => b.id === targetBusinessId)
+
+    if (!hasBusinessAccess) {
+      const inviteRes = await supabase.from('business_user_invites').insert({
+        email: user.email,
+        business_id: targetBusinessId,
+        business_role: 'location_admin',
+        location_role: 'location_admin',
+        invited_by: user.id,
+      })
+      if (inviteRes.error) {
+        setOnboardingError(inviteRes.error.message || 'Failed to request access.')
+      } else {
+        setOnboardingError('Access request sent to business admins.')
+      }
+      setOnboardingBusy(false)
+      return
+    }
+
+    const { data: location, error: locationErr } = await supabase
+      .from('locations')
+      .insert({
+        business_id: targetBusinessId,
+        name: onboardingLocationName.trim() || 'New Location',
+        city: onboardingCity.trim() || null,
+        state: onboardingState.trim() || null,
+        country: onboardingCountry.trim() || null,
+      })
+      .select('id, name, city, state, country, business_id')
+      .single()
+
+    if (locationErr || !location) {
+      setOnboardingError(locationErr?.message || 'Failed to create location.')
+      setOnboardingBusy(false)
+      return
+    }
+
+    const locationRoleRes = await supabase.from('user_location_roles').upsert({
+      user_id: user.id,
+      location_id: location.id,
+      role: 'location_admin',
+    })
+    if (locationRoleRes.error) {
+      setOnboardingError(locationRoleRes.error.message || 'Failed to assign location role.')
+      setOnboardingBusy(false)
+      return
+    }
+
+    setLocations((prev) => {
+      const exists = prev.some((l: any) => String(l.id) === String(location.id))
+      if (exists) return prev
+      return [...prev, location]
+    })
+    setActiveBusinessId(targetBusinessId)
+    setActiveLocationId(String(location.id))
+    setOnboardingBusy(false)
+  }
+
   async function loadVacancies(opts?: { force?: boolean }) {
     if (vacanciesLoadedOnce && !opts?.force) return
     setVacanciesLoading(true)
@@ -396,7 +1305,7 @@ export default function BusinessDashboard() {
         businessProfileId = String(bp.data.id)
       }
 
-      const filterKeys = ['business_profile_id', 'business_id', 'company_id'] as const
+      const filterKeys = ['location_id', 'business_profile_id', 'business_id', 'company_id'] as const
       const selectors = [
         'id,title,status,is_active,employment_type,location,city,country,created_at,application_url,application_email',
         'id,title,status,is_active,location,city,country,employment_type,created_at',
@@ -409,11 +1318,13 @@ export default function BusinessDashboard() {
       let lastErr: any = null
 
       outer: for (const fk of filterKeys) {
+        const filterValue = fk === 'location_id' ? activeLocationId : businessProfileId
+        if (!filterValue) continue
         for (const sel of selectors) {
           const res: any = await (supabase
             .from('jobs')
             .select(sel)
-            .eq(fk, businessProfileId)
+            .eq(fk, filterValue)
             .order('created_at', { ascending: false })
             .limit(50) as any)
 
@@ -439,6 +1350,26 @@ export default function BusinessDashboard() {
         return
       }
 
+      // Auto-activate published jobs if is_active exists but is false/null
+      const toActivate = data.filter((job: any) => {
+        const status = String(job?.status || '').toLowerCase()
+        return status === 'published' && job?.is_active !== true
+      })
+      if (toActivate.length > 0) {
+        const ids = toActivate.map((j: any) => j.id).filter(Boolean)
+        if (ids.length > 0) {
+          const updateRes: any = await supabase
+            .from('jobs')
+            .update({ is_active: true })
+            .in('id', ids)
+          if (!updateRes?.error) {
+            data = data.map((j: any) =>
+              ids.includes(j.id) ? { ...j, is_active: true } : j
+            )
+          }
+        }
+      }
+
       setVacancies(data)
       setVacanciesLoadedOnce(true)
     } finally {
@@ -449,9 +1380,9 @@ export default function BusinessDashboard() {
   // Keep the overview "Job Postings" stat real (best-effort), even before opening the Vacancies tab.
   useEffect(() => {
     if (!user?.id) return
-    loadVacancies().catch(() => {})
+    loadVacancies({ force: true }).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id])
+  }, [user?.id, activeLocationId])
 
   // Messaging state (Supabase/RLS-backed)
   const [msgLoading, setMsgLoading] = useState(false)
@@ -510,6 +1441,29 @@ export default function BusinessDashboard() {
         // Get fresh user data to ensure we have latest metadata
         const { data: { user: freshUser } } = await supabase.auth.getUser()
         const userMetadata = (freshUser || u).user_metadata || {}
+        const adminEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(',').map(e => e.trim().toLowerCase()) || []
+        const emailLower = (freshUser?.email || u.email || '').toLowerCase()
+        const hasAdminFlag = userMetadata.is_admin === true || userMetadata.admin === true
+        const isAdminEmail = !!emailLower && adminEmails.includes(emailLower)
+        if (!cancelled) {
+          setIsAdmin(hasAdminFlag || isAdminEmail)
+        }
+        if (!cancelled && !hasAdminFlag && isAdminEmail && !didAttemptAdminPromoteRef.current) {
+          didAttemptAdminPromoteRef.current = true
+          const { data: promoteSession } = await supabase.auth.getSession()
+          const accessToken = promoteSession.session?.access_token
+          if (accessToken) {
+            await fetch('/api/admin/promote', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${accessToken}` },
+            })
+            const { data: refreshed } = await supabase.auth.getUser()
+            const refreshedMeta = refreshed.user?.user_metadata || {}
+            if (!cancelled) {
+              setIsAdmin(refreshedMeta.is_admin === true || refreshedMeta.admin === true || isAdminEmail)
+            }
+          }
+        }
         const usernameFromMetadata = userMetadata.username || null
         const registeredAsTalentFromMetadata = userMetadata.registration_type === 'talent' || userMetadata.registered_as === 'talent'
         if (!cancelled && usernameFromMetadata) {
@@ -1588,9 +2542,18 @@ export default function BusinessDashboard() {
     return Math.round((completedFields / fields.length) * 100)
   }
 
-  const handleLogout = () => {
-    // Logout removed - just navigate home
-    router.push('/')
+  const handleLogout = async () => {
+    try {
+      localStorage.removeItem('creerlio_active_role')
+      localStorage.removeItem('user_type')
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('user_email')
+      await supabase.auth.signOut()
+    } catch (error) {
+      console.error('Error signing out:', error)
+    } finally {
+      window.location.assign('/')
+    }
   }
 
   const handleDeleteRegistration = async () => {
@@ -1705,6 +2668,15 @@ export default function BusinessDashboard() {
           
           <div className="flex items-center space-x-4">
             <span className="text-white">Welcome, {userFirstName || user?.full_name || user?.username}</span>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => router.push('/admin')}
+                className="px-4 py-2 text-white hover:text-[#20C997] transition-colors text-left"
+              >
+                Admin
+              </button>
+            )}
             <button
               onClick={handleLogout}
               className="px-4 py-2 text-white hover:text-[#20C997] transition-colors text-left"
@@ -1731,7 +2703,7 @@ export default function BusinessDashboard() {
         {/* Tabs */}
         <div className="mb-8 border-b border-gray-200">
           <div className="flex items-center gap-2">
-            {(['overview', 'vacancies', 'portfolio', 'applications', 'connections', 'service_connections', 'previous_connections', 'calendar'] as TabType[]).map((tab) => (
+            {(['overview', 'portfolio', 'locations', 'team', 'calendar', 'business_map'] as TabType[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -1741,35 +2713,128 @@ export default function BusinessDashboard() {
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                {tab === 'connections'
-                  ? 'Talent Connections'
-                  : tab === 'service_connections'
-                    ? 'Business Connections'
-                    : tab === 'previous_connections'
-                      ? 'Previous Connections'
-                      : tab === 'portfolio'
-                        ? 'Business Profile'
-                        : tab === 'vacancies'
-                          ? 'Vacancies'
-                          : tab === 'calendar'
-                            ? 'Calendar'
-                            : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'portfolio'
+                    ? 'Business Profile'
+                    : tab === 'vacancies'
+                      ? 'Vacancies'
+                      : tab === 'locations'
+                        ? 'Locations'
+                        : tab === 'team'
+                          ? 'Team Management'
+                    : tab === 'calendar'
+                      ? 'Calendar'
+                      : tab === 'business_map'
+                        ? 'Business Map'
+                        : tab.charAt(0).toUpperCase() + tab.slice(1)}
                 {activeTab === tab && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>
                 )}
               </button>
             ))}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setActiveTab('vacancies')
+                  setVacanciesMenuOpen((open) => !open)
+                }}
+                className={`px-6 py-3 text-sm font-medium transition-all relative ${
+                  activeTab === 'vacancies' || activeTab === 'applications'
+                    ? 'text-[#20C997]'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Vacancies
+                {(activeTab === 'vacancies' || activeTab === 'applications') && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>
+                )}
+              </button>
+              {vacanciesMenuOpen && (
+                <div className="absolute z-20 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-lg">
+                  <button
+                    onClick={() => {
+                      setActiveTab('vacancies')
+                      setVacanciesMenuOpen(false)
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                      activeTab === 'vacancies' ? 'text-[#20C997]' : 'text-gray-700'
+                    }`}
+                  >
+                    Vacancies
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('applications')
+                      setVacanciesMenuOpen(false)
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                      activeTab === 'applications' ? 'text-[#20C997]' : 'text-gray-700'
+                    }`}
+                  >
+                    Applications
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setActiveTab('connections')
+                  setConnectionsMenuOpen((open) => !open)
+                }}
+                className={`px-6 py-3 text-sm font-medium transition-all relative ${
+                  activeTab === 'connections' || activeTab === 'service_connections' || activeTab === 'previous_connections'
+                    ? 'text-[#20C997]'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Connections
+                {(activeTab === 'connections' || activeTab === 'service_connections' || activeTab === 'previous_connections') && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>
+                )}
+              </button>
+              {connectionsMenuOpen && (
+                <div className="absolute z-20 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-lg">
+                  <button
+                    onClick={() => {
+                      setActiveTab('connections')
+                      setConnectionsMenuOpen(false)
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                      activeTab === 'connections' ? 'text-[#20C997]' : 'text-gray-700'
+                    }`}
+                  >
+                    Talent Connections
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('service_connections')
+                      setConnectionsMenuOpen(false)
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                      activeTab === 'service_connections' ? 'text-[#20C997]' : 'text-gray-700'
+                    }`}
+                  >
+                    Business Connections
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('previous_connections')
+                      setConnectionsMenuOpen(false)
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                      activeTab === 'previous_connections' ? 'text-[#20C997]' : 'text-gray-700'
+                    }`}
+                  >
+                    Previous Connections
+                  </button>
+                </div>
+              )}
+            </div>
             <Link
               href="/dashboard/business/bank"
               className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
             >
               Business Bank ↗
-            </Link>
-            <Link
-              href="/business-map"
-              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
-            >
-              Business Map ↗
             </Link>
           </div>
         </div>
@@ -1777,6 +2842,136 @@ export default function BusinessDashboard() {
         {/* Tab Content */}
         {activeTab === 'overview' && (
           <>
+            {businesses.length === 0 && locations.length === 0 && (
+              <div className="dashboard-card rounded-xl p-6 mb-8 border border-amber-200 bg-amber-50">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Business Setup</h2>
+                <p className="text-gray-600 mb-4">
+                  Create a new business or request access to an existing one before posting jobs.
+                </p>
+                <div className="flex gap-2 mb-6">
+                  <button
+                    type="button"
+                    onClick={() => setOnboardingMode('new')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+                      onboardingMode === 'new'
+                        ? 'bg-[#20C997] text-white border-[#20C997]'
+                        : 'bg-white text-gray-700 border-gray-300'
+                    }`}
+                  >
+                    New Business
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOnboardingMode('existing')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+                      onboardingMode === 'existing'
+                        ? 'bg-[#2563EB] text-white border-[#2563EB]'
+                        : 'bg-white text-gray-700 border-gray-300'
+                    }`}
+                  >
+                    Existing Business
+                  </button>
+                </div>
+
+                {onboardingMode === 'new' ? (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      placeholder="Business name"
+                      value={onboardingBusinessName}
+                      onChange={(e) => setOnboardingBusinessName(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Industry (optional)"
+                      value={onboardingIndustry}
+                      onChange={(e) => setOnboardingIndustry(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Location name"
+                      value={onboardingLocationName}
+                      onChange={(e) => setOnboardingLocationName(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                    />
+                    <LocationDropdownsString
+                      city={onboardingCity}
+                      state={onboardingState}
+                      country={onboardingCountry}
+                      onCityChange={(city) => handleOnboardingLocation({ city })}
+                      onStateChange={(state) => handleOnboardingLocation({ state })}
+                      onCountryChange={(country) => handleOnboardingLocation({ country })}
+                    />
+                    {onboardingError && <p className="text-sm text-red-600 md:col-span-2">{onboardingError}</p>}
+                    <button
+                      type="button"
+                      onClick={createBusinessWithLocation}
+                      disabled={onboardingBusy}
+                      className="px-4 py-2 rounded-lg bg-[#20C997] text-white hover:bg-[#1DB886] transition-colors md:col-span-2 disabled:opacity-60"
+                    >
+                      {onboardingBusy ? 'Creating…' : 'Create Business + First Location'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      placeholder="Search existing business"
+                      value={onboardingSearch}
+                      onChange={(e) => setOnboardingSearch(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded text-gray-900 md:col-span-2"
+                    />
+                    <div className="md:col-span-2 space-y-2">
+                      {onboardingResults.map((biz) => (
+                        <button
+                          key={biz.id}
+                          type="button"
+                          onClick={() => setOnboardingSelectedBusiness(biz)}
+                          className={`w-full text-left px-3 py-2 rounded border ${
+                            onboardingSelectedBusiness?.id === biz.id
+                              ? 'border-blue-400 bg-blue-50'
+                              : 'border-gray-200'
+                          }`}
+                        >
+                          <div className="text-sm font-medium text-gray-900">{biz.name}</div>
+                          <div className="text-xs text-gray-500">{biz.industry || 'Industry not set'}</div>
+                        </button>
+                      ))}
+                      {onboardingSearch.trim() && onboardingResults.length === 0 && (
+                        <p className="text-sm text-gray-500">No businesses found.</p>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="New location name"
+                      value={onboardingLocationName}
+                      onChange={(e) => setOnboardingLocationName(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                    />
+                    <LocationDropdownsString
+                      city={onboardingCity}
+                      state={onboardingState}
+                      country={onboardingCountry}
+                      onCityChange={(city) => handleOnboardingLocation({ city })}
+                      onStateChange={(state) => handleOnboardingLocation({ state })}
+                      onCountryChange={(country) => handleOnboardingLocation({ country })}
+                    />
+                    {onboardingError && <p className="text-sm text-red-600 md:col-span-2">{onboardingError}</p>}
+                    <button
+                      type="button"
+                      onClick={requestAccessOrCreateLocation}
+                      disabled={onboardingBusy}
+                      className="px-4 py-2 rounded-lg bg-[#2563EB] text-white hover:bg-blue-600 transition-colors md:col-span-2 disabled:opacity-60"
+                    >
+                      {onboardingBusy ? 'Submitting…' : 'Request Access / Create Location'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid md:grid-cols-3 gap-6 mb-8">
               {/* Stats Card */}
               <div className="dashboard-card rounded-xl p-6">
@@ -1909,152 +3104,131 @@ export default function BusinessDashboard() {
 
         {activeTab === 'profile' && (
           <div className="dashboard-card rounded-xl p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Your Profile</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Profiles</h2>
             {user && (
-              <div className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">Email</label>
-                    {profileEditOpen ? (
-                      <input
-                        type="email"
-                        value={profileEditDraft.email}
-                        onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, email: e.target.value }))}
-                        className="w-full p-2 border border-gray-300 rounded text-gray-900"
-                      />
-                    ) : (
-                      <p className="text-gray-900">{businessProfile?.email || user.email}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">Username</label>
-                    {profileEditOpen ? (
-                      <input
-                        type="text"
-                        value={profileEditDraft.username}
-                        onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, username: e.target.value }))}
-                        className="w-full p-2 border border-gray-300 rounded text-gray-900"
-                      />
-                    ) : (
-                      <p className="text-gray-900">{user.username}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">Business Name</label>
-                    {profileEditOpen ? (
-                      <input
-                        type="text"
-                        value={profileEditDraft.businessName}
-                        onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, businessName: e.target.value }))}
-                        className="w-full p-2 border border-gray-300 rounded text-gray-900"
-                      />
-                    ) : (
-                      <p className="text-gray-900">{user.full_name || businessProfile?.business_name || businessProfile?.name || '—'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">User Type</label>
-                    <p className="text-gray-900 capitalize">{user.user_type}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">Location</label>
-                    {profileEditOpen ? (
-                      <div className="relative">
+              <div className="space-y-8">
+                <div className="rounded-xl border border-gray-200 p-5">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">User Profile</h3>
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-2">Email</label>
+                      {profileEditOpen ? (
                         <input
-                          type="text"
-                          value={locQuery}
-                          onChange={(e) => {
-                            setLocQuery(e.target.value)
-                            setProfileEditDraft((prev) => ({ ...prev, location: e.target.value }))
-                          }}
-                          onFocus={() => locSuggestions.length > 0 && setLocOpen(true)}
-                          onBlur={() => {
-                            // Delay closing to allow click on suggestion
-                            setTimeout(() => setLocOpen(false), 200)
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'ArrowDown') {
-                              e.preventDefault()
-                              setLocActiveIdx((prev) => Math.min(prev + 1, locSuggestions.length - 1))
-                              setLocOpen(true)
-                            } else if (e.key === 'ArrowUp') {
-                              e.preventDefault()
-                              setLocActiveIdx((prev) => Math.max(prev - 1, 0))
-                            } else if (e.key === 'Enter' && locSuggestions[locActiveIdx]) {
-                              e.preventDefault()
-                              handleLocationSelect(locSuggestions[locActiveIdx])
-                            } else if (e.key === 'Escape') {
-                              setLocOpen(false)
-                            }
-                          }}
-                          placeholder="Start typing to search locations..."
+                          type="email"
+                          value={profileEditDraft.email}
+                          onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, email: e.target.value }))}
                           className="w-full p-2 border border-gray-300 rounded text-gray-900"
                         />
-                        {locOpen && locSuggestions.length > 0 && (
-                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
-                            {locSuggestions.map((s, idx) => (
-                              <button
-                                key={s.id}
-                                type="button"
-                                onClick={() => handleLocationSelect(s)}
-                                className={`w-full text-left px-4 py-2 hover:bg-gray-100 transition-colors ${
-                                  idx === locActiveIdx ? 'bg-blue-50' : ''
-                                }`}
-                                style={{ color: '#000' }}
-                              >
-                                {s.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {locBusy && (
-                          <div className="absolute right-2 top-2 text-gray-400 text-sm">Searching...</div>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-gray-900">{businessProfile?.location || '—'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">City</label>
-                    {profileEditOpen ? (
-                      <input
-                        type="text"
-                        value={profileEditDraft.city}
-                        onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, city: e.target.value }))}
-                        className="w-full p-2 border border-gray-300 rounded text-gray-900"
-                      />
-                    ) : (
-                      <p className="text-gray-900">{businessProfile?.city || '—'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">State</label>
-                    {profileEditOpen ? (
-                      <input
-                        type="text"
-                        value={profileEditDraft.state}
-                        onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, state: e.target.value }))}
-                        className="w-full p-2 border border-gray-300 rounded text-gray-900"
-                      />
-                    ) : (
-                      <p className="text-gray-900">{businessProfile?.state || '—'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">Country</label>
-                    {profileEditOpen ? (
-                      <input
-                        type="text"
-                        value={profileEditDraft.country}
-                        onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, country: e.target.value }))}
-                        className="w-full p-2 border border-gray-300 rounded text-gray-900"
-                      />
-                    ) : (
-                      <p className="text-gray-900">{businessProfile?.country || '—'}</p>
-                    )}
+                      ) : (
+                        <p className="text-gray-900">{user.email}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-2">Username</label>
+                      {profileEditOpen ? (
+                        <input
+                          type="text"
+                          value={profileEditDraft.username}
+                          onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, username: e.target.value }))}
+                          className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                        />
+                      ) : (
+                        <p className="text-gray-900">{user.username}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-2">Full Name</label>
+                      <p className="text-gray-900">{user.full_name || '—'}</p>
+                    </div>
                   </div>
                 </div>
+
+                <div className="rounded-xl border border-gray-200 p-5">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Business Profile</h3>
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-2">Business Name</label>
+                      {profileEditOpen ? (
+                        <input
+                          type="text"
+                          value={profileEditDraft.businessName}
+                          onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, businessName: e.target.value }))}
+                          className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                        />
+                      ) : (
+                        <p className="text-gray-900">
+                          {businessProfile?.business_name || businessProfile?.name || user.full_name || '—'}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-2">Industry</label>
+                      <p className="text-gray-900">{businessProfile?.industry || '—'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-2">Website</label>
+                      <p className="text-gray-900">{businessProfile?.website || '—'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-2">Role</label>
+                      <p className="text-gray-900 capitalize">{activeBusinessRole}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 p-5">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Location Profile</h3>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-600 mb-2">Active Location</label>
+                    <select
+                      value={activeLocationId || ''}
+                      onChange={(e) => setActiveLocationId(e.target.value || null)}
+                      className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                    >
+                      <option value="">Select a location</option>
+                      {locations
+                        .filter((l) => (activeBusinessId ? l.business_id === activeBusinessId : true))
+                        .map((loc) => (
+                          <option key={loc.id} value={loc.id}>
+                            {loc.name} {loc.city ? `• ${loc.city}` : ''}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-2">Location Name</label>
+                      <input
+                        type="text"
+                        value={locationEditDraft.name}
+                        onChange={(e) => setLocationEditDraft((prev) => ({ ...prev, name: e.target.value }))}
+                        className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <LocationDropdownsString
+                        city={locationEditDraft.city || ''}
+                        state={locationEditDraft.state || ''}
+                        country={locationEditDraft.country || ''}
+                        onCityChange={(city) => handleLocationProfileDropdowns({ city })}
+                        onStateChange={(state) => handleLocationProfileDropdowns({ state })}
+                        onCountryChange={(country) => handleLocationProfileDropdowns({ country })}
+                      />
+                    </div>
+                  </div>
+                  {locationEditError && <div className="text-sm text-red-600 mt-2">{locationEditError}</div>}
+                  <div className="pt-4 border-t border-gray-200 mt-4">
+                    <button
+                      type="button"
+                      onClick={saveLocationProfile}
+                      disabled={locationEditSaving || !activeLocationId}
+                      className="px-6 py-3 bg-[#2563EB] text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-60"
+                    >
+                      {locationEditSaving ? 'Saving…' : 'Save Location'}
+                    </button>
+                  </div>
+                </div>
+
                 {profileEditError && <div className="text-sm text-red-600">{profileEditError}</div>}
                 {profileEditSuccess && <div className="text-sm text-green-600">{profileEditSuccess}</div>}
                 <div className="pt-4 border-t border-gray-200">
@@ -2066,7 +3240,7 @@ export default function BusinessDashboard() {
                         disabled={profileEditSaving}
                         className="px-6 py-3 bg-[#20C997] text-white rounded-lg hover:bg-[#1DB886] transition-colors disabled:opacity-60"
                       >
-                        {profileEditSaving ? 'Saving…' : 'Save Changes'}
+                        {profileEditSaving ? 'Saving…' : 'Save User + Business'}
                       </button>
                       <button
                         type="button"
@@ -2082,12 +3256,410 @@ export default function BusinessDashboard() {
                       onClick={() => setProfileEditOpen(true)}
                       className="px-6 py-3 bg-[#20C997] text-white rounded-lg hover:bg-[#1DB886] transition-colors"
                     >
-                      Edit Profile
+                      Edit User + Business
                     </button>
                   )}
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'locations' && (
+          <div className="space-y-6">
+            <div className="dashboard-card rounded-xl p-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Locations</h2>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">Active Business</label>
+                  <select
+                    value={activeBusinessId || ''}
+                    onChange={(e) => setActiveBusinessId(e.target.value || null)}
+                    className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                  >
+                    <option value="">Select a business</option>
+                    {(businesses.length > 0
+                      ? businesses.map((biz) => ({
+                          id: biz.id,
+                          name: biz.name,
+                          role: biz.role,
+                        }))
+                      : Array.from(
+                          new Map(
+                            locations.map((loc) => [
+                              String(loc.business_id),
+                              {
+                                id: String(loc.business_id),
+                                name: `Business ${String(loc.business_id).slice(0, 6)}`,
+                                role: loc.role || 'viewer',
+                              },
+                            ])
+                          ).values()
+                        )
+                    ).map((biz) => (
+                      <option key={biz.id} value={biz.id}>
+                        {biz.name} • {biz.role}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="mt-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Accessible Locations</h3>
+                    <div className="space-y-2">
+                      {locations
+                        .filter((l) => (activeBusinessId ? l.business_id === activeBusinessId : true))
+                        .map((loc) => (
+                          <div
+                            key={loc.id}
+                            className={`flex items-center justify-between border rounded-lg p-3 ${
+                              loc.id === activeLocationId ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
+                            }`}
+                          >
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{loc.name}</div>
+                              <div className="text-xs text-gray-500">
+                                {[loc.city, loc.state, loc.country].filter(Boolean).join(', ') || '—'}
+                              </div>
+                            </div>
+                          <div
+                            className="text-xs text-gray-500 capitalize"
+                            title="Role for this location. Location admin can manage jobs, applications, and settings here."
+                          >
+                            {loc.role}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setActiveLocationId(loc.id)}
+                              className="px-3 py-1.5 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700"
+                              title="Make this your active location for jobs, applications, and profile edits."
+                            >
+                              Set Active
+                            </button>
+                            {canManageLocations && (
+                              <button
+                                type="button"
+                                onClick={() => removeLocation(loc.id)}
+                                disabled={locationDeleteLoading === loc.id}
+                                className="px-3 py-1.5 text-xs rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-60"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                          </div>
+                        ))}
+                      {locationDeleteError && <p className="text-sm text-red-600">{locationDeleteError}</p>}
+                      {locations.filter((l) => (activeBusinessId ? l.business_id === activeBusinessId : true)).length === 0 && (
+                        <p className="text-sm text-gray-500">No locations found for this business.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Create Location</h3>
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      placeholder="Location name"
+                      value={newLocation.name}
+                      onChange={(e) => setNewLocation((prev) => ({ ...prev, name: e.target.value }))}
+                      className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                    />
+                    <LocationDropdownsString
+                      city={newLocation.city || ''}
+                      state={newLocation.state || ''}
+                      country={newLocation.country || ''}
+                      onCityChange={(city) => handleNewLocationDropdowns({ city })}
+                      onStateChange={(state) => handleNewLocationDropdowns({ state })}
+                      onCountryChange={(country) => handleNewLocationDropdowns({ country })}
+                    />
+                    {locationError && <p className="text-sm text-red-600">{locationError}</p>}
+                    <button
+                      type="button"
+                      onClick={createLocation}
+                      disabled={locationSaving}
+                      className="px-4 py-2 rounded-lg bg-[#20C997] text-white hover:bg-[#1DB886] transition-colors disabled:opacity-60"
+                    >
+                      {locationSaving ? 'Saving…' : 'Create Location'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'team' && (
+          <div className="space-y-6">
+            <div className="dashboard-card rounded-xl p-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Team Management</h2>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold text-gray-900">Invite User</h3>
+                  <input
+                    type="email"
+                    placeholder="user@company.com"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                  />
+                  <select
+                    value={inviteBusinessRole}
+                    onChange={(e) => setInviteBusinessRole(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                  >
+                    <option value="business_admin">Business Admin</option>
+                    <option value="location_admin">Location Admin</option>
+                    <option value="manager">Manager</option>
+                    <option value="viewer">Viewer</option>
+                  </select>
+                  <select
+                    value={inviteLocationId || ''}
+                    onChange={(e) => setInviteLocationId(e.target.value || null)}
+                    className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                  >
+                    <option value="">Assign to location (optional)</option>
+                    {locations
+                      .filter((l) => (activeBusinessId ? l.business_id === activeBusinessId : true))
+                      .map((loc) => (
+                        <option key={loc.id} value={loc.id}>
+                          {loc.name}
+                        </option>
+                      ))}
+                  </select>
+                  <select
+                    value={inviteLocationRole}
+                    onChange={(e) => setInviteLocationRole(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                  >
+                    <option value="location_admin">Location Admin</option>
+                    <option value="manager">Manager</option>
+                    <option value="viewer">Viewer</option>
+                  </select>
+                  {teamError && <p className="text-sm text-red-600">{teamError}</p>}
+                  {inviteStatus && <p className="text-sm text-green-600">{inviteStatus}</p>}
+                  <button
+                    type="button"
+                    onClick={inviteUser}
+                    className="px-4 py-2 rounded-lg bg-[#2563EB] text-white hover:bg-blue-600 transition-colors"
+                  >
+                    Send Invite
+                  </button>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Pending Invites</h3>
+                  <div className="space-y-2">
+                    {pendingInvites.length === 0 && (
+                      <p className="text-sm text-gray-500">No pending invites.</p>
+                    )}
+                    {pendingInvites.map((invite) => (
+                      <div key={invite.id} className="border border-gray-200 rounded-lg p-3">
+                        <div className="text-sm font-medium text-gray-900">{invite.email}</div>
+                        <div className="text-xs text-gray-500">
+                          {(invite.business_role || 'viewer')} • {(invite.location_role || 'viewer')}
+                        </div>
+                        <div className="mt-3 grid md:grid-cols-3 gap-2">
+                          <select
+                            value={
+                              inviteEditDraft[invite.id]?.businessRole || invite.business_role || 'viewer'
+                            }
+                            onChange={(e) =>
+                              setInviteEditDraft((prev) => ({
+                                ...prev,
+                                [invite.id]: {
+                                  locationId: prev[invite.id]?.locationId || invite.location_id || '',
+                                  businessRole: e.target.value,
+                                  locationRole: prev[invite.id]?.locationRole || invite.location_role || 'viewer',
+                                },
+                              }))
+                            }
+                            className="w-full p-2 border border-gray-300 rounded text-gray-900 text-xs"
+                          >
+                            <option value="super_admin">Super Admin</option>
+                            <option value="business_admin">Business Admin</option>
+                            <option value="location_admin">Location Admin</option>
+                            <option value="manager">Manager</option>
+                            <option value="viewer">Viewer</option>
+                          </select>
+                          <select
+                            value={inviteEditDraft[invite.id]?.locationId || invite.location_id || ''}
+                            onChange={(e) =>
+                              setInviteEditDraft((prev) => ({
+                                ...prev,
+                                [invite.id]: {
+                                  locationId: e.target.value,
+                                  businessRole: prev[invite.id]?.businessRole || invite.business_role || 'viewer',
+                                  locationRole: prev[invite.id]?.locationRole || invite.location_role || 'viewer',
+                                },
+                              }))
+                            }
+                            className="w-full p-2 border border-gray-300 rounded text-gray-900 text-xs"
+                          >
+                            <option value="">Select location</option>
+                            {locations
+                              .filter((l) => (activeBusinessId ? l.business_id === activeBusinessId : true))
+                              .map((loc) => (
+                                <option key={loc.id} value={loc.id}>
+                                  {loc.name}
+                                </option>
+                              ))}
+                          </select>
+                          <select
+                            value={inviteEditDraft[invite.id]?.locationRole || invite.location_role || 'viewer'}
+                            onChange={(e) =>
+                              setInviteEditDraft((prev) => ({
+                                ...prev,
+                                [invite.id]: {
+                                  locationId: prev[invite.id]?.locationId || invite.location_id || '',
+                                  businessRole: prev[invite.id]?.businessRole || invite.business_role || 'viewer',
+                                  locationRole: e.target.value,
+                                },
+                              }))
+                            }
+                            className="w-full p-2 border border-gray-300 rounded text-gray-900 text-xs"
+                          >
+                            <option value="location_admin">Location Admin</option>
+                            <option value="manager">Manager</option>
+                            <option value="viewer">Viewer</option>
+                          </select>
+                        </div>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => updatePendingInvite(invite.id)}
+                            disabled={teamActionLoading === invite.id}
+                            className="px-3 py-1.5 text-xs rounded-lg bg-[#20C997] text-white hover:bg-[#1DB886] transition-colors disabled:opacity-60"
+                          >
+                            Save Changes
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removePendingInvite(invite.id)}
+                            disabled={teamActionLoading === invite.id}
+                            className="px-3 py-1.5 text-xs rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-60"
+                          >
+                            Remove Invite
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="dashboard-card rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Members</h3>
+              {teamActionError && <p className="text-sm text-red-600 mb-2">{teamActionError}</p>}
+              {teamLoading ? (
+                <p className="text-sm text-gray-500">Loading team members…</p>
+              ) : teamMembers.length === 0 ? (
+                <p className="text-sm text-gray-500">No team members found.</p>
+              ) : (
+                <div className="space-y-2">
+                  {teamMembers.map((member) => (
+                    <div key={member.user_id} className="border border-gray-200 rounded-lg p-3">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {member.full_name || member.email}
+                          </div>
+                          <div className="text-xs text-gray-500">{member.email}</div>
+                          <div className="text-xs text-gray-500 capitalize">
+                            Business role: {member.business_role}
+                          </div>
+                          {Array.isArray(member.location_roles) && member.location_roles.length > 0 && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Locations:{' '}
+                              {member.location_roles
+                                .map((r: any) => {
+                                  const loc = locations.find((l) => String(l.id) === String(r.location_id))
+                                  const label = loc?.name || `Location ${String(r.location_id).slice(0, 6)}`
+                                  return `${label} (${r.role})`
+                                })
+                                .join(', ')}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2 min-w-[220px]">
+                          <select
+                            value={member.business_role}
+                            onChange={(e) => updateMemberBusinessRole(member.user_id, e.target.value)}
+                            disabled={teamActionLoading === member.user_id}
+                            className="w-full p-2 border border-gray-300 rounded text-gray-900 text-xs"
+                          >
+                            <option value="super_admin">Super Admin</option>
+                            <option value="business_admin">Business Admin</option>
+                            <option value="location_admin">Location Admin</option>
+                            <option value="manager">Manager</option>
+                            <option value="viewer">Viewer</option>
+                          </select>
+                          <div className="flex gap-2">
+                            <select
+                              value={memberLocationRoleDraft[member.user_id]?.locationId || ''}
+                              onChange={(e) =>
+                                setMemberLocationRoleDraft((prev) => ({
+                                  ...prev,
+                                  [member.user_id]: {
+                                    locationId: e.target.value,
+                                    role: prev[member.user_id]?.role || 'viewer',
+                                  },
+                                }))
+                              }
+                              className="flex-1 p-2 border border-gray-300 rounded text-gray-900 text-xs"
+                            >
+                              <option value="">Select location</option>
+                              {locations
+                                .filter((l) => (activeBusinessId ? l.business_id === activeBusinessId : true))
+                                .map((loc) => (
+                                  <option key={loc.id} value={loc.id}>
+                                    {loc.name}
+                                  </option>
+                                ))}
+                            </select>
+                            <select
+                              value={memberLocationRoleDraft[member.user_id]?.role || 'viewer'}
+                              onChange={(e) =>
+                                setMemberLocationRoleDraft((prev) => ({
+                                  ...prev,
+                                  [member.user_id]: {
+                                    locationId: prev[member.user_id]?.locationId || '',
+                                    role: e.target.value,
+                                  },
+                                }))
+                              }
+                              className="w-32 p-2 border border-gray-300 rounded text-gray-900 text-xs"
+                            >
+                              <option value="location_admin">Location Admin</option>
+                              <option value="manager">Manager</option>
+                              <option value="viewer">Viewer</option>
+                            </select>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => assignMemberLocationRole(member.user_id)}
+                            disabled={teamActionLoading === member.user_id}
+                            className="px-3 py-1.5 text-xs rounded-lg bg-[#20C997] text-white hover:bg-[#1DB886] transition-colors disabled:opacity-60"
+                          >
+                            Assign Location
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeTeamMember(member.user_id)}
+                            disabled={teamActionLoading === member.user_id}
+                            className="px-3 py-1.5 text-xs rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-60"
+                          >
+                            Remove Member
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -2996,6 +4568,16 @@ export default function BusinessDashboard() {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'business_map' && (
+          <div className="dashboard-card rounded-xl border border-gray-200 bg-white">
+            <iframe
+              title="Business Map"
+              src="/business-map?embed=1"
+              className="w-full h-[75vh] rounded-xl"
+            />
           </div>
         )}
 

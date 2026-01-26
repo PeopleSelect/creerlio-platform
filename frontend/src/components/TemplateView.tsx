@@ -14,7 +14,7 @@ import { PortfolioTemplate, getTemplateById, TemplateId } from './portfolioTempl
 import { supabase } from '@/lib/supabase'
 import TemplateLayoutRenderer from './template-layouts/TemplateLayoutRenderer'
 
-interface TemplateViewPortfolioData {
+export interface TemplateViewPortfolioData {
   name: string
   title: string
   bio: string
@@ -40,7 +40,7 @@ interface TemplateViewProps {
   onSelectDifferentTemplate?: () => void
 }
 
-interface TemplateState {
+export interface TemplateState {
   template_id: TemplateId
   included_sections: string[]
   selected_items: {

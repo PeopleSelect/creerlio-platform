@@ -188,6 +188,7 @@ export default function EditJobPage() {
         .map(s => s.trim())
         .filter(s => s.length > 0)
 
+      const isActive = formData.status === 'published'
       const updatePayload: any = {
         title: formData.title,
         description: formData.description || null,
@@ -209,15 +210,26 @@ export default function EditJobPage() {
         experience_level: formData.experience_level || null,
         education_level: formData.education_level || null,
         status: formData.status,
+        is_active: isActive,
         application_url: formData.application_url || null,
         application_email: formData.application_email || null,
       }
-
-      const { error: updateError } = await supabase
-        .from('jobs')
-        .update(updatePayload)
-        .eq('id', jobId)
-
+      let updateError = null as any
+      const attemptUpdate = async (payload: any) => {
+        const res = await supabase.from('jobs').update(payload).eq('id', jobId)
+        return res.error
+      }
+      updateError = await attemptUpdate(updatePayload)
+      if (updateError) {
+        const msg = String(updateError?.message ?? '')
+        const code = String(updateError?.code ?? '')
+        const isMissingCol = code === 'PGRST204' || /Could not find the .* column/i.test(msg)
+        if (isMissingCol) {
+          const legacyPayload = { ...updatePayload }
+          delete legacyPayload.is_active
+          updateError = await attemptUpdate(legacyPayload)
+        }
+      }
       if (updateError) {
         throw updateError
       }

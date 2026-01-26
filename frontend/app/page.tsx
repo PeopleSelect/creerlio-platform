@@ -8,14 +8,27 @@ import { supabase } from '@/lib/supabase'
 export default function HomePage() {
   const router = useRouter()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const { data } = await supabase.auth.getSession()
-        setIsAuthenticated(!!data.session?.user?.id)
+        const authed = !!data.session?.user?.id
+        setIsAuthenticated(authed)
+        if (!authed) {
+          setIsAdmin(false)
+          return
+        }
+        const { data: { user } } = await supabase.auth.getUser()
+        const meta = user?.user_metadata || {}
+        const email = (user?.email || data.session?.user?.email || '').toLowerCase()
+        const adminEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(',').map(e => e.trim().toLowerCase()) || []
+        const hasAdminFlag = meta.is_admin === true || meta.admin === true
+        setIsAdmin(hasAdminFlag || (!!email && adminEmails.includes(email)))
       } catch {
         setIsAuthenticated(false)
+        setIsAdmin(false)
       }
     }
 
@@ -44,6 +57,11 @@ export default function HomePage() {
               <Link href="/business" className="hover:text-blue-600 transition-colors">Business</Link>
               <Link href="/search" className="hover:text-blue-600 transition-colors">Search</Link>
               <Link href="/jobs" className="hover:text-blue-600 transition-colors">Jobs</Link>
+              {isAdmin && (
+                <Link href="/admin" className="hover:text-blue-600 transition-colors">
+                  Admin
+                </Link>
+              )}
               {isAuthenticated && (
                 <button
                   type="button"

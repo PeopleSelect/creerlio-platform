@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import VideoChat from '@/components/VideoChat'
 import { useBusinessContext } from '@/components/BusinessContext'
 import LocationDropdownsString from '@/components/LocationDropdownsString'
+import { INDUSTRY_OPTIONS } from '@/constants/industries'
 
 interface User {
   id: string
@@ -138,7 +139,11 @@ export default function BusinessDashboard() {
     city: string
     state: string
     country: string
-  }>({ email: '', username: '', businessName: '', location: '', city: '', state: '', country: '' })
+    industry: string
+    website: string
+  }>({ email: '', username: '', businessName: '', location: '', city: '', state: '', country: '', industry: '', website: '' })
+  const [industryQuery, setIndustryQuery] = useState('')
+  const [industrySuggestionsOpen, setIndustrySuggestionsOpen] = useState(false)
 
   // Location autocomplete state
   type LocSuggestion = { id: string; label: string; lng: number; lat: number; context?: any[] }
@@ -561,9 +566,13 @@ export default function BusinessDashboard() {
       city: businessProfile?.city || '',
       state: businessProfile?.state || '',
       country: businessProfile?.country || '',
+      industry: businessProfile?.industry || '',
+      website: businessProfile?.website || '',
     })
     // Initialize locQuery with the location value
     setLocQuery(businessProfile?.location || '')
+    // Initialize industryQuery with the industry value
+    setIndustryQuery(businessProfile?.industry || '')
   }, [user, businessProfile])
 
   // Debounced location query for autocomplete
@@ -730,6 +739,12 @@ export default function BusinessDashboard() {
       }
 
       // Always update business profile (business-level fields only)
+      const nextIndustry = profileEditDraft.industry.trim()
+      const nextWebsite = profileEditDraft.website.trim()
+      const nextLocation = profileEditDraft.location.trim()
+      const nextCity = profileEditDraft.city.trim()
+      const nextState = profileEditDraft.state.trim()
+      const nextCountry = profileEditDraft.country.trim()
       const profileRes = await supabase
         .from('business_profiles')
         .upsert(
@@ -742,6 +757,8 @@ export default function BusinessDashboard() {
             city: null,
             state: null,
             country: null,
+            industry: nextIndustry || null,
+            website: nextWebsite || null,
           },
           { onConflict: 'user_id' }
         )
@@ -766,6 +783,8 @@ export default function BusinessDashboard() {
               city: nextCity || prev.city,
               state: nextState || prev.state,
               country: nextCountry || prev.country,
+              industry: nextIndustry || prev.industry,
+              website: nextWebsite || prev.website,
             }
           : prev
       )
@@ -3166,13 +3185,72 @@ export default function BusinessDashboard() {
                         </p>
                       )}
                     </div>
-                    <div>
+                    <div className="relative">
                       <label className="block text-sm font-medium text-gray-600 mb-2">Industry</label>
-                      <p className="text-gray-900">{businessProfile?.industry || '—'}</p>
+                      {profileEditOpen ? (
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={industryQuery}
+                            onChange={(e) => {
+                              setIndustryQuery(e.target.value)
+                              setProfileEditDraft((prev) => ({ ...prev, industry: e.target.value }))
+                              setIndustrySuggestionsOpen(true)
+                            }}
+                            onFocus={() => setIndustrySuggestionsOpen(true)}
+                            onBlur={() => setTimeout(() => setIndustrySuggestionsOpen(false), 200)}
+                            placeholder="Type to search industries..."
+                            className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                          />
+                          {industrySuggestionsOpen && industryQuery.trim() && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                              {INDUSTRY_OPTIONS
+                                .filter((opt) => opt.toLowerCase().includes(industryQuery.toLowerCase()))
+                                .slice(0, 8)
+                                .map((option) => (
+                                  <button
+                                    key={option}
+                                    type="button"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => {
+                                      setIndustryQuery(option)
+                                      setProfileEditDraft((prev) => ({ ...prev, industry: option }))
+                                      setIndustrySuggestionsOpen(false)
+                                    }}
+                                    className="w-full text-left px-3 py-2 hover:bg-blue-50 text-gray-900 text-sm"
+                                  >
+                                    {option}
+                                  </button>
+                                ))}
+                              {INDUSTRY_OPTIONS.filter((opt) => opt.toLowerCase().includes(industryQuery.toLowerCase())).length === 0 && (
+                                <p className="px-3 py-2 text-gray-500 text-sm">No matching industries</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-gray-900">{businessProfile?.industry || '—'}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-2">Website</label>
-                      <p className="text-gray-900">{businessProfile?.website || '—'}</p>
+                      {profileEditOpen ? (
+                        <input
+                          type="url"
+                          value={profileEditDraft.website}
+                          onChange={(e) => setProfileEditDraft((prev) => ({ ...prev, website: e.target.value }))}
+                          placeholder="https://example.com"
+                          className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                        />
+                      ) : (
+                        <p className="text-gray-900">
+                          {businessProfile?.website ? (
+                            <a href={businessProfile.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                              {businessProfile.website}
+                            </a>
+                          ) : '—'}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-2">Role</label>

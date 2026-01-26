@@ -1101,7 +1101,12 @@ export function TalentDashboardShell({
     }
   }
 
-
+  const isTalentInitiatedRequest = (req: any) => {
+    if (!req) return false
+    if (req.initiated_by === 'talent') return true
+    if (req.initiated_by === 'business') return false
+    return !!(req.selected_sections && Array.isArray(req.selected_sections) && req.selected_sections.length > 0)
+  }
 
   async function cancelConnectionRequest(requestId: string) {
     if (!confirm('Are you sure you want to cancel this connection request? This action cannot be undone.')) {
@@ -4441,7 +4446,7 @@ export function TalentDashboardShell({
                         {selectedRequest.business_name || 'Business'}
                       </h3>
                       <p className="text-gray-600 text-sm">
-                        Connection request received on {new Date(selectedRequest.created_at).toLocaleString()}
+                        Connection request {isTalentInitiatedRequest(selectedRequest) ? 'sent' : 'received'} on {new Date(selectedRequest.created_at).toLocaleString()}
                       </p>
                     </div>
 
@@ -4459,7 +4464,9 @@ export function TalentDashboardShell({
                         }`}>
                           {selectedRequest.status === 'waiting_for_review'
                             ? '📋 This connection request is waiting for your review. Review their profile and accept or decline the request.'
-                            : '⏳ This business has requested to connect with you. Review their profile and accept or decline the request.'}
+                            : isTalentInitiatedRequest(selectedRequest)
+                              ? '⏳ You requested to connect with this business. Waiting for their response.'
+                              : '⏳ This business has requested to connect with you. Review their profile and accept or decline the request.'}
                         </p>
                       </div>
                     )}
@@ -4491,7 +4498,7 @@ export function TalentDashboardShell({
                         </button>
                         
                         {/* Accept/Reject buttons (only show for pending or waiting_for_review requests) */}
-                        {(selectedRequest.status === 'pending' || selectedRequest.status === 'waiting_for_review') && (
+                        {(selectedRequest.status === 'pending' || selectedRequest.status === 'waiting_for_review') && !isTalentInitiatedRequest(selectedRequest) && (
                           <>
                             <button
                               onClick={async () => {

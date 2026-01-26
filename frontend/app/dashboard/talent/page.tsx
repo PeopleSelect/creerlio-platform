@@ -3240,10 +3240,16 @@ export function TalentDashboardShell({
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <Link
-                      href="/dashboard/talent/edit"
+                      href="/dashboard/talent/view"
                       className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
                     >
                       View Profile
+                    </Link>
+                    <Link
+                      href="/dashboard/talent/edit"
+                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
+                    >
+                      Edit Profile
                     </Link>
                     <Link
                       href="/portfolio/view"

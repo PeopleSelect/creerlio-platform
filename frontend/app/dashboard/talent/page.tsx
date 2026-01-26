@@ -135,12 +135,18 @@ export function TalentDashboardShell({
       } else {
         const params = new URLSearchParams(window.location.search)
         const tab = params.get('tab')
-        if (tab === 'connections' || tab === 'overview' || tab === 'portfolio' || tab === 'applications') {
+        if (tab === 'connections' || tab === 'overview' || tab === 'applications') {
           setActiveTab(tab as TabType)
         }
       }
     } catch {}
   }, [forcedTab])
+
+  useEffect(() => {
+    if (activeTab === 'portfolio') {
+      setActiveTab('overview')
+    }
+  }, [activeTab])
 
   useEffect(() => {
     if (forcedConnectionMode) {

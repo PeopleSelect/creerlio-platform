@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const rawUrl = String(body?.url || '').trim()
     const pastedText = String(body?.pastedText || '').trim()
+    const industryHint = String(body?.industryHint || '').trim()
     const normalizedUrl = rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : ''
 
     let meta: any = null
@@ -49,32 +50,40 @@ export async function POST(request: NextRequest) {
     }
 
     const openaiApiKey = process.env.OPENAI_API_KEY
-    if (openaiApiKey) {
-      const systemPrompt = `You are an AI profile-builder for a talent discovery platform.
-Your task is to analyse a company’s public website and generate a Public Talent Profile (Lite) that is clear, neutral, and attractive to jobseekers.
+    if (!openaiApiKey) {
+      return NextResponse.json(
+        { error: 'OpenAI API key is not configured. Please add OPENAI_API_KEY.' },
+        { status: 503 }
+      )
+    }
 
-OUTPUT FORMAT (STRICT)
-Return a single JSON object:
+    const systemPrompt = `You are an autonomous AI profile-builder embedded inside a talent discovery platform.
+Your job is to fully construct a Public Talent Profile (Lite) for a business with minimal human effort, using OpenAI for all content, structure, summarisation, and imagery.
+
+OUTPUT FORMAT (STRICT — MACHINE CONSUMABLE)
+Return ONLY this JSON structure:
 {
   "profile": {
     "company_name": "",
+    "short_tagline": "",
     "short_summary": "",
     "what_they_do": "",
     "primary_industries": [],
-    "locations": [],
     "company_size_range": "",
+    "locations": [],
     "culture_and_values": "",
     "what_its_like_to_work_here": "",
     "typical_roles_hired": []
   },
-  "images": {
+  "ai_images": {
     "avatar_image_prompt": "",
     "banner_image_prompt": ""
   }
 }`
 
-      const userPrompt = `website_url: ${normalizedUrl || 'N/A'}
-optional_text: ${pastedText || 'N/A'}
+    const userPrompt = `website_url: ${normalizedUrl || 'N/A'}
+optional_pasted_text: ${pastedText || 'N/A'}
+industry_hint: ${industryHint || 'N/A'}
 extracted_name: ${meta?.name || 'N/A'}
 extracted_description: ${meta?.description || 'N/A'}
 extracted_industry: ${meta?.industry || 'N/A'}
@@ -84,77 +93,55 @@ brand_hint: ${meta?.siteName || 'N/A'}
 
 Generate the Public Talent Profile (Lite) content and image prompts.`
 
-      const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${openaiApiKey}`,
-        },
-        body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || 'gpt-4-turbo-preview',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          temperature: 0.3,
-          max_tokens: 900,
-          response_format: { type: 'json_object' },
-        }),
-      })
+    const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${openaiApiKey}`,
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || 'gpt-4-turbo-preview',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 900,
+        response_format: { type: 'json_object' },
+      }),
+    })
 
-      if (aiRes.ok) {
-        const data = await aiRes.json()
-        const raw = data.choices?.[0]?.message?.content?.trim() || '{}'
-        const parsed = JSON.parse(raw)
-        return NextResponse.json({
-          name: parsed?.profile?.company_name || meta?.name || null,
-          summary: parsed?.profile?.short_summary || null,
-          what_company_does: parsed?.profile?.what_they_do || null,
-          culture_values: parsed?.profile?.culture_and_values || null,
-          work_environment: parsed?.profile?.what_its_like_to_work_here || null,
-          typical_roles: Array.isArray(parsed?.profile?.typical_roles_hired)
-            ? parsed.profile.typical_roles_hired.join(', ')
-            : parsed?.profile?.typical_roles_hired || null,
-          industries: Array.isArray(parsed?.profile?.primary_industries)
-            ? parsed.profile.primary_industries
-            : [],
-          company_size: parsed?.profile?.company_size_range || null,
-          locations: Array.isArray(parsed?.profile?.locations) ? parsed.profile.locations : [],
-          website: meta?.website || normalizedUrl || null,
-          logo_url: meta?.logo || null,
-          banner_url: meta?.banner || null,
-          avatar_prompt: parsed?.images?.avatar_image_prompt || null,
-          banner_prompt: parsed?.images?.banner_image_prompt || null,
-          source_url: normalizedUrl || null,
-          source_text: pastedText || null,
-          services: meta?.services || [],
-        })
-      }
+    if (!aiRes.ok) {
+      const errorData = await aiRes.json().catch(() => ({ error: 'Unknown error' }))
+      const rawMessage = String(errorData.error?.message || 'Failed to generate profile')
+      const scrubbedMessage = rawMessage.replace(/sk-[a-zA-Z0-9_-]+/g, 'sk-***')
+      return NextResponse.json({ error: scrubbedMessage }, { status: aiRes.status })
     }
 
-    const baseText = pastedText || meta?.description || ''
-    const summary = summarizeText(baseText, 4)
-    const whatCompanyDoes = summarizeText(baseText, 2)
-
-    const cultureLines = extractKeywordLines(pastedText || '', ['culture', 'values', 'mission'])
-    const rolesLines = extractKeywordLines(pastedText || '', ['role', 'hiring', 'careers', 'positions'])
-    const workLines = extractKeywordLines(pastedText || '', ['work', 'team', 'environment'])
+    const data = await aiRes.json()
+    const raw = data.choices?.[0]?.message?.content?.trim() || '{}'
+    const parsed = JSON.parse(raw)
 
     return NextResponse.json({
-      name: meta?.name || null,
-      summary,
-      what_company_does: whatCompanyDoes,
-      culture_values: cultureLines.slice(0, 4).join('\n') || null,
-      work_environment: workLines.slice(0, 3).join('\n') || null,
-      typical_roles: rolesLines.slice(0, 4).join('\n') || null,
-      industries: meta?.industry ? [meta.industry] : [],
-      company_size: null,
-      locations: meta?.address?.full ? [meta.address.full] : [],
+      name: parsed?.profile?.company_name || meta?.name || null,
+      short_tagline: parsed?.profile?.short_tagline || null,
+      summary: parsed?.profile?.short_summary || null,
+      what_company_does: parsed?.profile?.what_they_do || null,
+      culture_values: parsed?.profile?.culture_and_values || null,
+      work_environment: parsed?.profile?.what_its_like_to_work_here || null,
+      typical_roles: Array.isArray(parsed?.profile?.typical_roles_hired)
+        ? parsed.profile.typical_roles_hired.join(', ')
+        : parsed?.profile?.typical_roles_hired || null,
+      industries: Array.isArray(parsed?.profile?.primary_industries)
+        ? parsed.profile.primary_industries
+        : (industryHint ? [industryHint] : []),
+      company_size: parsed?.profile?.company_size_range || null,
+      locations: Array.isArray(parsed?.profile?.locations) ? parsed.profile.locations : [],
       website: meta?.website || normalizedUrl || null,
       logo_url: meta?.logo || null,
       banner_url: meta?.banner || null,
-      avatar_prompt: null,
-      banner_prompt: null,
+      avatar_prompt: parsed?.ai_images?.avatar_image_prompt || null,
+      banner_prompt: parsed?.ai_images?.banner_image_prompt || null,
       source_url: normalizedUrl || null,
       source_text: pastedText || null,
       services: meta?.services || [],

@@ -91,6 +91,9 @@ export default function PublicLiteBusinessProfilePage() {
             ) : null}
             <div className="min-w-0">
               <h1 className="text-3xl md:text-4xl font-bold">{profile.name}</h1>
+              {profile.short_tagline && (
+                <p className="text-slate-300 mt-1">{profile.short_tagline}</p>
+              )}
               {profile.summary && <p className="text-slate-300 mt-2 max-w-2xl">{profile.summary}</p>}
               <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300 mt-3">
                 {Array.isArray(profile.industries) && profile.industries.length > 0 && (

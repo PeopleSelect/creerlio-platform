@@ -15,6 +15,7 @@ type PublicLiteProfile = {
   industries: string[]
   company_size: string
   locations: string[]
+  short_tagline: string
   what_company_does: string
   culture_values: string
   work_environment: string
@@ -32,6 +33,7 @@ const emptyProfile: PublicLiteProfile = {
   is_public: false,
   name: '',
   summary: '',
+  short_tagline: '',
   industries: [],
   company_size: '',
   locations: [],
@@ -69,6 +71,7 @@ export default function PublicLiteBusinessProfilePage() {
   const [locationSuggestions, setLocationSuggestions] = useState<Array<{ id: string; label: string }>>([])
   const [locationSuggestionsOpen, setLocationSuggestionsOpen] = useState(false)
   const [locationSuggestionsLoading, setLocationSuggestionsLoading] = useState(false)
+  const [importIndustryHint, setImportIndustryHint] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -99,6 +102,7 @@ export default function PublicLiteBusinessProfilePage() {
             industries: Array.isArray(liteRes.industries) ? liteRes.industries : [],
             locations: Array.isArray(liteRes.locations) ? liteRes.locations : [],
             name: liteRes.name || '',
+            short_tagline: liteRes.short_tagline || '',
             summary: liteRes.summary || '',
             company_size: liteRes.company_size || '',
             what_company_does: liteRes.what_company_does || '',
@@ -195,6 +199,7 @@ export default function PublicLiteBusinessProfilePage() {
         business_profile_id: profile.business_profile_id || null,
         is_public: profile.is_public,
         name: safe(profile.name),
+        short_tagline: safe(profile.short_tagline),
         summary: safe(profile.summary),
         industries: profile.industries,
         company_size: safe(profile.company_size) || null,
@@ -256,7 +261,7 @@ export default function PublicLiteBusinessProfilePage() {
       const res = await fetch('/api/public-lite/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, pastedText: text }),
+        body: JSON.stringify({ url, pastedText: text, industryHint: importIndustryHint }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -274,6 +279,7 @@ export default function PublicLiteBusinessProfilePage() {
         work_environment: data.work_environment || prev.work_environment,
         typical_roles: data.typical_roles || prev.typical_roles,
         company_size: data.company_size || prev.company_size,
+        short_tagline: data.short_tagline || prev.short_tagline,
         website: data.website || prev.website,
         logo_url: data.logo_url || prev.logo_url,
         banner_url: data.banner_url || prev.banner_url,
@@ -373,6 +379,14 @@ export default function PublicLiteBusinessProfilePage() {
                 <input
                   value={profile.name}
                   onChange={(e) => setProfile((prev) => ({ ...prev, name: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Short tagline (max 12 words)</label>
+                <input
+                  value={profile.short_tagline}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, short_tagline: e.target.value }))}
                   className="w-full p-2 border border-gray-300 rounded text-gray-900"
                 />
               </div>
@@ -593,6 +607,15 @@ export default function PublicLiteBusinessProfilePage() {
                   value={importUrl}
                   onChange={(e) => setImportUrl(e.target.value)}
                   placeholder="https://example.com"
+                  className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Industry hint (optional)</label>
+                <input
+                  value={importIndustryHint}
+                  onChange={(e) => setImportIndustryHint(e.target.value)}
+                  placeholder="e.g., Hospitality"
                   className="w-full p-2 border border-gray-300 rounded text-gray-900"
                 />
               </div>

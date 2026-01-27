@@ -67,17 +67,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const systemPrompt = `You are an autonomous AI profile-builder embedded inside a talent discovery platform.
-Your job is to fully construct a Public Talent Profile (Lite) for a business with minimal human effort, using OpenAI for all content, structure, summarisation, and imagery.
+    const systemPrompt = `You are an autonomous AI import engine embedded inside a talent platform.
 
-OUTPUT FORMAT (STRICT — MACHINE CONSUMABLE)
-Return ONLY this JSON structure:
+OUTPUT FORMAT (STRICT — REQUIRED)
+Return ONLY this JSON object:
 {
   "profile": {
-    "company_name": "",
-    "short_tagline": "",
+    "business_name": "",
     "short_summary": "",
-    "what_they_do": "",
+    "what_the_business_does": "",
     "primary_industries": [],
     "company_size_range": "",
     "locations": [],
@@ -85,15 +83,15 @@ Return ONLY this JSON structure:
     "what_its_like_to_work_here": "",
     "typical_roles_hired": []
   },
-  "ai_images": {
+  "images": {
     "avatar_image_prompt": "",
     "banner_image_prompt": ""
   }
 }`
 
     const userPrompt = `website_url: ${normalizedUrl || 'N/A'}
-optional_pasted_text: ${pastedText || 'N/A'}
 industry_hint: ${industryHint || 'N/A'}
+pasted_text: ${pastedText || 'N/A'}
 extracted_name: ${meta?.name || 'N/A'}
 extracted_description: ${meta?.description || 'N/A'}
 extracted_industry: ${meta?.industry || 'N/A'}
@@ -132,8 +130,8 @@ Generate the Public Talent Profile (Lite) content and image prompts.`
     const raw = data.choices?.[0]?.message?.content?.trim() || '{}'
     const parsed = JSON.parse(raw)
 
-    const avatarPrompt = parsed?.ai_images?.avatar_image_prompt || null
-    const bannerPrompt = parsed?.ai_images?.banner_image_prompt || null
+    const avatarPrompt = parsed?.images?.avatar_image_prompt || null
+    const bannerPrompt = parsed?.images?.banner_image_prompt || null
     let logoUrl = meta?.logo || null
     let bannerUrl = meta?.banner || null
 
@@ -181,10 +179,10 @@ Generate the Public Talent Profile (Lite) content and image prompts.`
     }
 
     return NextResponse.json({
-      name: parsed?.profile?.company_name || meta?.name || null,
-      short_tagline: parsed?.profile?.short_tagline || null,
+      name: parsed?.profile?.business_name || meta?.name || null,
+      short_tagline: null,
       summary: parsed?.profile?.short_summary || null,
-      what_company_does: parsed?.profile?.what_they_do || null,
+      what_company_does: parsed?.profile?.what_the_business_does || null,
       culture_values: parsed?.profile?.culture_and_values || null,
       work_environment: parsed?.profile?.what_its_like_to_work_here || null,
       typical_roles: Array.isArray(parsed?.profile?.typical_roles_hired)

@@ -59,6 +59,8 @@ export default function PublicLiteBusinessProfilePage() {
   const [importText, setImportText] = useState('')
   const [importLoading, setImportLoading] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
+  const [summaryGenerating, setSummaryGenerating] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -240,6 +242,36 @@ export default function PublicLiteBusinessProfilePage() {
     }
   }
 
+  const handleGenerateSummary = async () => {
+    setSummaryGenerating(true)
+    setSummaryError(null)
+    try {
+      const res = await fetch('/api/ai/public-lite-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payload: {
+            name: profile.name,
+            industries: profile.industries,
+            locations: profile.locations,
+            what_company_does: profile.what_company_does,
+            culture_values: profile.culture_values,
+            work_environment: profile.work_environment,
+            typical_roles: profile.typical_roles,
+          },
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setSummaryError(data?.error || 'Failed to generate summary.')
+        return
+      }
+      setProfile((prev) => ({ ...prev, summary: data.summary || prev.summary }))
+    } finally {
+      setSummaryGenerating(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -300,13 +332,24 @@ export default function PublicLiteBusinessProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Short summary (2–4 sentences)</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">Short summary (2–4 sentences)</label>
+                  <button
+                    type="button"
+                    onClick={handleGenerateSummary}
+                    disabled={summaryGenerating}
+                    className="text-xs px-2 py-1 rounded border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-60"
+                  >
+                    {summaryGenerating ? 'Writing…' : 'Write with OpenAI'}
+                  </button>
+                </div>
                 <textarea
                   value={profile.summary}
                   onChange={(e) => setProfile((prev) => ({ ...prev, summary: e.target.value }))}
                   rows={4}
                   className="w-full p-2 border border-gray-300 rounded text-gray-900"
                 />
+                {summaryError && <p className="text-sm text-red-600 mt-2">{summaryError}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Primary industries</label>

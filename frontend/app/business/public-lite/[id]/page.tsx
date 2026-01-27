@@ -72,27 +72,23 @@ export default function PublicLiteBusinessProfilePage() {
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <section className="overflow-hidden border-b border-white/10">
-        <div className="h-56 md:h-72 bg-slate-900 relative">
-          {profile.banner_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
+        {profile.banner_url ? (
+          <div className="h-56 md:h-72 bg-slate-900 relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={profile.banner_url} alt="Banner" className="w-full h-full object-cover opacity-80" />
-          ) : (
-            <div className="w-full h-full bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,0.35),transparent_45%),radial-gradient(circle_at_80%_30%,rgba(16,185,129,0.25),transparent_45%)]" />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/10 to-transparent" />
-        </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/10 to-transparent" />
+          </div>
+        ) : null}
         <div className="max-w-5xl mx-auto px-6 py-6">
           <div className="flex flex-col md:flex-row md:items-end gap-5">
-            <div className="-mt-16 md:-mt-20 shrink-0">
-              <div className="w-24 h-24 md:w-28 md:h-28 rounded-3xl overflow-hidden border border-white/10 bg-white/5 shadow-xl flex items-center justify-center">
-                {profile.logo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
+            {profile.logo_url ? (
+              <div className={profile.banner_url ? '-mt-16 md:-mt-20' : ''}>
+                <div className="w-24 h-24 md:w-28 md:h-28 rounded-3xl overflow-hidden border border-white/10 bg-white/5 shadow-xl flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={profile.logo_url} alt="Logo" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="text-xl font-bold">{String(profile.name || 'B').slice(0, 1).toUpperCase()}</div>
-                )}
+                </div>
               </div>
-            </div>
+            ) : null}
             <div className="min-w-0">
               <h1 className="text-3xl md:text-4xl font-bold">{profile.name}</h1>
               {profile.summary && <p className="text-slate-300 mt-2 max-w-2xl">{profile.summary}</p>}

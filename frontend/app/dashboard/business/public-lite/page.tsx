@@ -22,6 +22,8 @@ type PublicLiteProfile = {
   website: string
   logo_url: string
   banner_url: string
+  avatar_prompt: string
+  banner_prompt: string
   source_url?: string
   source_text?: string
 }
@@ -40,6 +42,8 @@ const emptyProfile: PublicLiteProfile = {
   website: '',
   logo_url: '',
   banner_url: '',
+  avatar_prompt: '',
+  banner_prompt: '',
 }
 
 const toList = (value: string) =>
@@ -104,6 +108,8 @@ export default function PublicLiteBusinessProfilePage() {
             website: liteRes.website || '',
             logo_url: liteRes.logo_url || '',
             banner_url: liteRes.banner_url || '',
+            avatar_prompt: liteRes.avatar_prompt || '',
+            banner_prompt: liteRes.banner_prompt || '',
           })
         } else if (!cancelled) {
           const { data: businessRes } = await supabase
@@ -200,6 +206,8 @@ export default function PublicLiteBusinessProfilePage() {
         website: safe(profile.website),
         logo_url: safe(profile.logo_url),
         banner_url: safe(profile.banner_url),
+        avatar_prompt: safe(profile.avatar_prompt),
+        banner_prompt: safe(profile.banner_prompt),
         source_url: profile.source_url || null,
         source_text: profile.source_text || null,
         updated_at: new Date().toISOString(),
@@ -265,9 +273,12 @@ export default function PublicLiteBusinessProfilePage() {
         culture_values: data.culture_values || prev.culture_values,
         work_environment: data.work_environment || prev.work_environment,
         typical_roles: data.typical_roles || prev.typical_roles,
+        company_size: data.company_size || prev.company_size,
         website: data.website || prev.website,
         logo_url: data.logo_url || prev.logo_url,
         banner_url: data.banner_url || prev.banner_url,
+        avatar_prompt: data.avatar_prompt || prev.avatar_prompt,
+        banner_prompt: data.banner_prompt || prev.banner_prompt,
         source_url: data.source_url || prev.source_url,
         source_text: data.source_text || prev.source_text,
       }))
@@ -551,6 +562,24 @@ export default function PublicLiteBusinessProfilePage() {
                 <input
                   value={profile.banner_url}
                   onChange={(e) => setProfile((prev) => ({ ...prev, banner_url: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Avatar image prompt (AI)</label>
+                <textarea
+                  value={profile.avatar_prompt}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, avatar_prompt: e.target.value }))}
+                  rows={3}
+                  className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Banner image prompt (AI)</label>
+                <textarea
+                  value={profile.banner_prompt}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, banner_prompt: e.target.value }))}
+                  rows={3}
                   className="w-full p-2 border border-gray-300 rounded text-gray-900"
                 />
               </div>

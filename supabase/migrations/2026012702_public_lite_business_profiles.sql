@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS public.public_lite_business_profiles (
   website text,
   logo_url text,
   banner_url text,
+  avatar_prompt text,
+  banner_prompt text,
   source_url text,
   source_text text
 );

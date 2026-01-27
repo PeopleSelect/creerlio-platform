@@ -48,6 +48,90 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const openaiApiKey = process.env.OPENAI_API_KEY
+    if (openaiApiKey) {
+      const systemPrompt = `You are an AI profile-builder for a talent discovery platform.
+Your task is to analyse a company’s public website and generate a Public Talent Profile (Lite) that is clear, neutral, and attractive to jobseekers.
+
+OUTPUT FORMAT (STRICT)
+Return a single JSON object:
+{
+  "profile": {
+    "company_name": "",
+    "short_summary": "",
+    "what_they_do": "",
+    "primary_industries": [],
+    "locations": [],
+    "company_size_range": "",
+    "culture_and_values": "",
+    "what_its_like_to_work_here": "",
+    "typical_roles_hired": []
+  },
+  "images": {
+    "avatar_image_prompt": "",
+    "banner_image_prompt": ""
+  }
+}`
+
+      const userPrompt = `website_url: ${normalizedUrl || 'N/A'}
+optional_text: ${pastedText || 'N/A'}
+extracted_name: ${meta?.name || 'N/A'}
+extracted_description: ${meta?.description || 'N/A'}
+extracted_industry: ${meta?.industry || 'N/A'}
+extracted_locations: ${meta?.address?.full || 'N/A'}
+extracted_services: ${Array.isArray(meta?.services) ? meta.services.join(', ') : 'N/A'}
+brand_hint: ${meta?.siteName || 'N/A'}
+
+Generate the Public Talent Profile (Lite) content and image prompts.`
+
+      const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${openaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: process.env.OPENAI_MODEL || 'gpt-4-turbo-preview',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.3,
+          max_tokens: 900,
+          response_format: { type: 'json_object' },
+        }),
+      })
+
+      if (aiRes.ok) {
+        const data = await aiRes.json()
+        const raw = data.choices?.[0]?.message?.content?.trim() || '{}'
+        const parsed = JSON.parse(raw)
+        return NextResponse.json({
+          name: parsed?.profile?.company_name || meta?.name || null,
+          summary: parsed?.profile?.short_summary || null,
+          what_company_does: parsed?.profile?.what_they_do || null,
+          culture_values: parsed?.profile?.culture_and_values || null,
+          work_environment: parsed?.profile?.what_its_like_to_work_here || null,
+          typical_roles: Array.isArray(parsed?.profile?.typical_roles_hired)
+            ? parsed.profile.typical_roles_hired.join(', ')
+            : parsed?.profile?.typical_roles_hired || null,
+          industries: Array.isArray(parsed?.profile?.primary_industries)
+            ? parsed.profile.primary_industries
+            : [],
+          company_size: parsed?.profile?.company_size_range || null,
+          locations: Array.isArray(parsed?.profile?.locations) ? parsed.profile.locations : [],
+          website: meta?.website || normalizedUrl || null,
+          logo_url: meta?.logo || null,
+          banner_url: meta?.banner || null,
+          avatar_prompt: parsed?.images?.avatar_image_prompt || null,
+          banner_prompt: parsed?.images?.banner_image_prompt || null,
+          source_url: normalizedUrl || null,
+          source_text: pastedText || null,
+          services: meta?.services || [],
+        })
+      }
+    }
+
     const baseText = pastedText || meta?.description || ''
     const summary = summarizeText(baseText, 4)
     const whatCompanyDoes = summarizeText(baseText, 2)
@@ -69,6 +153,8 @@ export async function POST(request: NextRequest) {
       website: meta?.website || normalizedUrl || null,
       logo_url: meta?.logo || null,
       banner_url: meta?.banner || null,
+      avatar_prompt: null,
+      banner_prompt: null,
       source_url: normalizedUrl || null,
       source_text: pastedText || null,
       services: meta?.services || [],

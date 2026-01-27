@@ -28,6 +28,16 @@ const extractKeywordLines = (text: string, keywords: string[]) => {
   return lines.filter((line) => keywords.some((k) => line.toLowerCase().includes(k)))
 }
 
+const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs: number) => {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -93,7 +103,7 @@ brand_hint: ${meta?.siteName || 'N/A'}
 
 Generate the Public Talent Profile (Lite) content and image prompts.`
 
-    const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    const aiRes = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -109,7 +119,7 @@ Generate the Public Talent Profile (Lite) content and image prompts.`
         max_tokens: 900,
         response_format: { type: 'json_object' },
       }),
-    })
+    }, 45000)
 
     if (!aiRes.ok) {
       const errorData = await aiRes.json().catch(() => ({ error: 'Unknown error' }))
@@ -121,6 +131,54 @@ Generate the Public Talent Profile (Lite) content and image prompts.`
     const data = await aiRes.json()
     const raw = data.choices?.[0]?.message?.content?.trim() || '{}'
     const parsed = JSON.parse(raw)
+
+    const avatarPrompt = parsed?.ai_images?.avatar_image_prompt || null
+    const bannerPrompt = parsed?.ai_images?.banner_image_prompt || null
+    let logoUrl = meta?.logo || null
+    let bannerUrl = meta?.banner || null
+
+    if (avatarPrompt || bannerPrompt) {
+      try {
+        if (avatarPrompt) {
+          const imgRes = await fetchWithTimeout('https://api.openai.com/v1/images/generations', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${openaiApiKey}`,
+            },
+            body: JSON.stringify({
+              model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
+              prompt: avatarPrompt,
+              size: '1024x1024',
+            }),
+          }, 45000)
+          if (imgRes.ok) {
+            const imgData = await imgRes.json()
+            logoUrl = imgData?.data?.[0]?.url || logoUrl
+          }
+        }
+        if (bannerPrompt) {
+          const bannerRes = await fetchWithTimeout('https://api.openai.com/v1/images/generations', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${openaiApiKey}`,
+            },
+            body: JSON.stringify({
+              model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
+              prompt: bannerPrompt,
+              size: '1792x1024',
+            }),
+          }, 45000)
+          if (bannerRes.ok) {
+            const bannerData = await bannerRes.json()
+            bannerUrl = bannerData?.data?.[0]?.url || bannerUrl
+          }
+        }
+      } catch {
+        // If image generation fails, keep existing URLs/prompts and return text anyway.
+      }
+    }
 
     return NextResponse.json({
       name: parsed?.profile?.company_name || meta?.name || null,
@@ -138,10 +196,10 @@ Generate the Public Talent Profile (Lite) content and image prompts.`
       company_size: parsed?.profile?.company_size_range || null,
       locations: Array.isArray(parsed?.profile?.locations) ? parsed.profile.locations : [],
       website: meta?.website || normalizedUrl || null,
-      logo_url: meta?.logo || null,
-      banner_url: meta?.banner || null,
-      avatar_prompt: parsed?.ai_images?.avatar_image_prompt || null,
-      banner_prompt: parsed?.ai_images?.banner_image_prompt || null,
+      logo_url: logoUrl,
+      banner_url: bannerUrl,
+      avatar_prompt: avatarPrompt,
+      banner_prompt: bannerPrompt,
       source_url: normalizedUrl || null,
       source_text: pastedText || null,
       services: meta?.services || [],

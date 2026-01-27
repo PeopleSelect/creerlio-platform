@@ -186,6 +186,19 @@ export default function PublicLiteBusinessProfilePage() {
     }
   }
 
+  const handleClearAll = () => {
+    if (!confirm('Clear all fields in this draft? This will not delete the profile until you click Save.')) {
+      return
+    }
+    setProfile((prev) => ({
+      ...emptyProfile,
+      business_profile_id: prev.business_profile_id || null,
+    }))
+    setImportUrl('')
+    setImportText('')
+    setImportError(null)
+  }
+
   const handleImport = async () => {
     const url = importUrl.trim()
     const text = importText.trim()
@@ -252,6 +265,12 @@ export default function PublicLiteBusinessProfilePage() {
                 Preview as Talent
               </Link>
             )}
+            <button
+              onClick={handleClearAll}
+              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
+            >
+              Clear All
+            </button>
             <button
               onClick={handleSave}
               disabled={isSaving}

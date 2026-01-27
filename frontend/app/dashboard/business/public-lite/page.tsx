@@ -61,6 +61,10 @@ export default function PublicLiteBusinessProfilePage() {
   const [importError, setImportError] = useState<string | null>(null)
   const [summaryGenerating, setSummaryGenerating] = useState(false)
   const [summaryError, setSummaryError] = useState<string | null>(null)
+  const [locationsInput, setLocationsInput] = useState('')
+  const [locationSuggestions, setLocationSuggestions] = useState<Array<{ id: string; label: string }>>([])
+  const [locationSuggestionsOpen, setLocationSuggestionsOpen] = useState(false)
+  const [locationSuggestionsLoading, setLocationSuggestionsLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -136,6 +140,39 @@ export default function PublicLiteBusinessProfilePage() {
       cancelled = true
     }
   }, [router])
+
+  useEffect(() => {
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
+    if (!locationSuggestionsOpen || !locationsInput.trim() || locationsInput.trim().length < 2 || !token) {
+      setLocationSuggestions([])
+      return
+    }
+    const timeout = setTimeout(async () => {
+      setLocationSuggestionsLoading(true)
+      try {
+        const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locationsInput.trim())}.json`)
+        u.searchParams.set('access_token', token)
+        u.searchParams.set('limit', '6')
+        u.searchParams.set('types', 'place,locality,neighborhood,postcode,address')
+        const res = await fetch(u.toString())
+        const data = await res.json()
+        const feats = Array.isArray(data?.features) ? data.features : []
+        const suggestions = feats
+          .map((f: any) => ({
+            id: String(f?.id || ''),
+            label: String(f?.place_name || '').trim(),
+          }))
+          .filter((s: any) => s.id && s.label)
+        setLocationSuggestions(suggestions)
+      } catch (err) {
+        console.error('Location suggestions error:', err)
+        setLocationSuggestions([])
+      } finally {
+        setLocationSuggestionsLoading(false)
+      }
+    }, 250)
+    return () => clearTimeout(timeout)
+  }, [locationsInput, locationSuggestionsOpen])
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -373,14 +410,70 @@ export default function PublicLiteBusinessProfilePage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Locations</label>
-                <input
-                  value={profile.locations.join(', ')}
-                  onChange={(e) =>
-                    setProfile((prev) => ({ ...prev, locations: toList(e.target.value) }))
-                  }
-                  placeholder="e.g., Sydney, Remote"
-                  className="w-full p-2 border border-gray-300 rounded text-gray-900"
-                />
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {profile.locations.map((loc) => (
+                      <span key={loc} className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 text-xs">
+                        {loc}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setProfile((prev) => ({
+                              ...prev,
+                              locations: prev.locations.filter((l) => l !== loc),
+                            }))
+                          }
+                          className="ml-2 text-blue-500 hover:text-blue-700"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <input
+                      value={locationsInput}
+                      onChange={(e) => {
+                        setLocationsInput(e.target.value)
+                        setLocationSuggestionsOpen(true)
+                      }}
+                      onFocus={() => setLocationSuggestionsOpen(true)}
+                      onBlur={() => setTimeout(() => setLocationSuggestionsOpen(false), 150)}
+                      placeholder="Search and add a location..."
+                      className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                    />
+                    {locationSuggestionsOpen && (
+                      <div className="absolute left-0 right-0 mt-1 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden z-10">
+                        {locationSuggestionsLoading ? (
+                          <div className="px-3 py-2 text-sm text-gray-500">Loading suggestions…</div>
+                        ) : locationSuggestions.length === 0 ? (
+                          <div className="px-3 py-2 text-sm text-gray-500">No suggestions</div>
+                        ) : (
+                          locationSuggestions.map((s) => (
+                            <button
+                              key={s.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setProfile((prev) => ({
+                                  ...prev,
+                                  locations: prev.locations.includes(s.label)
+                                    ? prev.locations
+                                    : [...prev.locations, s.label],
+                                }))
+                                setLocationsInput('')
+                                setLocationSuggestionsOpen(false)
+                              }}
+                            >
+                              {s.label}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 

@@ -72,6 +72,7 @@ export default function PublicLiteBusinessProfilePage() {
   const [locationSuggestionsOpen, setLocationSuggestionsOpen] = useState(false)
   const [locationSuggestionsLoading, setLocationSuggestionsLoading] = useState(false)
   const [importIndustryHint, setImportIndustryHint] = useState('')
+  const [importAiMode, setImportAiMode] = useState<'safe' | 'creative' | 'premium_brand'>('safe')
 
   useEffect(() => {
     let cancelled = false
@@ -261,7 +262,13 @@ export default function PublicLiteBusinessProfilePage() {
       const res = await fetch('/api/public-lite/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, pastedText: text, industryHint: importIndustryHint }),
+        body: JSON.stringify({
+          url,
+          pastedText: text,
+          industryHint: importIndustryHint,
+          aiMode: importAiMode,
+          regenImagesOnly: false,
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -287,6 +294,51 @@ export default function PublicLiteBusinessProfilePage() {
         banner_prompt: data.banner_prompt || prev.banner_prompt,
         source_url: data.source_url || prev.source_url,
         source_text: data.source_text || prev.source_text,
+      }))
+    } finally {
+      setImportLoading(false)
+    }
+  }
+
+  const handleRegenerateImages = async () => {
+    const url = importUrl.trim() || profile.website.trim()
+    setImportLoading(true)
+    setImportError(null)
+    try {
+      const res = await fetch('/api/public-lite/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url,
+          pastedText: importText.trim(),
+          industryHint: importIndustryHint,
+          aiMode: importAiMode,
+          regenImagesOnly: true,
+          currentProfile: {
+            business_name: profile.name,
+            short_tagline: profile.short_tagline,
+            short_summary: profile.summary,
+            what_the_business_does: profile.what_company_does,
+            primary_industries: profile.industries,
+            company_size_range: profile.company_size,
+            locations: profile.locations,
+            culture_and_values: profile.culture_values,
+            what_its_like_to_work_here: profile.work_environment,
+            typical_roles_hired: profile.typical_roles,
+          },
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setImportError(data?.error || 'Failed to regenerate images.')
+        return
+      }
+      setProfile((prev) => ({
+        ...prev,
+        logo_url: data.logo_url || prev.logo_url,
+        banner_url: data.banner_url || prev.banner_url,
+        avatar_prompt: data.avatar_prompt || prev.avatar_prompt,
+        banner_prompt: data.banner_prompt || prev.banner_prompt,
       }))
     } finally {
       setImportLoading(false)
@@ -620,6 +672,18 @@ export default function PublicLiteBusinessProfilePage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">AI mode</label>
+                <select
+                  value={importAiMode}
+                  onChange={(e) => setImportAiMode(e.target.value as 'safe' | 'creative' | 'premium_brand')}
+                  className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                >
+                  <option value="safe">Safe</option>
+                  <option value="creative">Creative</option>
+                  <option value="premium_brand">Premium brand</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Paste text (optional)</label>
                 <textarea
                   value={importText}
@@ -636,6 +700,14 @@ export default function PublicLiteBusinessProfilePage() {
                 className="w-full px-4 py-2 rounded-lg bg-gray-900 text-white font-semibold disabled:opacity-60"
               >
                 {importLoading ? 'Importing…' : 'Import & Fill Draft'}
+              </button>
+              <button
+                type="button"
+                onClick={handleRegenerateImages}
+                disabled={importLoading}
+                className="w-full px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-semibold disabled:opacity-60"
+              >
+                Regenerate Images Only
               </button>
               <p className="text-xs text-gray-500">
                 Import fills the draft only. Click Save to publish updates.

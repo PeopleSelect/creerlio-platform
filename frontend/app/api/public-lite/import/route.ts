@@ -44,6 +44,9 @@ export async function POST(request: NextRequest) {
     const rawUrl = String(body?.url || '').trim()
     const pastedText = String(body?.pastedText || '').trim()
     const industryHint = String(body?.industryHint || '').trim()
+    const aiMode = String(body?.aiMode || 'safe').trim() || 'safe'
+    const regenImagesOnly = body?.regenImagesOnly === true
+    const currentProfile = body?.currentProfile || {}
     const normalizedUrl = rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : ''
 
     let meta: any = null
@@ -67,13 +70,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const systemPrompt = `You are an autonomous AI import engine embedded inside a talent platform.
+    const systemPrompt = `You are an autonomous AI import engine embedded inside a talent discovery platform.
+Follow the ai_mode behavior rules:
+- safe: conservative wording, realistic imagery, neutral tone, corporate-appropriate visuals.
+- creative: warmer language, lifestyle-oriented imagery, more colour and personality.
+- premium_brand: polished, minimal copy, high-end editorial imagery, brand-forward composition.
 
-OUTPUT FORMAT (STRICT — REQUIRED)
-Return ONLY this JSON object:
+Output format (STRICT):
 {
   "profile": {
     "business_name": "",
+    "short_tagline": "",
     "short_summary": "",
     "what_the_business_does": "",
     "primary_industries": [],
@@ -83,7 +90,7 @@ Return ONLY this JSON object:
     "what_its_like_to_work_here": "",
     "typical_roles_hired": []
   },
-  "images": {
+  "ai_images": {
     "avatar_image_prompt": "",
     "banner_image_prompt": ""
   }
@@ -92,6 +99,9 @@ Return ONLY this JSON object:
     const userPrompt = `website_url: ${normalizedUrl || 'N/A'}
 industry_hint: ${industryHint || 'N/A'}
 pasted_text: ${pastedText || 'N/A'}
+ai_mode: ${aiMode}
+regen_images_only: ${regenImagesOnly ? 'true' : 'false'}
+current_profile_json: ${JSON.stringify(currentProfile)}
 extracted_name: ${meta?.name || 'N/A'}
 extracted_description: ${meta?.description || 'N/A'}
 extracted_industry: ${meta?.industry || 'N/A'}
@@ -99,7 +109,7 @@ extracted_locations: ${meta?.address?.full || 'N/A'}
 extracted_services: ${Array.isArray(meta?.services) ? meta.services.join(', ') : 'N/A'}
 brand_hint: ${meta?.siteName || 'N/A'}
 
-Generate the Public Talent Profile (Lite) content and image prompts.`
+Generate the Public Talent Profile (Lite) content and image prompts. If regen_images_only is true, do not change any text fields; return the same profile text as current_profile_json and only refresh ai_images.`
 
     const aiRes = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -130,8 +140,8 @@ Generate the Public Talent Profile (Lite) content and image prompts.`
     const raw = data.choices?.[0]?.message?.content?.trim() || '{}'
     const parsed = JSON.parse(raw)
 
-    const avatarPrompt = parsed?.images?.avatar_image_prompt || null
-    const bannerPrompt = parsed?.images?.banner_image_prompt || null
+    const avatarPrompt = parsed?.ai_images?.avatar_image_prompt || null
+    const bannerPrompt = parsed?.ai_images?.banner_image_prompt || null
     let logoUrl = meta?.logo || null
     let bannerUrl = meta?.banner || null
 
@@ -178,21 +188,36 @@ Generate the Public Talent Profile (Lite) content and image prompts.`
       }
     }
 
+    const resolvedProfile = regenImagesOnly
+      ? currentProfile
+      : {
+          business_name: parsed?.profile?.business_name || meta?.name || null,
+          short_tagline: parsed?.profile?.short_tagline || null,
+          short_summary: parsed?.profile?.short_summary || null,
+          what_the_business_does: parsed?.profile?.what_the_business_does || null,
+          culture_and_values: parsed?.profile?.culture_and_values || null,
+          what_its_like_to_work_here: parsed?.profile?.what_its_like_to_work_here || null,
+          typical_roles_hired: parsed?.profile?.typical_roles_hired || null,
+          primary_industries: parsed?.profile?.primary_industries || (industryHint ? [industryHint] : []),
+          company_size_range: parsed?.profile?.company_size_range || null,
+          locations: parsed?.profile?.locations || [],
+        }
+
     return NextResponse.json({
-      name: parsed?.profile?.business_name || meta?.name || null,
-      short_tagline: null,
-      summary: parsed?.profile?.short_summary || null,
-      what_company_does: parsed?.profile?.what_the_business_does || null,
-      culture_values: parsed?.profile?.culture_and_values || null,
-      work_environment: parsed?.profile?.what_its_like_to_work_here || null,
-      typical_roles: Array.isArray(parsed?.profile?.typical_roles_hired)
-        ? parsed.profile.typical_roles_hired.join(', ')
-        : parsed?.profile?.typical_roles_hired || null,
-      industries: Array.isArray(parsed?.profile?.primary_industries)
-        ? parsed.profile.primary_industries
+      name: resolvedProfile.business_name || meta?.name || null,
+      short_tagline: resolvedProfile.short_tagline || null,
+      summary: resolvedProfile.short_summary || null,
+      what_company_does: resolvedProfile.what_the_business_does || null,
+      culture_values: resolvedProfile.culture_and_values || null,
+      work_environment: resolvedProfile.what_its_like_to_work_here || null,
+      typical_roles: Array.isArray(resolvedProfile.typical_roles_hired)
+        ? resolvedProfile.typical_roles_hired.join(', ')
+        : resolvedProfile.typical_roles_hired || null,
+      industries: Array.isArray(resolvedProfile.primary_industries)
+        ? resolvedProfile.primary_industries
         : (industryHint ? [industryHint] : []),
-      company_size: parsed?.profile?.company_size_range || null,
-      locations: Array.isArray(parsed?.profile?.locations) ? parsed.profile.locations : [],
+      company_size: resolvedProfile.company_size_range || null,
+      locations: Array.isArray(resolvedProfile.locations) ? resolvedProfile.locations : [],
       website: meta?.website || normalizedUrl || null,
       logo_url: logoUrl,
       banner_url: bannerUrl,

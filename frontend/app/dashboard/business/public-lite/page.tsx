@@ -142,19 +142,16 @@ export default function PublicLiteBusinessProfilePage() {
   }, [router])
 
   useEffect(() => {
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
-    if (!locationSuggestionsOpen || !locationsInput.trim() || locationsInput.trim().length < 2 || !token) {
+    if (!locationSuggestionsOpen || !locationsInput.trim() || locationsInput.trim().length < 2) {
       setLocationSuggestions([])
       return
     }
     const timeout = setTimeout(async () => {
       setLocationSuggestionsLoading(true)
       try {
-        const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locationsInput.trim())}.json`)
-        u.searchParams.set('access_token', token)
-        u.searchParams.set('limit', '6')
-        u.searchParams.set('types', 'place,locality,neighborhood,postcode,address')
-        const res = await fetch(u.toString())
+        const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(locationsInput.trim())}`, {
+          cache: 'no-store',
+        })
         const data = await res.json()
         const feats = Array.isArray(data?.features) ? data.features : []
         const suggestions = feats

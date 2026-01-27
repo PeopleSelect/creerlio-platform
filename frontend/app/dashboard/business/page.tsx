@@ -132,6 +132,8 @@ export default function BusinessDashboard() {
   const [websiteImportLoading, setWebsiteImportLoading] = useState(false)
   const [websiteImportError, setWebsiteImportError] = useState<string | null>(null)
   const [websiteImportResult, setWebsiteImportResult] = useState<any | null>(null)
+  const [publicLiteProfile, setPublicLiteProfile] = useState<any | null>(null)
+  const [publicLiteLoading, setPublicLiteLoading] = useState(false)
   const [profileEditSaving, setProfileEditSaving] = useState(false)
   const [profileEditError, setProfileEditError] = useState<string | null>(null)
   const [profileEditSuccess, setProfileEditSuccess] = useState<string | null>(null)
@@ -1628,6 +1630,30 @@ export default function BusinessDashboard() {
       cancelled = true
     }
   }, [router])
+
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    const loadPublicLite = async () => {
+      setPublicLiteLoading(true)
+      try {
+        const res = await supabase
+          .from('public_lite_business_profiles')
+          .select('id,is_public,summary')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        if (!cancelled) {
+          setPublicLiteProfile(res.data || null)
+        }
+      } finally {
+        if (!cancelled) setPublicLiteLoading(false)
+      }
+    }
+    loadPublicLite()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
 
   useEffect(() => {
     // Debug logging disabled
@@ -3337,6 +3363,46 @@ export default function BusinessDashboard() {
                       <p className="text-gray-900 capitalize">{activeBusinessRole}</p>
                     </div>
                   </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-semibold text-gray-900">Public Talent Profile (Lite)</h3>
+                    <span className="text-xs px-2 py-1 rounded-full border border-emerald-200 text-emerald-700 bg-emerald-50">
+                      Public profile visible to talent
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Create a simplified, public profile tailored for talent discovery. This does not replace your main business profile.
+                  </p>
+                  {publicLiteLoading ? (
+                    <p className="text-sm text-gray-500">Loading public profile status…</p>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className={`text-xs px-2 py-1 rounded-full border ${
+                        publicLiteProfile?.is_public
+                          ? 'border-green-200 text-green-700 bg-green-50'
+                          : 'border-gray-200 text-gray-600 bg-gray-50'
+                      }`}>
+                        {publicLiteProfile?.is_public ? 'Public: On' : 'Public: Off'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => router.push('/dashboard/business/public-lite')}
+                        className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+                      >
+                        {publicLiteProfile ? 'Edit Public Profile' : 'Create Public Profile'}
+                      </button>
+                      {publicLiteProfile?.id && (
+                        <Link
+                          href={`/business/public-lite/${publicLiteProfile.id}?preview=1`}
+                          className="px-4 py-2 rounded-lg border border-blue-200 text-blue-600 text-sm font-semibold hover:bg-blue-50 transition-colors"
+                        >
+                          Preview as Talent
+                        </Link>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="rounded-xl border border-gray-200 p-5">

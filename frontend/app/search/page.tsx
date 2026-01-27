@@ -43,6 +43,7 @@ interface Business {
   country?: string | null
   latitude?: number | null
   longitude?: number | null
+  profile_type?: 'full' | 'public_lite'
 }
 
 interface MapMarker {
@@ -987,6 +988,40 @@ function SearchPageInner() {
           businesses = [...businesses, ...profileBusinesses]
         }
 
+        // Also search public_lite_business_profiles (talent-visible lite profiles)
+        const liteIds = new Set(businesses.map((b) => b.id))
+        let liteQuery = supabase
+          .from('public_lite_business_profiles')
+          .select('id, name, summary, locations')
+          .eq('is_public', true)
+
+        if (q) {
+          liteQuery = liteQuery.or(`name.ilike.%${q}%,summary.ilike.%${q}%`)
+        }
+
+        const liteRes = await liteQuery.limit(50)
+        if (!liteRes.error && liteRes.data && liteRes.data.length > 0) {
+          let liteData = liteRes.data
+          if (loc) {
+            const locLower = loc.toLowerCase()
+            liteData = liteData.filter((r: any) => {
+              const locations = Array.isArray(r.locations) ? r.locations : []
+              return locations.some((l: string) => String(l).toLowerCase().includes(locLower))
+            })
+          }
+          const liteBusinesses = liteData
+            .filter((r: any) => !liteIds.has(String(r.id)))
+            .map((r: any) => ({
+              id: String(r.id),
+              name: typeof r.name === 'string' && r.name ? r.name : 'Business',
+              tagline: null,
+              mission: typeof r.summary === 'string' ? r.summary : null,
+              location: Array.isArray(r.locations) ? r.locations[0] : null,
+              profile_type: 'public_lite' as const,
+            }))
+          businesses = [...businesses, ...liteBusinesses]
+        }
+
         // #region agent log
         fetch('http://127.0.0.1:7243/ingest/6182f207-3db2-4ea3-b5df-968f1e2a56cc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'search/page.tsx:business_search_final',message:'Business search final results',data:{query:q,location:loc,resultCount:businesses.length,allResults:businesses.map(b=>({id:b.id,name:b.name,slug:b.slug}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'BUS_SEARCH'})}).catch(()=>{});
         // #endregion
@@ -1376,7 +1411,14 @@ function SearchPageInner() {
                             {business.mission ? (
                               <p className="text-gray-600 text-sm mb-3 line-clamp-2">{business.mission}</p>
                             ) : null}
-                            {business.id ? (
+                            {business.profile_type === 'public_lite' ? (
+                              <Link
+                                href={`/business/public-lite/${encodeURIComponent(String(business.id))}`}
+                                className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-lg bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 transition-colors"
+                              >
+                                View Public Talent Profile →
+                              </Link>
+                            ) : business.id ? (
                               <Link
                                 href={`/dashboard/business/view?id=${encodeURIComponent(String(business.id))}`}
                                 className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-lg bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 transition-colors"

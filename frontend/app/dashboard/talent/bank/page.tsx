@@ -114,6 +114,12 @@ export default function TalentBankPage() {
   const [recPreviewUrl, setRecPreviewUrl] = useState<string | null>(null)
   const [recMime, setRecMime] = useState<string>('video/webm')
   const liveVideoRef = useRef<HTMLVideoElement | null>(null)
+  // Video import mode: record, file, url
+  const [videoImportMode, setVideoImportMode] = useState<'record' | 'file' | 'url'>('record')
+  const [videoFileInput, setVideoFileInput] = useState<File | null>(null)
+  const [videoFilePreview, setVideoFilePreview] = useState<string | null>(null)
+  const [videoUrlInput, setVideoUrlInput] = useState('')
+  const videoFileRef = useRef<HTMLInputElement | null>(null)
 
   // Resume parsing state
   const [resumeParseModal, setResumeParseModal] = useState<{
@@ -453,6 +459,113 @@ export default function TalentBankPage() {
     setRecPreviewUrl(null)
     setRecChunks([])
     recChunksRef.current = []
+  }
+
+  function handleVideoFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Check if it's a video file
+    if (!file.type.startsWith('video/')) {
+      setRecErr('Please select a video file (MP4, WebM, MOV, etc.)')
+      return
+    }
+
+    // Clean up previous preview
+    if (videoFilePreview) {
+      URL.revokeObjectURL(videoFilePreview)
+    }
+
+    setVideoFileInput(file)
+    setVideoFilePreview(URL.createObjectURL(file))
+    setRecErr(null)
+  }
+
+  function clearVideoFile() {
+    if (videoFilePreview) {
+      URL.revokeObjectURL(videoFilePreview)
+    }
+    setVideoFileInput(null)
+    setVideoFilePreview(null)
+    if (videoFileRef.current) {
+      videoFileRef.current.value = ''
+    }
+  }
+
+  async function uploadVideoFile() {
+    if (!videoFileInput) {
+      setRecErr('No video file selected.')
+      return
+    }
+
+    setRecErr(null)
+    setIsUploading(true)
+    try {
+      await uploadSingleFile(videoFileInput, { source: 'file-import', categoryOverride: 'document' })
+      clearVideoFile()
+      setRecOpen(false)
+    } catch (err: any) {
+      setRecErr(err?.message || 'Failed to upload video file.')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  async function uploadVideoUrl() {
+    if (!videoUrlInput.trim()) {
+      setRecErr('Please enter a video URL.')
+      return
+    }
+
+    const url = videoUrlInput.trim()
+
+    // Validate URL format
+    try {
+      new URL(url)
+    } catch {
+      setRecErr('Please enter a valid URL.')
+      return
+    }
+
+    setRecErr(null)
+    setIsUploading(true)
+
+    const uid = userId ?? (await ensureSession())
+    setUserId(uid)
+    if (!uid) {
+      setIsUploading(false)
+      return
+    }
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const sessionEmail = sessionData?.session?.user?.email ?? (authEmail || null)
+
+      // Insert as a link/URL attachment
+      const { error: insertError } = await supabase.from('talent_bank_attachments').insert({
+        user_id: uid,
+        talent_email: sessionEmail,
+        file_name: url,
+        file_type: 'video/url',
+        file_size: 0,
+        storage_path: url,
+        category: 'document',
+        is_url: true,
+      })
+
+      if (insertError) {
+        setRecErr(`Failed to save video URL: ${insertError.message}`)
+        return
+      }
+
+      setVideoUrlInput('')
+      setRecOpen(false)
+      await loadAttachments()
+    } catch (err: any) {
+      setRecErr(err?.message || 'Failed to save video URL.')
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   async function uploadRecordedVideo() {
@@ -2084,7 +2197,7 @@ export default function TalentBankPage() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-                <div className="font-semibold">Record video</div>
+                <div className="font-semibold">Add Video</div>
                 <button
                   type="button"
                   className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm"
@@ -2095,14 +2208,53 @@ export default function TalentBankPage() {
                     setRecorder(null)
                     setIsRecording(false)
                     clearRecording()
-                    // #region agent log
+                    clearVideoFile()
+                    setVideoUrlInput('')
+                    setRecErr(null)
                     agentDbg('TB_REC_UI', 'record modal closed', {})
-                    // #endregion agent log
                   }}
                 >
                   Close
                 </button>
               </div>
+
+              {/* Import Mode Tabs */}
+              <div className="flex border-b border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setVideoImportMode('record')}
+                  className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                    videoImportMode === 'record'
+                      ? 'bg-slate-800 text-white border-b-2 border-blue-500'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                  }`}
+                >
+                  Record
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVideoImportMode('file')}
+                  className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                    videoImportMode === 'file'
+                      ? 'bg-slate-800 text-white border-b-2 border-blue-500'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                  }`}
+                >
+                  Upload File
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVideoImportMode('url')}
+                  className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                    videoImportMode === 'url'
+                      ? 'bg-slate-800 text-white border-b-2 border-blue-500'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                  }`}
+                >
+                  Video URL
+                </button>
+              </div>
+
               <div className="p-4 space-y-4">
                 {recErr && (
                   <div className="text-sm text-amber-300">
@@ -2110,65 +2262,165 @@ export default function TalentBankPage() {
                   </div>
                 )}
 
-                <div className="grid md:grid-cols-2 gap-4 items-start">
-                  <div className="border border-white/10 rounded-xl overflow-hidden bg-black">
-                    {recPreviewUrl ? (
-                      <video src={recPreviewUrl} controls playsInline className="w-full h-[260px] object-contain" />
-                    ) : (
-                      <video ref={liveVideoRef} autoPlay muted playsInline className="w-full h-[260px] object-contain" />
-                    )}
-                  </div>
-                  <div className="space-y-3 text-sm">
-                    <div className="text-slate-300">
-                      {recPreviewUrl ? 'Preview your recording, then upload.' : 'Start your camera, then record.'}
+                {/* Record Mode */}
+                {videoImportMode === 'record' && (
+                  <div className="grid md:grid-cols-2 gap-4 items-start">
+                    <div className="border border-white/10 rounded-xl overflow-hidden bg-black">
+                      {recPreviewUrl ? (
+                        <video src={recPreviewUrl} controls playsInline className="w-full h-[260px] object-contain" />
+                      ) : (
+                        <video ref={liveVideoRef} autoPlay muted playsInline className="w-full h-[260px] object-contain" />
+                      )}
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="space-y-3 text-sm">
+                      <div className="text-slate-300">
+                        {recPreviewUrl ? 'Preview your recording, then upload.' : 'Start your camera, then record.'}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={recBusy || !!recStream}
+                          className="px-3 py-2 rounded bg-slate-800 border border-slate-700 disabled:opacity-60"
+                          onClick={startCamera}
+                        >
+                          {recStream ? 'Camera Ready' : recBusy ? 'Starting…' : 'Start Camera'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!recStream || isRecording}
+                          className="px-3 py-2 rounded bg-green-600 disabled:opacity-60"
+                          onClick={beginRecording}
+                        >
+                          Start Recording
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!isRecording}
+                          className="px-3 py-2 rounded bg-amber-600 disabled:opacity-60"
+                          onClick={stopRecording}
+                        >
+                          Stop
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!recPreviewUrl || isUploading}
+                          className="px-3 py-2 rounded bg-blue-600 disabled:opacity-60"
+                          onClick={uploadRecordedVideo}
+                        >
+                          {isUploading ? 'Uploading…' : 'Upload to Talent Bank'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isRecording}
+                          className="px-3 py-2 rounded bg-slate-800 border border-slate-700 disabled:opacity-60"
+                          onClick={clearRecording}
+                        >
+                          Discard
+                        </button>
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        Tip: Keep videos short to stay under the ~50MB upload limit.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* File Upload Mode */}
+                {videoImportMode === 'file' && (
+                  <div className="grid md:grid-cols-2 gap-4 items-start">
+                    <div className="border border-white/10 rounded-xl overflow-hidden bg-black">
+                      {videoFilePreview ? (
+                        <video src={videoFilePreview} controls playsInline className="w-full h-[260px] object-contain" />
+                      ) : (
+                        <div className="w-full h-[260px] flex items-center justify-center text-slate-500">
+                          No video selected
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-3 text-sm">
+                      <div className="text-slate-300">
+                        Select a video file from your device (MP4, WebM, MOV, etc.)
+                      </div>
+                      <input
+                        ref={videoFileRef}
+                        type="file"
+                        accept="video/*"
+                        onChange={handleVideoFileSelect}
+                        className="hidden"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="px-3 py-2 rounded bg-slate-800 border border-slate-700"
+                          onClick={() => videoFileRef.current?.click()}
+                        >
+                          Choose File
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!videoFileInput || isUploading}
+                          className="px-3 py-2 rounded bg-blue-600 disabled:opacity-60"
+                          onClick={uploadVideoFile}
+                        >
+                          {isUploading ? 'Uploading…' : 'Upload to Talent Bank'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!videoFileInput}
+                          className="px-3 py-2 rounded bg-slate-800 border border-slate-700 disabled:opacity-60"
+                          onClick={clearVideoFile}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      {videoFileInput && (
+                        <div className="text-xs text-slate-400">
+                          Selected: {videoFileInput.name} ({(videoFileInput.size / (1024 * 1024)).toFixed(1)}MB)
+                        </div>
+                      )}
+                      <div className="text-xs text-slate-400">
+                        Tip: Maximum file size is ~50MB.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* URL Import Mode */}
+                {videoImportMode === 'url' && (
+                  <div className="space-y-4">
+                    <div className="text-slate-300 text-sm">
+                      Paste a video URL (YouTube, Vimeo, or direct video link)
+                    </div>
+                    <input
+                      type="url"
+                      value={videoUrlInput}
+                      onChange={(e) => setVideoUrlInput(e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <div className="flex gap-2">
                       <button
                         type="button"
-                        disabled={recBusy || !!recStream}
-                        className="px-3 py-2 rounded bg-slate-800 border border-slate-700 disabled:opacity-60"
-                        onClick={startCamera}
+                        disabled={!videoUrlInput.trim() || isUploading}
+                        className="px-4 py-2 rounded bg-blue-600 disabled:opacity-60"
+                        onClick={uploadVideoUrl}
                       >
-                        {recStream ? 'Camera Ready' : recBusy ? 'Starting…' : 'Start Camera'}
+                        {isUploading ? 'Saving…' : 'Save Video Link'}
                       </button>
                       <button
                         type="button"
-                        disabled={!recStream || isRecording}
-                        className="px-3 py-2 rounded bg-green-600 disabled:opacity-60"
-                        onClick={beginRecording}
+                        disabled={!videoUrlInput}
+                        className="px-4 py-2 rounded bg-slate-800 border border-slate-700 disabled:opacity-60"
+                        onClick={() => setVideoUrlInput('')}
                       >
-                        Start Recording
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!isRecording}
-                        className="px-3 py-2 rounded bg-amber-600 disabled:opacity-60"
-                        onClick={stopRecording}
-                      >
-                        Stop
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!recPreviewUrl || isUploading}
-                        className="px-3 py-2 rounded bg-blue-600 disabled:opacity-60"
-                        onClick={uploadRecordedVideo}
-                      >
-                        {isUploading ? 'Uploading…' : 'Upload to Talent Bank'}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isRecording}
-                        className="px-3 py-2 rounded bg-slate-800 border border-slate-700 disabled:opacity-60"
-                        onClick={clearRecording}
-                      >
-                        Discard
+                        Clear
                       </button>
                     </div>
                     <div className="text-xs text-slate-400">
-                      Tip: Keep videos short to stay under the ~50MB upload limit.
+                      Supported: YouTube, Vimeo, or any direct video URL. The link will be saved to your Talent Bank.
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>

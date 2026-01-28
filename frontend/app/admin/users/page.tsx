@@ -251,15 +251,24 @@ export default function AdminUsersPage() {
               <span className="text-gray-400">|</span>
               <span className="text-lg font-semibold">User Management</span>
             </div>
-            <button
-              onClick={async () => {
-                await supabase.auth.signOut()
-                router.push('/')
-              }}
-              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg text-red-400 transition-colors"
-            >
-              Sign Out
-            </button>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/dashboard/business"
+                className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg text-blue-400 transition-colors"
+              >
+                Business Dashboard
+              </Link>
+              <button
+                type="button"
+                onClick={async () => {
+                  await supabase.auth.signOut()
+                  router.push('/')
+                }}
+                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg text-red-400 transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
           </div>
         </div>
       </header>

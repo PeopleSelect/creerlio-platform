@@ -357,15 +357,15 @@ function TalentLoginPageInner() {
       <div className="min-h-[calc(100vh-80px)] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center px-6 py-8">
         <div className="w-full max-w-4xl dashboard-card rounded-xl p-8 border border-white/10">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-xl font-bold text-white">Create Talent Account</h1>
-            <Link href="/login/business" className="text-slate-300 hover:text-green-400 transition-colors text-sm">
+            <h1 className="text-xl font-bold text-gray-900">Create Talent Account</h1>
+            <Link href="/login/business" className="text-gray-600 hover:text-green-600 transition-colors text-sm">
               I'm a Business →
             </Link>
           </div>
 
-        <h1 className="text-2xl font-bold text-white mb-2">{mode === 'signin' ? 'Talent sign in' : 'Create Talent account'}</h1>
-        <p className="text-gray-400 text-sm mb-6">Talent can sign in with email/password or supported providers.</p>
-        <p className="text-[11px] text-gray-500 mb-4">UI: {UI_VERSION}</p>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{mode === 'signin' ? 'Talent sign in' : 'Create Talent account'}</h1>
+        <p className="text-gray-700 text-sm mb-6">Talent can sign in with email/password or supported providers.</p>
+        <p className="text-[11px] text-gray-600 mb-4">UI: {UI_VERSION}</p>
 
         {error && (
           <div className="mb-4 border border-red-500/30 bg-red-500/10 text-red-200 rounded-lg p-3 text-sm">{error}</div>
@@ -376,7 +376,7 @@ function TalentLoginPageInner() {
             type="button"
             disabled={busy}
             onClick={() => oauth('google')}
-            className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-slate-200 text-sm font-semibold disabled:opacity-60"
+            className="px-4 py-2 rounded-lg bg-gray-100 border border-gray-300 hover:bg-gray-200 text-gray-800 text-sm font-semibold disabled:opacity-60"
           >
             Continue with Google
           </button>
@@ -384,7 +384,7 @@ function TalentLoginPageInner() {
             type="button"
             disabled={busy}
             onClick={() => oauth('apple')}
-            className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-slate-200 text-sm font-semibold disabled:opacity-60"
+            className="px-4 py-2 rounded-lg bg-gray-100 border border-gray-300 hover:bg-gray-200 text-gray-800 text-sm font-semibold disabled:opacity-60"
           >
             Continue with Apple
           </button>
@@ -399,7 +399,7 @@ function TalentLoginPageInner() {
               setError(null)
             }}
             className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              mode === 'signin' ? 'bg-blue-500 text-white border-blue-500' : 'bg-transparent text-slate-300 border-white/10 hover:bg-white/5'
+              mode === 'signin' ? 'bg-blue-500 text-white border-blue-500' : 'bg-transparent text-gray-700 border-gray-300 hover:bg-gray-100'
             }`}
           >
             Sign in
@@ -412,7 +412,7 @@ function TalentLoginPageInner() {
               setError(null)
             }}
             className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              mode === 'signup' ? 'bg-blue-500 text-white border-blue-500' : 'bg-transparent text-slate-300 border-white/10 hover:bg-white/5'
+              mode === 'signup' ? 'bg-blue-500 text-white border-blue-500' : 'bg-transparent text-gray-700 border-gray-300 hover:bg-gray-100'
             }`}
           >
             Create account
@@ -422,13 +422,13 @@ function TalentLoginPageInner() {
         {showForgotPassword ? (
           <form onSubmit={handleForgotPassword} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
               <input
                 type="email"
                 value={resetEmail}
                 onChange={(e) => setResetEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                className="w-full px-4 py-3 bg-blue-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                style={{ color: '#111827', WebkitTextFillColor: '#111827' }}
                 placeholder="you@example.com"
                 autoComplete="email"
               />
@@ -447,7 +447,7 @@ function TalentLoginPageInner() {
                 setResetEmail('')
                 setError(null)
               }}
-              className="w-full px-4 py-2 text-gray-300 hover:text-white transition-colors text-sm"
+              className="w-full px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors text-sm"
             >
               Back to Sign In
             </button>
@@ -457,53 +457,53 @@ function TalentLoginPageInner() {
             {mode === 'signup' ? (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">First Name <span className="text-red-400">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">First Name <span className="text-red-400">*</span></label>
                   <input
                     type="text"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                    className="w-full px-4 py-3 bg-blue-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    style={{ color: '#111827', WebkitTextFillColor: '#111827' }}
                     placeholder="John"
                     autoComplete="given-name"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Last Name <span className="text-red-400">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Last Name <span className="text-red-400">*</span></label>
                   <input
                     type="text"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                    className="w-full px-4 py-3 bg-blue-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    style={{ color: '#111827', WebkitTextFillColor: '#111827' }}
                     placeholder="Doe"
                     autoComplete="family-name"
                     required
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                   <input
                     type="email"
                     name="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                    className="w-full px-4 py-3 bg-blue-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    style={{ color: '#111827', WebkitTextFillColor: '#111827' }}
                     placeholder="you@example.com"
                     autoComplete="email"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Phone Number</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
                   <input
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                    className="w-full px-4 py-3 bg-blue-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    style={{ color: '#111827', WebkitTextFillColor: '#111827' }}
                     placeholder="+1 234 567 8900"
                     autoComplete="tel"
                   />
@@ -516,15 +516,15 @@ function TalentLoginPageInner() {
                       onChange={(e) => setEnable2FA(e.target.checked)}
                       className="w-4 h-4 rounded border-white/10 bg-slate-900 text-blue-500 focus:ring-2 focus:ring-blue-500/40"
                     />
-                    <span className="text-sm font-medium text-gray-300">Enable Two-Factor Authentication</span>
+                    <span className="text-sm font-medium text-gray-700">Enable Two-Factor Authentication</span>
                   </label>
                   {enable2FA && (
                     <input
                       type="tel"
                       value={mobile}
                       onChange={(e) => setMobile(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 mt-2"
-                      style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                      className="w-full px-4 py-3 bg-blue-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 mt-2"
+                      style={{ color: '#111827', WebkitTextFillColor: '#111827' }}
                       placeholder="Mobile number for 2FA"
                       autoComplete="tel"
                       required
@@ -532,15 +532,15 @@ function TalentLoginPageInner() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       name="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-4 py-3 pr-12 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                      style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                      className="w-full px-4 py-3 pr-12 bg-blue-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      style={{ color: '#111827', WebkitTextFillColor: '#111827' }}
                       placeholder="At least 8 characters"
                       autoComplete="new-password"
                       required
@@ -548,22 +548,22 @@ function TalentLoginPageInner() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-300 hover:text-white"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-600 hover:text-gray-900"
                     >
                       {showPassword ? 'Hide' : 'Show'}
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Confirm Password <span className="text-red-400">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password <span className="text-red-400">*</span></label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       name="confirm-password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full px-4 py-3 pr-12 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                      style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                      className="w-full px-4 py-3 pr-12 bg-blue-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      style={{ color: '#111827', WebkitTextFillColor: '#111827' }}
                       placeholder="Confirm your password"
                       autoComplete="new-password"
                       required
@@ -571,7 +571,7 @@ function TalentLoginPageInner() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-300 hover:text-white"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-600 hover:text-gray-900"
                     >
                       {showPassword ? 'Hide' : 'Show'}
                     </button>
@@ -581,29 +581,29 @@ function TalentLoginPageInner() {
             ) : (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                   <input
                     type="email"
                     name="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                    className="w-full px-4 py-3 bg-blue-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    style={{ color: '#111827', WebkitTextFillColor: '#111827' }}
                     placeholder="you@example.com"
                     autoComplete="email"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       name="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-4 py-3 pr-12 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                      style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                      className="w-full px-4 py-3 pr-12 bg-blue-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      style={{ color: '#111827', WebkitTextFillColor: '#111827' }}
                       placeholder="••••••••"
                       autoComplete="current-password"
                       required
@@ -611,7 +611,7 @@ function TalentLoginPageInner() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-300 hover:text-white"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-600 hover:text-gray-900"
                     >
                       {showPassword ? 'Hide' : 'Show'}
                     </button>

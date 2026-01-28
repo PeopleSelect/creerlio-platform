@@ -209,14 +209,14 @@ function BusinessLoginPageInner() {
       <div className="min-h-[calc(100vh-80px)] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center px-6">
         <div className="w-full max-w-md dashboard-card rounded-xl p-8 border border-white/10">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-xl font-bold text-white">{mode === 'signin' ? 'Business Sign In' : 'Create Business Account'}</h1>
-            <Link href="/login/talent" className="text-slate-300 hover:text-blue-400 transition-colors text-sm">
+            <h1 className="text-xl font-bold text-gray-900">{mode === 'signin' ? 'Business Sign In' : 'Create Business Account'}</h1>
+            <Link href="/login/talent" className="text-gray-600 hover:text-blue-600 transition-colors text-sm">
               I'm Talent →
             </Link>
           </div>
 
-        <h1 className="text-2xl font-bold text-white mb-2">{mode === 'signin' ? 'Business sign in' : 'Create Business account'}</h1>
-        <p className="text-gray-400 text-sm mb-6">Business sign-in uses your business email.</p>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{mode === 'signin' ? 'Business sign in' : 'Create Business account'}</h1>
+        <p className="text-gray-700 text-sm mb-6">Business sign-in uses your business email.</p>
 
         {error && (
           <div className="mb-4 border border-red-500/30 bg-red-500/10 text-red-200 rounded-lg p-3 text-sm">{error}</div>
@@ -227,7 +227,7 @@ function BusinessLoginPageInner() {
             type="button"
             onClick={() => setMode('signin')}
             className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              mode === 'signin' ? 'bg-green-500 text-white border-green-500' : 'bg-transparent text-slate-300 border-white/10 hover:bg-white/5'
+              mode === 'signin' ? 'bg-green-500 text-white border-green-500' : 'bg-transparent text-gray-700 border-gray-300 hover:bg-gray-100'
             }`}
           >
             Sign in
@@ -236,7 +236,7 @@ function BusinessLoginPageInner() {
             type="button"
             onClick={() => setMode('signup')}
             className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              mode === 'signup' ? 'bg-green-500 text-white border-green-500' : 'bg-transparent text-slate-300 border-white/10 hover:bg-white/5'
+              mode === 'signup' ? 'bg-green-500 text-white border-green-500' : 'bg-transparent text-gray-700 border-gray-300 hover:bg-gray-100'
             }`}
           >
             Create account
@@ -245,35 +245,35 @@ function BusinessLoginPageInner() {
 
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Business email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Business email</label>
             <input
               type="email"
               name="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/40"
-              style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+              className="w-full px-4 py-3 bg-blue-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/40"
+              style={{ color: '#111827', WebkitTextFillColor: '#111827' }}
               placeholder="name@company.com"
               autoComplete="email"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
                 name="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 pr-12 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/40"
-                style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                className="w-full px-4 py-3 pr-12 bg-blue-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/40"
+                style={{ color: '#111827', WebkitTextFillColor: '#111827' }}
                 placeholder="••••••••"
                 autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-300 hover:text-white"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-600 hover:text-gray-900"
               >
                 {showPassword ? 'Hide' : 'Show'}
               </button>

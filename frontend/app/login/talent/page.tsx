@@ -304,8 +304,24 @@ function TalentLoginPageInner() {
             enable_2fa: enable2FA
           }
         })
+
+        // Create talent profile with registration data
+        const userId = signUpData.user.id
+        const { error: profileError } = await supabase
+          .from('talent_profiles')
+          .upsert({
+            user_id: userId,
+            name: fullName,
+            email: email.trim(),
+            phone: phone.trim() || null,
+          }, { onConflict: 'user_id' })
+
+        if (profileError) {
+          console.error('Error creating talent profile:', profileError)
+          // Don't block signup if profile creation fails - they can fill it in later
+        }
       }
-      
+
       router.replace(redirectTo)
     } finally {
       setBusy(false)

@@ -156,8 +156,22 @@ function BusinessLoginPageInner() {
             registered_as: 'business'
           }
         })
+
+        // Create business profile with registration data
+        const userId = signUpData.user.id
+        const { error: profileError } = await supabase
+          .from('business_profiles')
+          .upsert({
+            user_id: userId,
+            email: email.trim(),
+          }, { onConflict: 'user_id' })
+
+        if (profileError) {
+          console.error('Error creating business profile:', profileError)
+          // Don't block signup if profile creation fails - they can fill it in later
+        }
       }
-      
+
       router.replace(redirectTo)
     } finally {
       setBusy(false)

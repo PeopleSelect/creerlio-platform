@@ -428,7 +428,7 @@ export default function EditTalentProfilePage() {
           )}
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Name <span className="text-red-400">*</span>
             </label>
             <input
@@ -447,7 +447,7 @@ export default function EditTalentProfilePage() {
 
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Professional Title</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Professional Title</label>
             <input
               type="text"
               name="title"
@@ -460,7 +460,7 @@ export default function EditTalentProfilePage() {
 
           {/* Headline */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Headline</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Headline</label>
             <input
               type="text"
               name="headline"
@@ -473,7 +473,7 @@ export default function EditTalentProfilePage() {
 
           {/* Bio */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Bio</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
             <textarea
               name="bio"
               value={formData.bio}
@@ -486,7 +486,7 @@ export default function EditTalentProfilePage() {
 
           {/* Skills */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Skills (comma-separated)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Skills (comma-separated)</label>
             <input
               type="text"
               name="skills"
@@ -509,7 +509,7 @@ export default function EditTalentProfilePage() {
 
           {/* Phone */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Phone</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
             <input
               type="tel"
               name="phone"
@@ -523,7 +523,7 @@ export default function EditTalentProfilePage() {
           {/* Business Search Visibility Section */}
           <div className="border-t border-gray-700 pt-6 mt-6">
             <h3 className="text-lg font-semibold text-white mb-4">Business Search Visibility</h3>
-            <p className="text-sm text-gray-400 mb-4">
+            <p className="text-sm text-gray-600 mb-4">
               Control whether your profile is visible to businesses searching for talent. When enabled, businesses will see a brief summary you write (not your full profile) and can request a connection.
             </p>
 
@@ -536,11 +536,11 @@ export default function EditTalentProfilePage() {
                   onChange={(e) => setFormData(prev => ({ ...prev, search_visible: e.target.checked }))}
                   className="w-5 h-5 rounded border-gray-600 bg-white text-blue-500 focus:ring-2 focus:ring-blue-500"
                 />
-                <span className="text-sm font-medium text-gray-300">
+                <span className="text-sm font-medium text-gray-700">
                   Make my profile visible to businesses in search
                 </span>
               </label>
-              <p className="text-xs text-gray-400 mt-1 ml-8">
+              <p className="text-xs text-gray-600 mt-1 ml-8">
                 When enabled, businesses can find you on the Business Map and see your search summary below
               </p>
             </div>
@@ -549,10 +549,10 @@ export default function EditTalentProfilePage() {
             {formData.search_visible && (
               <>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Business Search Summary <span className="text-red-400">*</span>
                   </label>
-                  <p className="text-xs text-gray-400 mb-2">
+                  <p className="text-xs text-gray-600 mb-2">
                     Write a brief summary that businesses will see when searching for talent. Include your role, experience, location, and what you're looking for. Example: "Actor with 10 years experience, lives in Sydney, looking for acting roles in the next 3 months"
                   </p>
                   <textarea
@@ -575,10 +575,10 @@ export default function EditTalentProfilePage() {
 
                 {/* Availability Description */}
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Availability Description (Optional)
                   </label>
-                  <p className="text-xs text-gray-400 mb-2">
+                  <p className="text-xs text-gray-600 mb-2">
                     Additional details about when you're looking for roles, availability, or preferences
                   </p>
                   <textarea

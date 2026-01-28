@@ -90,40 +90,20 @@ export default function JobsPage() {
     try {
       const keyword = (filters.keyword || '').trim()
       const loc = (filters.location || '').trim()
+      const params = new URLSearchParams()
+      if (keyword) params.set('keyword', keyword)
+      if (loc) params.set('location', loc)
 
-      let qb: any = supabase
-        .from('jobs')
-        .select(
-          'id,title,description,location,city,state,country,employment_type,remote_allowed,salary_min,salary_max,salary_currency,required_skills,created_at,business_profile_id,status'
-        )
-        .limit(200)
+      const res = await fetch(`/api/jobs?${params.toString()}`)
+      const payload = await res.json()
 
-      // Prefer published jobs if this column exists; if it doesn't, Supabase will return an error and we'll fall back.
-      qb = qb.eq('status', 'published')
-      if (keyword) qb = qb.or(`title.ilike.%${keyword}%,description.ilike.%${keyword}%`)
-      if (loc) qb = qb.or(`location.ilike.%${loc}%,city.ilike.%${loc}%,state.ilike.%${loc}%,country.ilike.%${loc}%`)
-
-      let res: any = await qb
-      if (res.error) {
-        // Try again without status filter (schema may not have it)
-        qb = supabase
-          .from('jobs')
-          .select(
-            'id,title,description,location,city,state,country,employment_type,remote_allowed,salary_min,salary_max,salary_currency,required_skills,created_at,business_profile_id'
-          )
-          .limit(200)
-        if (keyword) qb = qb.or(`title.ilike.%${keyword}%,description.ilike.%${keyword}%`)
-        if (loc) qb = qb.or(`location.ilike.%${loc}%,city.ilike.%${loc}%,state.ilike.%${loc}%,country.ilike.%${loc}%`)
-        res = await qb
-      }
-
-      if (res.error) {
+      if (!payload?.ok) {
         setJobs([])
-        setJobsError('Jobs are not configured yet (missing jobs table or permissions).')
+        setJobsError(payload?.error || 'Jobs are not configured yet (missing jobs table or permissions).')
         return
       }
 
-      const mapped: Job[] = (res.data || []).map((j: any) => ({
+      const mapped: Job[] = (payload.jobs || []).map((j: any) => ({
         id: String(j?.id),
         title: typeof j?.title === 'string' ? j.title : 'Job',
         description: typeof j?.description === 'string' ? j.description : null,

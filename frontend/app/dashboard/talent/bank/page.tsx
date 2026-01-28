@@ -511,6 +511,10 @@ export default function TalentBankPage() {
     }
   }
 
+  function isExternalUrl(path?: string | null) {
+    return !!path && /^https?:\/\//i.test(path)
+  }
+
   async function uploadVideoUrl() {
     if (!videoUrlInput.trim()) {
       setRecErr('Please enter a video URL.')
@@ -541,17 +545,30 @@ export default function TalentBankPage() {
       const { data: sessionData } = await supabase.auth.getSession()
       const sessionEmail = sessionData?.session?.user?.email ?? (authEmail || null)
 
-      // Insert as a link/URL attachment
-      const { error: insertError } = await supabase.from('talent_bank_attachments').insert({
+      // Insert as a video item (external URL)
+      const insertPayload = {
         user_id: uid,
-        talent_email: sessionEmail,
-        file_name: url,
+        item_type: 'video',
+        title: 'Video URL',
+        description: url,
+        file_path: url,
         file_type: 'video/url',
         file_size: 0,
-        storage_path: url,
-        category: 'document',
-        is_url: true,
-      })
+        metadata: {
+          url,
+          source: 'url-import',
+          file_kind: 'video',
+          isExternal: true,
+        },
+        is_public: false,
+      }
+
+      let { error: insertError } = await supabase.from('talent_bank_items').insert(insertPayload as any)
+      if ((insertError as any)?.code === '23503') {
+        await ensureUserRow(uid, sessionEmail)
+        const retry = await supabase.from('talent_bank_items').insert(insertPayload as any)
+        insertError = retry.error
+      }
 
       if (insertError) {
         setRecErr(`Failed to save video URL: ${insertError.message}`)
@@ -560,7 +577,7 @@ export default function TalentBankPage() {
 
       setVideoUrlInput('')
       setRecOpen(false)
-      await loadAttachments()
+      await refreshItems(uid)
     } catch (err: any) {
       setRecErr(err?.message || 'Failed to save video URL.')
     } finally {
@@ -1423,6 +1440,7 @@ export default function TalentBankPage() {
   // Load signed URLs on-demand (for images/videos). This avoids the "only first N thumbnails load" issue.
   async function ensureSignedUrl(path: string) {
     if (!path) return
+    if (isExternalUrl(path)) return
     if (thumbUrls[path]) return
     const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60 * 10)
     if (data?.signedUrl) {
@@ -1557,6 +1575,10 @@ export default function TalentBankPage() {
   }
 
   async function openFile(path: string) {
+    if (isExternalUrl(path)) {
+      window.open(path, '_blank')
+      return
+    }
     const { data, error } = await supabase.storage
       .from(BUCKET)
       .createSignedUrl(path, 60 * 10)
@@ -1573,7 +1595,8 @@ export default function TalentBankPage() {
   function renderThumb(item: TalentBankItem) {
     const type = item.item_type
     const path = item.file_path || ''
-    const url = path ? thumbUrls[path] : undefined
+    const isExternal = isExternalUrl(path)
+    const url = isExternal ? path : (path ? thumbUrls[path] : undefined)
     const isImg = (item.file_type?.startsWith('image') ?? false) || type === 'image'
     const isVid = (item.file_type?.startsWith('video') ?? false) || type === 'video'
 
@@ -1625,6 +1648,18 @@ export default function TalentBankPage() {
 
     // Video thumbnail (use metadata frame if we can get a signed URL)
     if (isVid) {
+      if (isExternal) {
+        return (
+          <button
+            type="button"
+            className={base}
+            onClick={() => openFile(path)}
+            title="Open video link"
+          >
+            <ThumbIcon label={label} />
+          </button>
+        )
+      }
       if (!url && path) ensureSignedUrl(path).catch(() => {})
       if (url) {
         return (
@@ -1699,7 +1734,7 @@ export default function TalentBankPage() {
     if (!uid) return
 
     // Delete file first (optional) then row. If file is missing, still delete DB row.
-    if (item.file_path) {
+    if (item.file_path && !isExternalUrl(item.file_path)) {
       const { error: removeError } = await supabase.storage
         .from(BUCKET)
         .remove([item.file_path])

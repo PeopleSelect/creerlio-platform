@@ -1252,16 +1252,94 @@ export default function BusinessBankPage() {
 
             {!recStream && !recPreviewUrl && (
               <div className="space-y-4">
-                <p className="text-gray-300">
-                  Click "Start Camera" to begin recording your business introduction video.
-                </p>
-                <button
-                  onClick={startCamera}
-                  disabled={recBusy}
-                  className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 font-semibold"
-                >
-                  {recBusy ? 'Starting Camera...' : 'Start Camera'}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIntroVideoSource('record')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      introVideoSource === 'record'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    Record
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIntroVideoSource('upload')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      introVideoSource === 'upload'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    Upload File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIntroVideoSource('link')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      introVideoSource === 'link'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    Link URL
+                  </button>
+                </div>
+
+                {introVideoSource === 'record' && (
+                  <>
+                    <p className="text-gray-300">
+                      Click "Start Camera" to begin recording your business introduction video.
+                    </p>
+                    <button
+                      onClick={startCamera}
+                      disabled={recBusy}
+                      className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 font-semibold"
+                    >
+                      {recBusy ? 'Starting Camera...' : 'Start Camera'}
+                    </button>
+                  </>
+                )}
+
+                {introVideoSource === 'upload' && (
+                  <div className="space-y-3">
+                    <input
+                      ref={videoFileInputRef}
+                      type="file"
+                      accept="video/*"
+                      onChange={(e) => handleIntroVideoUpload(e.target.files)}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => videoFileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 font-semibold"
+                    >
+                      {isUploading ? 'Uploading...' : 'Choose Video File'}
+                    </button>
+                  </div>
+                )}
+
+                {introVideoSource === 'link' && (
+                  <div className="space-y-3">
+                    <input
+                      type="url"
+                      placeholder="Video URL (YouTube, Vimeo, or direct video link)"
+                      value={introVideoUrl}
+                      onChange={(e) => setIntroVideoUrl(e.target.value)}
+                      className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
+                    />
+                    <button
+                      onClick={handleIntroVideoLink}
+                      disabled={isUploading}
+                      className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 font-semibold"
+                    >
+                      {isUploading ? 'Saving...' : 'Add Video Link'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

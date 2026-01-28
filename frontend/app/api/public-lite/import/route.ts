@@ -155,14 +155,17 @@ Generate the Public Talent Profile (Lite) content and image prompts. If regen_im
               Authorization: `Bearer ${openaiApiKey}`,
             },
             body: JSON.stringify({
-              model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
+              model: process.env.OPENAI_IMAGE_MODEL || 'dall-e-3',
               prompt: avatarPrompt,
               size: '1024x1024',
+              n: 1,
             }),
           }, 45000)
           if (imgRes.ok) {
             const imgData = await imgRes.json()
             logoUrl = imgData?.data?.[0]?.url || logoUrl
+          } else {
+            console.error('Avatar image generation failed:', await imgRes.text())
           }
         }
         if (bannerPrompt) {
@@ -173,17 +176,21 @@ Generate the Public Talent Profile (Lite) content and image prompts. If regen_im
               Authorization: `Bearer ${openaiApiKey}`,
             },
             body: JSON.stringify({
-              model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
+              model: process.env.OPENAI_IMAGE_MODEL || 'dall-e-3',
               prompt: bannerPrompt,
               size: '1792x1024',
+              n: 1,
             }),
           }, 45000)
           if (bannerRes.ok) {
             const bannerData = await bannerRes.json()
             bannerUrl = bannerData?.data?.[0]?.url || bannerUrl
+          } else {
+            console.error('Banner image generation failed:', await bannerRes.text())
           }
         }
-      } catch {
+      } catch (imgError: any) {
+        console.error('Image generation error:', imgError?.message || imgError)
         // If image generation fails, keep existing URLs/prompts and return text anyway.
       }
     }

@@ -79,6 +79,7 @@ export default function EditTalentProfilePage() {
         const { data: sessionRes } = await supabase.auth.getSession()
         const uid = sessionRes.session?.user?.id ?? null
         const email = sessionRes.session?.user?.email ?? null
+        const userMetadata = sessionRes.session?.user?.user_metadata || {}
         if (!uid) {
           router.push('/login?redirect=/dashboard/talent/edit')
           return
@@ -91,12 +92,26 @@ export default function EditTalentProfilePage() {
           return
         }
 
+        // Pre-fill from user metadata if available
+        const metaName = userMetadata.full_name ||
+          (userMetadata.first_name && userMetadata.last_name
+            ? `${userMetadata.first_name} ${userMetadata.last_name}`.trim()
+            : '')
+        const metaPhone = userMetadata.phone || userMetadata.mobile || ''
+
         if (!existing.data) {
-          // Empty state: no profile yet; user can create one.
+          // Empty state: no profile yet; pre-fill from user metadata
           if (!cancelled) {
             setProfile(null)
             setTalentId(null)
-            setFormData((p) => ({ ...p, name: '', headline: '', bio: '', skills: '' }))
+            setFormData((p) => ({
+              ...p,
+              name: metaName,
+              phone: metaPhone,
+              headline: '',
+              bio: '',
+              skills: ''
+            }))
           }
           return
         }
@@ -105,8 +120,11 @@ export default function EditTalentProfilePage() {
         if (!cancelled) {
           setProfile(row)
           setTalentId(String(row.id))
+          // Use profile data, fallback to user metadata if profile field is empty
+          const profileName = pickTalentName(row)
+          const profilePhone = (typeof row.phone === 'string' && row.phone) || ''
           setFormData({
-            name: pickTalentName(row),
+            name: profileName || metaName,
             title: (typeof row.title === 'string' && row.title) || '',
             headline: (typeof row.headline === 'string' && row.headline) || '',
             bio: (typeof row.bio === 'string' && row.bio) || '',
@@ -116,7 +134,7 @@ export default function EditTalentProfilePage() {
             city: (typeof row.city === 'string' && row.city) || '',
             state: (typeof row.state === 'string' && row.state) || '',
             country: (typeof row.country === 'string' && row.country) || '',
-            phone: (typeof row.phone === 'string' && row.phone) || '',
+            phone: profilePhone || metaPhone,
             search_visible: typeof row.search_visible === 'boolean' ? row.search_visible : false,
             search_summary: (typeof row.search_summary === 'string' && row.search_summary) || '',
             availability_description: (typeof row.availability_description === 'string' && row.availability_description) || '',

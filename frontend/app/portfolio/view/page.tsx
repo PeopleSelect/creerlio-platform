@@ -28,8 +28,39 @@ function safeArray<T = any>(v: any): T[] {
   return Array.isArray(v) ? (v as T[]) : []
 }
 
+function isExternalUrl(path?: string | null) {
+  return !!path && /^https?:\/\//i.test(path)
+}
+
+function isDirectVideoUrl(url?: string | null) {
+  if (!url) return false
+  return /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(url)
+}
+
+function getEmbedUrl(url?: string | null) {
+  if (!url) return null
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\./, '')
+    if (host.includes('youtube.com')) {
+      const v = u.searchParams.get('v')
+      return v ? `https://www.youtube.com/embed/${v}` : null
+    }
+    if (host === 'youtu.be') {
+      const id = u.pathname.split('/').filter(Boolean)[0]
+      return id ? `https://www.youtube.com/embed/${id}` : null
+    }
+    if (host.includes('vimeo.com')) {
+      const id = u.pathname.split('/').filter(Boolean)[0]
+      return id ? `https://player.vimeo.com/video/${id}` : null
+    }
+  } catch {}
+  return null
+}
+
 async function signedUrl(path: string, seconds = 60 * 30, usePublicUrl = false) {
   if (!path) return null
+  if (isExternalUrl(path)) return path
   
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   
@@ -625,6 +656,13 @@ function PortfolioViewPageInner() {
             const fileUrl = videoData?.file_url as string | null
             
             if (filePath) {
+              if (isExternalUrl(filePath)) {
+                if (!cancelled) {
+                  setIntroVideoUrl(filePath)
+                  setIntroVideoTitle(videoData?.title || 'Introduction Video')
+                }
+                return
+              }
               // When viewing from business context, use public URL directly
               if (viewTalentId && process.env.NEXT_PUBLIC_SUPABASE_URL) {
                 const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/talent-bank/${encodeURIComponent(filePath)}`
@@ -2387,12 +2425,35 @@ function PortfolioViewPageInner() {
                         <div className="rounded-3xl p-[1px] bg-gradient-to-br from-white/15 via-white/5 to-transparent shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
                           <div className="rounded-3xl overflow-hidden bg-slate-950/60 border border-white/10">
                             <div className="bg-black">
-                              <video
-                                src={introVideoUrl}
-                                controls
-                                playsInline
-                                className="w-full max-h-[280px] md:max-h-[300px] object-contain"
-                              />
+                              {isExternalUrl(introVideoUrl) && !isDirectVideoUrl(introVideoUrl) ? (
+                                getEmbedUrl(introVideoUrl) ? (
+                                  <iframe
+                                    src={getEmbedUrl(introVideoUrl) || undefined}
+                                    className="w-full aspect-video"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                    title={introVideoTitle || 'Introduction Video'}
+                                  />
+                                ) : (
+                                  <div className="p-4 text-sm text-slate-300">
+                                    <a
+                                      href={introVideoUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-blue-300 underline"
+                                    >
+                                      Open video link
+                                    </a>
+                                  </div>
+                                )
+                              ) : (
+                                <video
+                                  src={introVideoUrl}
+                                  controls
+                                  playsInline
+                                  className="w-full max-h-[280px] md:max-h-[300px] object-contain"
+                                />
+                              )}
                             </div>
                           </div>
                         </div>

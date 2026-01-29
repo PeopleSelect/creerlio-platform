@@ -5,6 +5,26 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
+function isExternalUrl(path?: string | null) {
+  return !!path && /^https?:\/\//i.test(path)
+}
+
+async function resolveTalentBankUrl(path?: string | null, seconds = 60 * 30) {
+  if (!path) return null
+  if (isExternalUrl(path)) return path
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  try {
+    const { data, error } = await supabase.storage.from('talent-bank').createSignedUrl(path, seconds)
+    if (!error && data?.signedUrl) {
+      return data.signedUrl
+    }
+  } catch {}
+  if (supabaseUrl) {
+    return `${supabaseUrl}/storage/v1/object/public/talent-bank/${encodeURIComponent(path)}`
+  }
+  return null
+}
+
 interface TalentProfile {
   id: string
   user_id: string
@@ -33,6 +53,7 @@ export default function ViewTalentProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
 
   const handleDeleteRegistration = async () => {
     setIsDeleting(true)
@@ -150,6 +171,19 @@ export default function ViewTalentProfilePage() {
         }
 
         setProfile(data as TalentProfile)
+
+        const { data: portfolioRow } = await supabase
+          .from('talent_bank_items')
+          .select('metadata')
+          .eq('user_id', uid)
+          .eq('item_type', 'portfolio')
+          .maybeSingle()
+
+        const avatarPath = (portfolioRow as any)?.metadata?.avatar_path || null
+        if (avatarPath) {
+          const url = await resolveTalentBankUrl(String(avatarPath))
+          setAvatarUrl(url)
+        }
       } catch (err: any) {
         setError(err.message || 'Failed to load profile')
       } finally {
@@ -222,24 +256,35 @@ export default function ViewTalentProfilePage() {
           >
             &larr; Back to Dashboard
           </Link>
-          <Link
-            href="/dashboard/talent/edit"
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Edit Profile
-          </Link>
         </div>
 
         {/* Profile Card */}
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           {/* Profile Header */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6">
-            <h1 className="text-2xl font-bold text-white">
-              {profile?.name || 'Unnamed Talent'}
-            </h1>
-            {profile?.title && (
-              <p className="text-blue-100 mt-1">{profile.title}</p>
-            )}
+            <div className="flex items-center gap-4">
+              <Link
+                href="/dashboard/talent/edit"
+                className="w-14 h-14 rounded-full bg-white/20 border border-white/30 overflow-hidden flex items-center justify-center text-white hover:bg-white/30 transition-colors"
+                title="View Profile"
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-lg font-semibold">
+                    {(profile?.name || 'U').charAt(0)}
+                  </span>
+                )}
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold text-white">
+                  {profile?.name || 'Unnamed Talent'}
+                </h1>
+                {profile?.title && (
+                  <p className="text-blue-100 mt-1">{profile.title}</p>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Profile Content */}
@@ -374,28 +419,6 @@ export default function ViewTalentProfilePage() {
               )}
             </section>
           </div>
-        </div>
-
-        {/* Action Links */}
-        <div className="mt-6 flex flex-wrap gap-4">
-          <Link
-            href="/dashboard/talent/edit"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Edit Profile
-          </Link>
-          <Link
-            href="/portfolio/view"
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-          >
-            View Portfolio
-          </Link>
-          <Link
-            href="/portfolio"
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-          >
-            Edit Portfolio
-          </Link>
         </div>
 
         {/* Delete Registration */}

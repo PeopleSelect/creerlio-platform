@@ -221,9 +221,6 @@ export function TalentDashboardShell({
   const [portfolioMeta, setPortfolioMeta] = useState<any>(null)
   const [portfolioBannerUrl, setPortfolioBannerUrl] = useState<string | null>(null)
   const [portfolioAvatarUrl, setPortfolioAvatarUrl] = useState<string | null>(null)
-  const [avatarUploading, setAvatarUploading] = useState(false)
-  const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null)
-  const avatarFileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [calendarItems, setCalendarItems] = useState<Array<{ id: string; title: string; dateLabel: string; businessId?: string | null }>>([])
   const [calendarCollapsed, setCalendarCollapsed] = useState(false)
@@ -810,77 +807,6 @@ export function TalentDashboardShell({
     }
   }, [user?.id])
 
-  async function handleAvatarFileSelect(file?: File | null) {
-    if (!file) return
-    if (!file.type.startsWith('image/')) {
-      setAvatarUploadError('Please choose an image file.')
-      return
-    }
-    const maxBytes = 10 * 1024 * 1024
-    if (file.size > maxBytes) {
-      setAvatarUploadError('Image is too large. Please use an image under 10MB.')
-      return
-    }
-    const uid = user?.id
-    if (!uid) {
-      setAvatarUploadError('Please sign in to upload an avatar.')
-      return
-    }
-    setAvatarUploading(true)
-    setAvatarUploadError(null)
-    try {
-      const path = `${uid}/portfolio/avatar-${crypto.randomUUID()}-${file.name}`
-      const { error: uploadError } = await supabase.storage
-        .from('talent-bank')
-        .upload(path, file, { upsert: true, contentType: file.type })
-      if (uploadError) {
-        setAvatarUploadError(uploadError.message || 'Upload failed.')
-        return
-      }
-      const { data: existing, error: fetchError } = await supabase
-        .from('talent_bank_items')
-        .select('id, metadata')
-        .eq('user_id', uid)
-        .eq('item_type', 'portfolio')
-        .maybeSingle()
-      if (fetchError) {
-        setAvatarUploadError(fetchError.message || 'Failed to update portfolio.')
-        return
-      }
-      const prevMeta = (existing as any)?.metadata && typeof (existing as any).metadata === 'object'
-        ? { ...(existing as any).metadata }
-        : {}
-      const nextMeta = { ...prevMeta, avatar_path: path }
-      if (existing?.id) {
-        const { error: updateError } = await supabase
-          .from('talent_bank_items')
-          .update({ metadata: nextMeta })
-          .eq('id', existing.id)
-          .eq('user_id', uid)
-        if (updateError) {
-          setAvatarUploadError(updateError.message || 'Failed to save avatar.')
-          return
-        }
-      } else {
-        const { error: insertError } = await supabase
-          .from('talent_bank_items')
-          .insert({
-            user_id: uid,
-            item_type: 'portfolio',
-            title: 'Portfolio',
-            metadata: nextMeta,
-          })
-        if (insertError) {
-          setAvatarUploadError(insertError.message || 'Failed to save avatar.')
-          return
-        }
-      }
-      const url = await resolveTalentBankUrl(path)
-      setPortfolioAvatarUrl(url)
-    } finally {
-      setAvatarUploading(false)
-    }
-  }
 
   // Fetch applications when Applications tab is active
   useEffect(() => {
@@ -2331,37 +2257,23 @@ export function TalentDashboardShell({
             <span className="text-white font-bold text-xl">C</span>
           </div>
           <span className="text-gray-900 text-2xl font-bold">Creerlio</span>
-          <Link
-            href="/dashboard/talent/view"
-            className="ml-8 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
-          >
-            View Profile
-          </Link>
+          {/* Removed View Profile button - avatar now links to edit */}
         </Link>
         
         <div className="flex items-center space-x-4">
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => avatarFileInputRef.current?.click()}
+            <Link
+              href="/dashboard/talent/edit"
               className="w-10 h-10 rounded-full border border-gray-200 bg-gray-100 overflow-hidden flex items-center justify-center text-gray-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
-              title="Upload avatar"
-              disabled={avatarUploading}
+              title="View Profile"
             >
               {portfolioAvatarUrl ? (
                 <img src={portfolioAvatarUrl} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 <span className="text-sm font-semibold">{(userFirstName || user?.full_name || user?.username || 'U').charAt(0)}</span>
               )}
-            </button>
-            <div className="flex flex-col">
-              <span className="text-gray-700">Welcome, {userFirstName || user?.full_name || user?.username}</span>
-              {avatarUploadError ? (
-                <span className="text-xs text-red-500">{avatarUploadError}</span>
-              ) : (
-                <span className="text-xs text-gray-400">{avatarUploading ? 'Uploading avatar...' : 'Click avatar to update'}</span>
-              )}
-            </div>
+            </Link>
+            <span className="text-gray-700">Welcome, {userFirstName || user?.full_name || user?.username}</span>
           </div>
           <button
             onClick={handleLogout}
@@ -2370,17 +2282,6 @@ export function TalentDashboardShell({
             Logout
           </button>
         </div>
-        <input
-          ref={avatarFileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            e.currentTarget.value = ''
-            handleAvatarFileSelect(file)
-          }}
-        />
       </header>
 
       {/* Dashboard Content */}

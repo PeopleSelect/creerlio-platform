@@ -4,45 +4,6 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { BusinessProfilePage } from '@/components/business-profile/BusinessProfilePage'
-import type { BusinessProfilePageData } from '@/components/business-profile/types'
-
-function safeArray<T = any>(v: any): T[] {
-  return Array.isArray(v) ? (v as T[]) : []
-}
-
-function asString(v: any): string | null {
-  return typeof v === 'string' ? v : null
-}
-
-function normalizePageRow(row: any): BusinessProfilePageData {
-  const name = asString(row.name) || asString(row.business_name) || asString(row.company_name) || asString(row.legal_name) || asString(row.display_name) || 'Business'
-
-  return {
-    business_id: String(row.business_id ?? row.id ?? ''),
-    slug: String(row.slug ?? ''),
-    is_published: row.is_published !== false,
-    name,
-    logo_url: asString(row.logo_url),
-    hero_image_url: asString(row.hero_image_url),
-    tagline: asString(row.tagline),
-    mission: asString(row.mission),
-    value_prop_headline: asString(row.value_prop_headline),
-    value_prop_body: asString(row.value_prop_body),
-    impact_stats: safeArray(row.impact_stats),
-    culture_values: safeArray(row.culture_values),
-    business_areas: safeArray(row.business_areas),
-    benefits: safeArray(row.benefits),
-    programs: safeArray(row.programs),
-    social_proof: safeArray(row.social_proof),
-    media_assets: safeArray(row.media_assets),
-    live_roles_count: Number(row.live_roles_count ?? 0) || 0,
-    talent_community_enabled: !!row.talent_community_enabled,
-    portfolio_intake_enabled: !!row.portfolio_intake_enabled,
-    acknowledgement_of_country: asString(row.acknowledgement_of_country),
-  }
-}
-
 export default function AdminBusinessProfileViewPage() {
   const router = useRouter()
   const params = useParams()
@@ -50,7 +11,6 @@ export default function AdminBusinessProfileViewPage() {
   
   const [isLoading, setIsLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [pageData, setPageData] = useState<BusinessProfilePageData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -90,7 +50,6 @@ export default function AdminBusinessProfileViewPage() {
 
   async function loadBusinessProfile() {
     try {
-      // First get the business profile
       const { data: businessData, error: businessError } = await supabase
         .from('business_profiles')
         .select('*')
@@ -107,22 +66,8 @@ export default function AdminBusinessProfileViewPage() {
         return
       }
 
-      // Get the business profile page data
       const businessId = businessData.id
-      const { data: pageDataRes, error: pageError } = await supabase
-        .from('business_profile_pages')
-        .select('*')
-        .eq('business_id', businessId)
-        .maybeSingle()
-
-      // Combine business profile and page data
-      const combined = {
-        ...businessData,
-        ...(pageDataRes || {}),
-        business_id: businessId
-      }
-
-      setPageData(normalizePageRow(combined))
+      router.replace(`/dashboard/business/view?id=${encodeURIComponent(String(businessId))}&from=admin&admin_user_id=${encodeURIComponent(userId)}`)
     } catch (err: any) {
       setError(err.message || 'Failed to load business profile')
     }
@@ -158,19 +103,12 @@ export default function AdminBusinessProfileViewPage() {
           <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-red-100">
             {error}
           </div>
-        ) : !pageData ? (
-          <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-8">
-            <h1 className="text-2xl font-bold">Business Profile Not Found</h1>
-            <p className="text-slate-300 mt-2">
-              This user does not have a business profile page set up.
-            </p>
-          </div>
         ) : (
-          <div className="mb-6">
-            <div className="bg-slate-900/70 border border-white/10 rounded-xl p-4 mb-6">
-              <p className="text-sm text-gray-400">Admin View - Business Profile</p>
-            </div>
-            <BusinessProfilePage data={pageData} />
+          <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-8">
+            <h1 className="text-2xl font-bold">Opening Business Profile...</h1>
+            <p className="text-slate-300 mt-2">
+              Redirecting to the new business profile view.
+            </p>
           </div>
         )}
       </main>

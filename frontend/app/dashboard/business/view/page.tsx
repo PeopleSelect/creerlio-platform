@@ -390,6 +390,8 @@ function BusinessProfileViewPageInner() {
 
   const fromParam = searchParams.get('from')
   const backToMapHref = fromParam === 'talent-map' ? '/talent-map' : null
+  const adminUserId = searchParams.get('admin_user_id')
+  const isAdminPreview = fromParam === 'admin' && !!adminUserId
   const [projListExpanded, setProjListExpanded] = useState(false)
   const [attachExpanded, setAttachExpanded] = useState(false)
   const [jobs, setJobs] = useState<any[]>([])
@@ -2288,18 +2290,31 @@ function BusinessProfileViewPageInner() {
           <div className="flex items-center gap-4">
             {!isPublicViewer ? (
               <>
-                {backToMapHref ? (
-                  <Link href={backToMapHref} className="text-slate-300 hover:text-blue-400">
-                    ← Back to Overview
+                {isAdminPreview ? (
+                  <Link href={`/admin/users/${adminUserId}`} className="text-slate-300 hover:text-blue-400">
+                    ← Back to User Details
                   </Link>
-                ) : null}
-                <Link href="/dashboard/business" className="text-slate-300 hover:text-blue-400">
-                  ← Back to Dashboard
-                </Link>
+                ) : (
+                  <>
+                    {backToMapHref ? (
+                      <Link href={backToMapHref} className="text-slate-300 hover:text-blue-400">
+                        ← Back to Overview
+                      </Link>
+                    ) : null}
+                    <Link href="/dashboard/business" className="text-slate-300 hover:text-blue-400">
+                      ← Back to Dashboard
+                    </Link>
+                  </>
+                )}
               </>
             ) : null}
           </div>
           <div className="flex items-center gap-3">
+            {isAdminPreview ? (
+              <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-slate-500/10 text-slate-300 border-slate-500/40">
+                Admin View
+              </span>
+            ) : null}
             {isPublicViewer ? (
               <>
                 <Link

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
-import { supabaseServiceServer } from '@/lib/supabaseServer'
+import { createClient } from '@supabase/supabase-js'
+
+export const runtime = 'nodejs'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -7,7 +9,25 @@ export async function GET(req: Request) {
   const location = (searchParams.get('location') || '').trim()
 
   try {
-    const supabase = supabaseServiceServer()
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+    const hasKey = !!serviceKey || !!anonKey
+
+    if (!url || !hasKey) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Supabase env missing: NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY',
+          hasUrl: !!url,
+          hasServiceRoleKey: !!serviceKey,
+          hasAnonKey: !!anonKey,
+        },
+        { status: 500 }
+      )
+    }
+
+    const supabase = createClient(url, serviceKey ?? anonKey!, { auth: { persistSession: false } })
 
     let qb: any = supabase
       .from('jobs')

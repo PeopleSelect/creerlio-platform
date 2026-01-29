@@ -2311,22 +2311,10 @@ export function TalentDashboardShell({
                     View Profile
                   </Link>
                   <Link
-                    href="/dashboard/talent/edit"
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
-                  >
-                    Edit Profile
-                  </Link>
-                  <Link
                     href="/portfolio/view"
                     className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
                   >
                     View Portfolio
-                  </Link>
-                  <Link
-                    href="/portfolio"
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
-                  >
-                    Edit Portfolio
                   </Link>
                 </div>
               </div>

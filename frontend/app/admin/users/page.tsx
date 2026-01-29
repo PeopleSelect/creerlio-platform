@@ -14,6 +14,7 @@ export default function AdminUsersPage() {
   const [page, setPage] = useState(0)
   const [totalCount, setTotalCount] = useState(0)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [adminApiStatus, setAdminApiStatus] = useState<'checking' | 'ready' | 'missing'>('checking')
 
   useEffect(() => {
     async function checkAdmin() {
@@ -190,6 +191,24 @@ export default function AdminUsersPage() {
     }
   }, [page, searchQuery, isAdmin, user])
 
+  useEffect(() => {
+    if (!isAdmin) return
+    async function checkAdminApi() {
+      try {
+        const res = await fetch('/api/admin/users/delete', { method: 'GET' })
+        if (!res.ok) {
+          setAdminApiStatus('missing')
+          return
+        }
+        const payload = await res.json().catch(() => ({}))
+        setAdminApiStatus(payload?.configured ? 'ready' : 'missing')
+      } catch {
+        setAdminApiStatus('missing')
+      }
+    }
+    checkAdminApi()
+  }, [isAdmin])
+
   async function deleteUser(userId: string) {
     if (!user) return
     if (!confirm('Are you sure you want to delete this user? This action cannot be undone. This will delete the auth user and all associated profiles.')) {
@@ -197,26 +216,28 @@ export default function AdminUsersPage() {
     }
     
     try {
-      // Delete talent profile if exists
-      const { error: talentError } = await supabase
-        .from('talent_profiles')
-        .delete()
-        .eq('user_id', userId)
-      
-      if (talentError) console.warn('Error deleting talent profile:', talentError)
-      
-      // Delete business profile if exists
-      const { error: businessError } = await supabase
-        .from('business_profiles')
-        .delete()
-        .eq('user_id', userId)
-      
-      if (businessError) console.warn('Error deleting business profile:', businessError)
-      
-      // Note: Deleting the auth user requires admin API access
-      // For now, we'll delete the profiles. The auth user deletion would need
-      // to be done via Supabase Admin API or a backend service
-      alert('User profiles deleted. Note: Auth user deletion requires admin API access.')
+      const { data: sessionRes } = await supabase.auth.getSession()
+      const accessToken = sessionRes.session?.access_token
+      if (!accessToken) {
+        alert('You are not authenticated. Please sign in again.')
+        return
+      }
+
+      const res = await fetch('/api/admin/users/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ userId })
+      })
+
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok || payload?.success === false) {
+        throw new Error(payload?.message || 'Failed to delete user.')
+      }
+
+      alert(payload?.message || 'User deleted successfully.')
       
       // Reload list
       loadUsers(user.id)
@@ -252,6 +273,15 @@ export default function AdminUsersPage() {
               <span className="text-lg font-semibold">User Management</span>
             </div>
             <div className="flex items-center gap-3">
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                  adminApiStatus === 'ready'
+                    ? 'bg-green-500/10 text-green-300 border-green-500/40'
+                    : 'bg-amber-500/10 text-amber-300 border-amber-500/40'
+                }`}
+              >
+                {adminApiStatus === 'ready' ? 'Admin API Ready' : 'Admin API Missing'}
+              </span>
               <Link
                 href="/dashboard/business"
                 className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg text-blue-400 transition-colors"

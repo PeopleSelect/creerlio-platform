@@ -17,6 +17,26 @@ const emitDebugLog = (payload: Record<string, unknown>) => {
   fetch(DEBUG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {})
 }
 
+function isExternalUrl(path?: string | null) {
+  return !!path && /^https?:\/\//i.test(path)
+}
+
+async function resolveTalentBankUrl(path?: string | null, seconds = 60 * 30) {
+  if (!path) return null
+  if (isExternalUrl(path)) return path
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  try {
+    const { data, error } = await supabase.storage.from('talent-bank').createSignedUrl(path, seconds)
+    if (!error && data?.signedUrl) {
+      return data.signedUrl
+    }
+  } catch {}
+  if (supabaseUrl) {
+    return `${supabaseUrl}/storage/v1/object/public/talent-bank/${encodeURIComponent(path)}`
+  }
+  return null
+}
+
 export default function TalentDashboard() {
   return <TalentDashboardShell />
 }
@@ -201,6 +221,9 @@ export function TalentDashboardShell({
   const [portfolioMeta, setPortfolioMeta] = useState<any>(null)
   const [portfolioBannerUrl, setPortfolioBannerUrl] = useState<string | null>(null)
   const [portfolioAvatarUrl, setPortfolioAvatarUrl] = useState<string | null>(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null)
+  const avatarFileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [calendarItems, setCalendarItems] = useState<Array<{ id: string; title: string; dateLabel: string; businessId?: string | null }>>([])
   const [calendarCollapsed, setCalendarCollapsed] = useState(false)
@@ -761,6 +784,103 @@ export function TalentDashboardShell({
       cancelled = true
     }
   }, [router])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadAvatar() {
+      if (!user?.id) return
+      try {
+        const { data, error } = await supabase
+          .from('talent_bank_items')
+          .select('id, metadata')
+          .eq('user_id', user.id)
+          .eq('item_type', 'portfolio')
+          .maybeSingle()
+        if (error || !data) return
+        const meta = (data as any).metadata || {}
+        const avatarPath = meta.avatar_path || meta.avatarPath || null
+        if (!avatarPath) return
+        const url = await resolveTalentBankUrl(String(avatarPath))
+        if (!cancelled) setPortfolioAvatarUrl(url)
+      } catch {}
+    }
+    loadAvatar()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
+  async function handleAvatarFileSelect(file?: File | null) {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setAvatarUploadError('Please choose an image file.')
+      return
+    }
+    const maxBytes = 10 * 1024 * 1024
+    if (file.size > maxBytes) {
+      setAvatarUploadError('Image is too large. Please use an image under 10MB.')
+      return
+    }
+    const uid = user?.id
+    if (!uid) {
+      setAvatarUploadError('Please sign in to upload an avatar.')
+      return
+    }
+    setAvatarUploading(true)
+    setAvatarUploadError(null)
+    try {
+      const path = `${uid}/portfolio/avatar-${crypto.randomUUID()}-${file.name}`
+      const { error: uploadError } = await supabase.storage
+        .from('talent-bank')
+        .upload(path, file, { upsert: true, contentType: file.type })
+      if (uploadError) {
+        setAvatarUploadError(uploadError.message || 'Upload failed.')
+        return
+      }
+      const { data: existing, error: fetchError } = await supabase
+        .from('talent_bank_items')
+        .select('id, metadata')
+        .eq('user_id', uid)
+        .eq('item_type', 'portfolio')
+        .maybeSingle()
+      if (fetchError) {
+        setAvatarUploadError(fetchError.message || 'Failed to update portfolio.')
+        return
+      }
+      const prevMeta = (existing as any)?.metadata && typeof (existing as any).metadata === 'object'
+        ? { ...(existing as any).metadata }
+        : {}
+      const nextMeta = { ...prevMeta, avatar_path: path }
+      if (existing?.id) {
+        const { error: updateError } = await supabase
+          .from('talent_bank_items')
+          .update({ metadata: nextMeta })
+          .eq('id', existing.id)
+          .eq('user_id', uid)
+        if (updateError) {
+          setAvatarUploadError(updateError.message || 'Failed to save avatar.')
+          return
+        }
+      } else {
+        const { error: insertError } = await supabase
+          .from('talent_bank_items')
+          .insert({
+            user_id: uid,
+            item_type: 'portfolio',
+            title: 'Portfolio',
+            metadata: nextMeta,
+          })
+        if (insertError) {
+          setAvatarUploadError(insertError.message || 'Failed to save avatar.')
+          return
+        }
+      }
+      const url = await resolveTalentBankUrl(path)
+      setPortfolioAvatarUrl(url)
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
 
   // Fetch applications when Applications tab is active
   useEffect(() => {
@@ -2211,11 +2331,38 @@ export function TalentDashboardShell({
             <span className="text-white font-bold text-xl">C</span>
           </div>
           <span className="text-gray-900 text-2xl font-bold">Creerlio</span>
-          <span className="text-gray-900 text-lg font-semibold ml-10">Talent Dashboard</span>
+          <Link
+            href="/dashboard/talent/view"
+            className="ml-8 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+          >
+            View Profile
+          </Link>
         </Link>
         
         <div className="flex items-center space-x-4">
-          <span className="text-gray-700">Welcome, {userFirstName || user?.full_name || user?.username}</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => avatarFileInputRef.current?.click()}
+              className="w-10 h-10 rounded-full border border-gray-200 bg-gray-100 overflow-hidden flex items-center justify-center text-gray-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
+              title="Upload avatar"
+              disabled={avatarUploading}
+            >
+              {portfolioAvatarUrl ? (
+                <img src={portfolioAvatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-sm font-semibold">{(userFirstName || user?.full_name || user?.username || 'U').charAt(0)}</span>
+              )}
+            </button>
+            <div className="flex flex-col">
+              <span className="text-gray-700">Welcome, {userFirstName || user?.full_name || user?.username}</span>
+              {avatarUploadError ? (
+                <span className="text-xs text-red-500">{avatarUploadError}</span>
+              ) : (
+                <span className="text-xs text-gray-400">{avatarUploading ? 'Uploading avatar...' : 'Click avatar to update'}</span>
+              )}
+            </div>
+          </div>
           <button
             onClick={handleLogout}
             className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
@@ -2223,6 +2370,17 @@ export function TalentDashboardShell({
             Logout
           </button>
         </div>
+        <input
+          ref={avatarFileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            e.currentTarget.value = ''
+            handleAvatarFileSelect(file)
+          }}
+        />
       </header>
 
       {/* Dashboard Content */}
@@ -2231,7 +2389,42 @@ export function TalentDashboardShell({
         {/* Tabs */}
         <div className="mb-8 border-b border-gray-200">
           <div className="flex items-center gap-2">
-            {(['overview', 'applications', 'connections'] as TabType[]).map((tab) => (
+            {(['overview'] as TabType[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => {
+                  if (isBusinessRoute) {
+                    router.push(`/dashboard/talent?tab=${tab}`)
+                    return
+                  }
+                  setActiveTab(tab)
+                }}
+                className={`px-6 py-3 text-sm font-medium transition-all relative ${
+                  !isBusinessRoute && activeTab === tab
+                    ? 'text-blue-600'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  {tab === 'connections' ? 'Career Connections' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  {!isBusinessRoute && tab === 'connections' && notifications.filter((n) => !n.is_read).length > 0 && (
+                    <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-amber-500 rounded-full animate-pulse">
+                      {notifications.filter((n) => !n.is_read).length}
+                    </span>
+                  )}
+                </span>
+                {!isBusinessRoute && activeTab === tab && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></span>
+                )}
+              </button>
+            ))}
+            <Link
+              href="/portfolio/view"
+              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
+            >
+              View Portfolio
+            </Link>
+            {(['applications', 'connections'] as TabType[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => {
@@ -2294,32 +2487,6 @@ export function TalentDashboardShell({
         {/* Tab Content */}
         {activeTab === 'overview' && (
           <>
-            {/* Quick Actions */}
-            <div className="mb-6 dashboard-card rounded-xl p-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Welcome back{talentProfile?.name ? `, ${talentProfile.name.split(' ')[0]}` : ''}!
-                  </h3>
-                  <p className="text-sm text-gray-600">Manage your profile and portfolio</p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <Link
-                    href="/dashboard/talent/view"
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    View Profile
-                  </Link>
-                  <Link
-                    href="/portfolio/view"
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
-                  >
-                    View Portfolio
-                  </Link>
-                </div>
-              </div>
-            </div>
-
             {/* Talent Map */}
             <div className="mb-8">
               <div className="flex flex-col lg:flex-row gap-4 relative h-auto lg:h-[calc(100vh-12rem)]">

@@ -559,8 +559,11 @@ export default function PortfolioEditor() {
   }
 
   const toggleSectionVisibility = (key: string, checked: boolean) => {
-    setSectionVisibility((prev) => ({ ...prev, [key]: checked }))
-    savePortfolio({ redirect: false, source: `visibility:${key}` }).catch(() => {})
+    setSectionVisibility((prev) => {
+      const next = { ...prev, [key]: checked }
+      savePortfolio({ redirect: false, source: `visibility:${key}`, sectionVisibilityOverride: next }).catch(() => {})
+      return next
+    })
   }
 
   const [introItems, setIntroItems] = useState<TalentBankItem[]>([])
@@ -3269,7 +3272,7 @@ export default function PortfolioEditor() {
     )
   }
 
-  const savePortfolio = async (opts?: { redirect?: boolean; source?: string }) => {
+  const savePortfolio = async (opts?: { redirect?: boolean; source?: string; sectionVisibilityOverride?: Record<string, boolean> }) => {
     try {
       const uid = await getUserId()
       await log('savePortfolio start', 'P_SAVE', { hasUser: !!uid, redirect: !!opts?.redirect, source: opts?.source ?? null })
@@ -3303,7 +3306,7 @@ export default function PortfolioEditor() {
       // Explicitly preserve attachmentIds for education, projects, and referees
       const payloadMeta = {
         ...portfolio,
-        sectionVisibility: sectionVisibility,
+        sectionVisibility: opts?.sectionVisibilityOverride ?? sectionVisibility,
         portfolioSelections: keepSelections,
         education: Array.isArray(portfolio.education)
           ? portfolio.education.map((e) => ({

@@ -19,7 +19,6 @@ const SECTION_CHOICES = [
 ] as const
 
 type SectionKey = (typeof SECTION_CHOICES)[number]['key']
-type Step = 'select' | 'review' | 'confirm'
 
 export default function TalentConnectPage({ params }: { params: { business_slug: string } }) {
   const router = useRouter()
@@ -29,7 +28,6 @@ export default function TalentConnectPage({ params }: { params: { business_slug:
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [step, setStep] = useState<Step>('select')
   const [businessName, setBusinessName] = useState<string>('Business')
   const [businessId, setBusinessId] = useState<string | null>(null)
   const [talentId, setTalentId] = useState<string | null>(null)
@@ -234,28 +232,12 @@ export default function TalentConnectPage({ params }: { params: { business_slug:
     }
   }, [slug, editRequestId])
 
-  function goReview() {
+  async function submit() {
     setError(null)
     if (selectedList.length === 0) {
       setError('Please select at least one section to share.')
       return
     }
-    setStep('review')
-  }
-
-  function goBack() {
-    setError(null)
-    if (step === 'review') setStep('select')
-    else if (step === 'confirm') setStep('review')
-  }
-
-  function goConfirm() {
-    setError(null)
-    setStep('confirm')
-  }
-
-  async function submit() {
-    setError(null)
     if (!talentId || !businessId) return
     try {
       // #region agent log
@@ -407,162 +389,33 @@ export default function TalentConnectPage({ params }: { params: { business_slug:
           </div>
         ) : (
           <div className="dashboard-card rounded-xl p-6 space-y-4">
-            {step === 'select' ? (
-              <>
-                <h2 className="text-xl font-bold text-white">1) Select what to share</h2>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  {SECTION_CHOICES.map((s) => (
-                    <label key={s.key} className="flex items-center gap-2 text-gray-200">
-                      <input
-                        type="checkbox"
-                        checked={!!selected[s.key]}
-                        onChange={(e) => setSelected((p) => ({ ...p, [s.key]: e.target.checked }))}
-                        className="h-4 w-4"
-                      />
-                      {s.label}
-                    </label>
-                  ))}
-                </div>
-                <div className="pt-4 border-t border-gray-800 flex items-center justify-between">
-                  <p className="text-sm text-gray-400">{selectedList.length} sections selected</p>
-                  <button
-                    type="button"
-                    onClick={goReview}
-                    disabled={selectedList.length === 0}
-                    className="px-5 py-3 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-semibold disabled:opacity-60"
-                  >
-                    Review what you’re sending
-                  </button>
-                </div>
-              </>
-            ) : step === 'review' ? (
-              <>
-                <h2 className="text-xl font-bold text-white">2) Choose what to share with {businessName}</h2>
-                <p className="text-gray-400 text-sm mb-4">
-                  Select the sections you want to share. Uncheck any sections you'd like to keep private. The preview below shows what the business will see.
-                </p>
-                <div className="mb-4 p-4 rounded-xl border border-blue-500/30 bg-blue-500/10">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-white font-semibold mb-1">View Your Full Portfolio</p>
-                      <p className="text-gray-300 text-sm">
-                        See exactly how your portfolio appears to businesses, including all sections, images, and media.
-                      </p>
-                    </div>
-                    <a
-                      href={`/portfolio/view?sections=${encodeURIComponent(selectedList.join(','))}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-4 px-5 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold whitespace-nowrap transition-colors"
-                    >
-                      View Full Portfolio →
-                    </a>
-                  </div>
-                </div>
-                
-                {/* Interactive section selection with previews */}
-                <div className="space-y-4">
-                  {SECTION_CHOICES.map((section) => {
-                    const isSelected = selected[section.key]
-                    return (
-                      <div
-                        key={section.key}
-                        className={`rounded-xl border p-4 transition-all ${
-                          isSelected
-                            ? 'border-blue-500/50 bg-slate-900/60'
-                            : 'border-gray-800 bg-slate-900/20 opacity-60'
-                        }`}
-                      >
-                        <label className="flex items-start gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(e) => {
-                              setSelected((p) => ({ ...p, [section.key]: e.target.checked }))
-                            }}
-                            className="mt-1 h-5 w-5 flex-shrink-0"
-                          />
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-2">
-                              <h3 className="text-white font-semibold">{section.label}</h3>
-                              {isSelected && (
-                                <span className="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-300">
-                                  Will be shared
-                                </span>
-                              )}
-                            </div>
-                            {isSelected && (
-                              <div className="mt-2">
-                                <SectionPreview k={section.key as SectionKey} />
-                              </div>
-                            )}
-                            {!isSelected && (
-                              <p className="text-gray-500 text-sm mt-1">This section will not be shared with {businessName}.</p>
-                            )}
-                          </div>
-                        </label>
-                      </div>
-                    )
-                  })}
-                </div>
-                
-                <div className="pt-4 border-t border-gray-800 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <button
-                      type="button"
-                      onClick={goBack}
-                      className="px-4 py-2 rounded-lg border border-gray-700 text-gray-200 hover:bg-white/5"
-                    >
-                      Back
-                    </button>
-                    <p className="text-sm text-gray-400">
-                      {selectedList.length} {selectedList.length === 1 ? 'section' : 'sections'} selected
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={goConfirm}
-                    disabled={selectedList.length === 0}
-                    className="px-5 py-3 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    Continue to confirmation
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h2 className="text-xl font-bold text-white">3) {isEditMode ? 'Confirm & update request' : 'Confirm & send request'}</h2>
-                <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 text-gray-200">
-                  {isEditMode ? (
-                    <>
-                      You're about to update your connection request to <span className="font-semibold text-white">{businessName}</span> with{' '}
-                      <span className="font-semibold text-white">{selectedList.length}</span> shared sections.
-                    </>
-                  ) : (
-                    <>
-                      You're about to send a connection request to <span className="font-semibold text-white">{businessName}</span> with{' '}
-                      <span className="font-semibold text-white">{selectedList.length}</span> shared sections.
-                    </>
-                  )}
-                </div>
-                <div className="pt-4 border-t border-gray-800 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={goBack}
-                    className="px-4 py-2 rounded-lg border border-gray-700 text-gray-200 hover:bg-white/5"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={submit}
-                    className="px-5 py-3 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-semibold"
-                  >
-                    {isEditMode ? 'Update Request' : 'Send connection request'}
-                  </button>
-                </div>
-              </>
-            )}
+            <>
+              <h2 className="text-xl font-bold text-white">Select what to share</h2>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {SECTION_CHOICES.map((s) => (
+                  <label key={s.key} className="flex items-center gap-2 text-gray-200">
+                    <input
+                      type="checkbox"
+                      checked={!!selected[s.key]}
+                      onChange={(e) => setSelected((p) => ({ ...p, [s.key]: e.target.checked }))}
+                      className="h-4 w-4"
+                    />
+                    {s.label}
+                  </label>
+                ))}
+              </div>
+              <div className="pt-4 border-t border-gray-800 flex items-center justify-between">
+                <p className="text-sm text-gray-400">{selectedList.length} sections selected</p>
+                <button
+                  type="button"
+                  onClick={submit}
+                  disabled={selectedList.length === 0}
+                  className="px-5 py-3 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-semibold disabled:opacity-60"
+                >
+                  {isEditMode ? 'Update Request' : 'Send connection request'}
+                </button>
+              </div>
+            </>
           </div>
         )}
       </div>

@@ -191,6 +191,7 @@ function PortfolioViewPageInner() {
     if (!selectedSections) return true
     return selectedSections.has(visibilityKey) || selectedSections.has(key)
   }
+  const showConnectWithMe = isSectionVisible('basic') || isSectionVisible('social') || isSectionVisible('skills')
   
   // Video Chat and Messaging state (for business viewing talent profiles)
   const [videoChatSession, setVideoChatSession] = useState<any | null>(null)
@@ -2903,65 +2904,69 @@ function PortfolioViewPageInner() {
 
               {/* Sidebar */}
               <aside className="lg:col-span-4 flex flex-col gap-6">
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
-                  <div className="text-slate-200 font-semibold mb-4">Connect With Me</div>
-                  <div className="space-y-4 text-sm">
-                    {authEmail ? (
-                      <div>
-                        <div className="text-slate-400 text-xs">Email</div>
-                        <div className="text-slate-200 break-all">{authEmail}</div>
-                      </div>
-                    ) : null}
-                    {(meta as any)?.phone ? (
-                      <div>
-                        <div className="text-slate-400 text-xs">Phone</div>
-                        <div className="text-slate-200">{String((meta as any).phone)}</div>
-                      </div>
-                    ) : null}
-                    {(() => {
-                      // Keep legacy LinkedIn field support, but avoid duplicating if socialLinks already includes LinkedIn.
-                      if (socialLinks.some((s) => String(s.platform).toLowerCase().includes('linkedin'))) return null
-                      const m: any = meta ?? {}
-                      const link =
-                        m.linkedin ||
-                        m.linkedIn ||
-                        m?.social?.linkedin ||
-                        m?.socialLinks?.linkedin ||
-                        m?.socials?.linkedin ||
-                        null
-                      if (!link) return null
-                      return (
+                {showConnectWithMe ? (
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                    <div className="text-slate-200 font-semibold mb-4">Connect With Me</div>
+                    <div className="space-y-4 text-sm">
+                      {isSectionVisible('basic') && authEmail ? (
                         <div>
-                          <div className="text-slate-400 text-xs">LinkedIn</div>
-                          <a className="text-blue-300 hover:text-blue-200 break-all" href={String(link)} target="_blank" rel="noreferrer">
-                            {String(link)}
-                          </a>
+                          <div className="text-slate-400 text-xs">Email</div>
+                          <div className="text-slate-200 break-all">{authEmail}</div>
                         </div>
-                      )
-                    })()}
-                  </div>
-
-                  {/* Social icons under Connect with Me */}
-                  {isSectionVisible('social') && socialLinks.length ? (
-                    <div className="mt-6">
-                      <div className="text-slate-400 text-xs mb-2">Social</div>
-                      <SocialIconBar links={socialLinks} />
+                      ) : null}
+                      {isSectionVisible('basic') && (meta as any)?.phone ? (
+                        <div>
+                          <div className="text-slate-400 text-xs">Phone</div>
+                          <div className="text-slate-200">{String((meta as any).phone)}</div>
+                        </div>
+                      ) : null}
+                      {isSectionVisible('basic') ? (
+                        (() => {
+                          // Keep legacy LinkedIn field support, but avoid duplicating if socialLinks already includes LinkedIn.
+                          if (socialLinks.some((s) => String(s.platform).toLowerCase().includes('linkedin'))) return null
+                          const m: any = meta ?? {}
+                          const link =
+                            m.linkedin ||
+                            m.linkedIn ||
+                            m?.social?.linkedin ||
+                            m?.socialLinks?.linkedin ||
+                            m?.socials?.linkedin ||
+                            null
+                          if (!link) return null
+                          return (
+                            <div>
+                              <div className="text-slate-400 text-xs">LinkedIn</div>
+                              <a className="text-blue-300 hover:text-blue-200 break-all" href={String(link)} target="_blank" rel="noreferrer">
+                                {String(link)}
+                              </a>
+                            </div>
+                          )
+                        })()
+                      ) : null}
                     </div>
-                  ) : null}
 
-                  {isSectionVisible('skills') && skills.length ? (
-                    <div className="mt-6">
-                      <div className="text-slate-400 text-xs mb-2">Top skills</div>
-                      <div className="flex flex-wrap gap-2">
-                        {skills.slice(0, 6).map((s, idx) => (
-                          <span key={`${s}-${idx}`} className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-200 text-xs">
-                            {s}
-                          </span>
-                        ))}
+                    {/* Social icons under Connect with Me */}
+                    {isSectionVisible('social') && socialLinks.length ? (
+                      <div className="mt-6">
+                        <div className="text-slate-400 text-xs mb-2">Social</div>
+                        <SocialIconBar links={socialLinks} />
                       </div>
-                    </div>
-                  ) : null}
-                </div>
+                    ) : null}
+
+                    {isSectionVisible('skills') && skills.length ? (
+                      <div className="mt-6">
+                        <div className="text-slate-400 text-xs mb-2">Top skills</div>
+                        <div className="flex flex-wrap gap-2">
+                          {skills.slice(0, 6).map((s, idx) => (
+                            <span key={`${s}-${idx}`} className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-200 text-xs">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {/* Family and Community: placed under Connect With Me and above Projects */}
                 {isSectionVisible('family_community') && familyCommunityImageIds.length > 0 && (
@@ -3012,6 +3017,7 @@ function PortfolioViewPageInner() {
                 )}
 
                 {/* Projects: placed under Connect With Me to sit beside the intro video */}
+                {isSectionVisible('projects') ? (
                 <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="text-slate-200 font-semibold">Projects</div>
@@ -3104,8 +3110,10 @@ function PortfolioViewPageInner() {
                     <div className="text-slate-400 text-sm">No projects added yet.</div>
                   )}
                 </div>
+                ) : null}
 
                 {/* Personal Documents: placed under Projects in the right column */}
+                {isSectionVisible('personal_documents') ? (
                 <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="text-slate-200 font-semibold">Personal Documents</div>
@@ -3218,6 +3226,7 @@ function PortfolioViewPageInner() {
                     <div className="text-slate-400 text-sm">No personal documents added yet.</div>
                   )}
                 </div>
+                ) : null}
 
                 {/* Licences and Accreditations: placed under Personal Documents in the right column */}
                 {isSectionVisible('licences_accreditations') ? (

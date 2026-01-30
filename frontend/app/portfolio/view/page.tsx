@@ -1851,6 +1851,7 @@ function PortfolioViewPageInner() {
                   <div className="text-slate-300 space-y-2">
                     <p>Add your basics, skills, experience, and education so businesses can understand your background fast.</p>
                     <p>Use the Talent Bank to import items like resumes, certificates, projects, and attachments.</p>
+                    <p>Import your resume to auto-populate much of your portfolio (work history, skills, and education).</p>
                     <p>Add an intro video to introduce yourself and highlight your strongest work.</p>
                     <p>Toggle tabs on/off to control what appears in the public View Portfolio.</p>
                   </div>

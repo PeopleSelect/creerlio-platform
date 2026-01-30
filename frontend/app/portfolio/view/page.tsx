@@ -158,7 +158,39 @@ function PortfolioViewPageInner() {
     )
     return set.size ? set : null
   }, [selectedSectionsParam])
-  const isSectionVisible = (key: string) => !selectedSections || selectedSections.has(key)
+  const SECTION_VISIBILITY_KEYS = [
+    'basic',
+    'intro',
+    'social',
+    'skills',
+    'experience',
+    'education',
+    'referees',
+    'projects',
+    'personal_documents',
+    'licences_accreditations',
+    'family_community',
+    'attachments',
+  ]
+  const sectionVisibility = useMemo(() => {
+    const base: Record<string, boolean> = {}
+    for (const key of SECTION_VISIBILITY_KEYS) base[key] = true
+    const saved = (meta as any)?.sectionVisibility
+    if (saved && typeof saved === 'object') {
+      const merged = { ...base }
+      for (const [key, value] of Object.entries(saved as Record<string, unknown>)) {
+        merged[String(key)] = !!value
+      }
+      return merged
+    }
+    return base
+  }, [meta])
+  const isSectionVisible = (key: string) => {
+    const visibilityKey = key === 'bio' ? 'basic' : key
+    if (sectionVisibility[visibilityKey] === false) return false
+    if (!selectedSections) return true
+    return selectedSections.has(visibilityKey) || selectedSections.has(key)
+  }
   
   // Video Chat and Messaging state (for business viewing talent profiles)
   const [videoChatSession, setVideoChatSession] = useState<any | null>(null)

@@ -338,6 +338,7 @@ interface PortfolioData {
   avatar_path?: string | null
   banner_path?: string | null
   sectionOrder?: string[]
+  sectionVisibility?: Record<string, boolean>
   introVideoId?: number | null
   socialLinks: Array<{
     platform: string
@@ -414,6 +415,21 @@ interface TalentBankItem {
 export default function PortfolioEditor() {
   const router = useRouter()
   const DEFAULT_SECTION_ORDER = ['intro', 'social', 'skills', 'experience', 'education', 'referees', 'projects', 'personal_documents', 'licences_accreditations', 'family_community', 'attachments'] as const
+  const SECTION_VISIBILITY_KEYS = ['basic', ...DEFAULT_SECTION_ORDER] as const
+  const SECTION_LABELS: Record<string, string> = {
+    basic: 'Basic',
+    intro: 'Intro Video',
+    social: 'Social',
+    skills: 'Skills',
+    experience: 'Experience',
+    education: 'Education',
+    referees: 'Referees',
+    projects: 'Projects',
+    personal_documents: 'Documents',
+    licences_accreditations: 'Licences',
+    family_community: 'Family',
+    attachments: 'Attachments',
+  }
   type SectionKey = (typeof DEFAULT_SECTION_ORDER)[number]
   const SOCIAL_PLATFORMS = [
     'LinkedIn',
@@ -445,6 +461,11 @@ export default function PortfolioEditor() {
     personal_documents: [],
     licences_accreditations: [],
     family_community: { imageIds: [], descriptions: {} }
+  })
+  const [sectionVisibility, setSectionVisibility] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {}
+    for (const key of SECTION_VISIBILITY_KEYS) initial[String(key)] = true
+    return initial
   })
 
   const [newSkill, setNewSkill] = useState('')
@@ -535,6 +556,17 @@ export default function PortfolioEditor() {
   // Helper function to toggle textarea expansion
   const toggleTextarea = (key: string) => {
     setExpandedTextareas(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  const allSectionsSelected = useMemo(() => {
+    return SECTION_VISIBILITY_KEYS.every((key) => sectionVisibility[String(key)] !== false)
+  }, [SECTION_VISIBILITY_KEYS, sectionVisibility])
+
+  const sectionLabel = (key: string) => {
+    if (SECTION_LABELS[key]) return SECTION_LABELS[key]
+    return key
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (m) => m.toUpperCase())
   }
 
   const [introItems, setIntroItems] = useState<TalentBankItem[]>([])
@@ -1760,6 +1792,18 @@ export default function PortfolioEditor() {
               : prev.family_community,
           }
         })
+        const baseVisibility: Record<string, boolean> = {}
+        for (const key of SECTION_VISIBILITY_KEYS) baseVisibility[String(key)] = true
+        const savedVisibility = (saved as any).sectionVisibility
+        if (savedVisibility && typeof savedVisibility === 'object') {
+          const mergedVisibility = { ...baseVisibility }
+          for (const [key, value] of Object.entries(savedVisibility as Record<string, unknown>)) {
+            mergedVisibility[String(key)] = !!value
+          }
+          setSectionVisibility(mergedVisibility)
+        } else {
+          setSectionVisibility(baseVisibility)
+        }
       }
 
       await ensureMediaUrl('avatar', (saved as any)?.avatar_path)
@@ -3265,6 +3309,7 @@ export default function PortfolioEditor() {
       // Explicitly preserve attachmentIds for education, projects, and referees
       const payloadMeta = {
         ...portfolio,
+        sectionVisibility: sectionVisibility,
         portfolioSelections: keepSelections,
         education: Array.isArray(portfolio.education)
           ? portfolio.education.map((e) => ({
@@ -5245,6 +5290,50 @@ export default function PortfolioEditor() {
             <>
               <div className="text-xs text-slate-400 mb-3">
                 Business users will see sections in this order. Keep the most important sections at the top.
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 mb-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-slate-100">Portfolio visibility</div>
+                  <label className="flex items-center gap-2 text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={allSectionsSelected}
+                      onChange={(e) => {
+                        const checked = e.target.checked
+                        const next: Record<string, boolean> = {}
+                        for (const key of SECTION_VISIBILITY_KEYS) next[String(key)] = checked
+                        setSectionVisibility(next)
+                      }}
+                    />
+                    Select all
+                  </label>
+                </div>
+                <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {SECTION_VISIBILITY_KEYS.map((key) => (
+                    <label key={String(key)} className="flex items-center gap-2 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={sectionVisibility[String(key)] !== false}
+                        onChange={(e) =>
+                          setSectionVisibility((prev) => ({ ...prev, [String(key)]: e.target.checked }))
+                        }
+                      />
+                      {sectionLabel(String(key))}
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-3 text-xs text-slate-400">
+                  Unchecked sections are hidden in View Portfolio.
+                </div>
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    className="px-3 py-1 rounded bg-slate-800 border border-slate-700 text-xs hover:bg-slate-700"
+                    onClick={() => savePortfolio({ redirect: false, source: 'visibility:layout' })}
+                  >
+                    Save visibility
+                  </button>
+                </div>
               </div>
               <ul className="space-y-2">
                 {(Array.isArray(portfolio.sectionOrder) ? portfolio.sectionOrder : []).map((k, idx) => (

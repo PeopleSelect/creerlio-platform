@@ -2366,12 +2366,7 @@ export function TalentDashboardShell({
             >
               Talent Bank ↗
             </Link>
-            <Link
-              href="/portfolio/templates"
-              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
-            >
-              Portfolio Templates ↗
-            </Link>
+            {/* Portfolio Templates temporarily hidden */}
             <Link
               href="/dashboard/talent/business-connections"
               className={`px-6 py-3 text-sm font-medium transition-colors ${

@@ -416,20 +416,6 @@ export default function PortfolioEditor() {
   const router = useRouter()
   const DEFAULT_SECTION_ORDER = ['intro', 'social', 'skills', 'experience', 'education', 'referees', 'projects', 'personal_documents', 'licences_accreditations', 'family_community', 'attachments'] as const
   const SECTION_VISIBILITY_KEYS = ['basic', ...DEFAULT_SECTION_ORDER] as const
-  const SECTION_LABELS: Record<string, string> = {
-    basic: 'Basic',
-    intro: 'Intro Video',
-    social: 'Social',
-    skills: 'Skills',
-    experience: 'Experience',
-    education: 'Education',
-    referees: 'Referees',
-    projects: 'Projects',
-    personal_documents: 'Documents',
-    licences_accreditations: 'Licences',
-    family_community: 'Family',
-    attachments: 'Attachments',
-  }
   const SECTION_TOOLTIPS: Record<string, string> = {
     basic: 'Add your name, title, bio, avatar, banner, and contact basics.',
     intro: 'Add a short intro video to introduce yourself.',
@@ -572,15 +558,9 @@ export default function PortfolioEditor() {
     setExpandedTextareas(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
-  const allSectionsSelected = useMemo(() => {
-    return SECTION_VISIBILITY_KEYS.every((key) => sectionVisibility[String(key)] !== false)
-  }, [SECTION_VISIBILITY_KEYS, sectionVisibility])
-
-  const sectionLabel = (key: string) => {
-    if (SECTION_LABELS[key]) return SECTION_LABELS[key]
-    return key
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (m) => m.toUpperCase())
+  const toggleSectionVisibility = (key: string, checked: boolean) => {
+    setSectionVisibility((prev) => ({ ...prev, [key]: checked }))
+    savePortfolio({ redirect: false, source: `visibility:${key}` }).catch(() => {})
   }
 
   const [introItems, setIntroItems] = useState<TalentBankItem[]>([])
@@ -3580,9 +3560,21 @@ export default function PortfolioEditor() {
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
               title={SECTION_TOOLTIPS.basic}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
+              className="relative px-3 pr-7 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Basic
+              <span
+                className="absolute top-1 right-1"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Show Basic in portfolio"
+                  checked={sectionVisibility.basic !== false}
+                  onChange={(e) => toggleSectionVisibility('basic', e.target.checked)}
+                />
+              </span>
             </button>
             <button
               type="button"
@@ -3591,9 +3583,21 @@ export default function PortfolioEditor() {
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
               title={SECTION_TOOLTIPS.intro}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
+              className="relative px-3 pr-7 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Intro Video
+              <span
+                className="absolute top-1 right-1"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Show Intro Video in portfolio"
+                  checked={sectionVisibility.intro !== false}
+                  onChange={(e) => toggleSectionVisibility('intro', e.target.checked)}
+                />
+              </span>
             </button>
             <button
               type="button"
@@ -3602,9 +3606,21 @@ export default function PortfolioEditor() {
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
               title={SECTION_TOOLTIPS.social}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
+              className="relative px-3 pr-7 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Social
+              <span
+                className="absolute top-1 right-1"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Show Social in portfolio"
+                  checked={sectionVisibility.social !== false}
+                  onChange={(e) => toggleSectionVisibility('social', e.target.checked)}
+                />
+              </span>
             </button>
                   <button
                     type="button"
@@ -3613,9 +3629,21 @@ export default function PortfolioEditor() {
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
               title={SECTION_TOOLTIPS.skills}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
+              className="relative px-3 pr-7 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Skills
+              <span
+                className="absolute top-1 right-1"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Show Skills in portfolio"
+                  checked={sectionVisibility.skills !== false}
+                  onChange={(e) => toggleSectionVisibility('skills', e.target.checked)}
+                />
+              </span>
                   </button>
                   <button
                     type="button"
@@ -3624,9 +3652,21 @@ export default function PortfolioEditor() {
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
               title={SECTION_TOOLTIPS.experience}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
+              className="relative px-3 pr-7 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Experience
+              <span
+                className="absolute top-1 right-1"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Show Experience in portfolio"
+                  checked={sectionVisibility.experience !== false}
+                  onChange={(e) => toggleSectionVisibility('experience', e.target.checked)}
+                />
+              </span>
             </button>
             <button
               type="button"
@@ -3635,9 +3675,21 @@ export default function PortfolioEditor() {
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
               title={SECTION_TOOLTIPS.education}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
+              className="relative px-3 pr-7 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Education
+              <span
+                className="absolute top-1 right-1"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Show Education in portfolio"
+                  checked={sectionVisibility.education !== false}
+                  onChange={(e) => toggleSectionVisibility('education', e.target.checked)}
+                />
+              </span>
             </button>
             <button
               type="button"
@@ -3646,9 +3698,21 @@ export default function PortfolioEditor() {
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
               title={SECTION_TOOLTIPS.referees}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
+              className="relative px-3 pr-7 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Referees
+              <span
+                className="absolute top-1 right-1"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Show Referees in portfolio"
+                  checked={sectionVisibility.referees !== false}
+                  onChange={(e) => toggleSectionVisibility('referees', e.target.checked)}
+                />
+              </span>
             </button>
             <button
               type="button"
@@ -3657,9 +3721,21 @@ export default function PortfolioEditor() {
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
               title={SECTION_TOOLTIPS.projects}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
+              className="relative px-3 pr-7 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Projects
+              <span
+                className="absolute top-1 right-1"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Show Projects in portfolio"
+                  checked={sectionVisibility.projects !== false}
+                  onChange={(e) => toggleSectionVisibility('projects', e.target.checked)}
+                />
+              </span>
             </button>
             <button
               type="button"
@@ -3668,9 +3744,21 @@ export default function PortfolioEditor() {
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
               title={SECTION_TOOLTIPS.personal_documents}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
+              className="relative px-3 pr-7 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Documents
+              <span
+                className="absolute top-1 right-1"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Show Documents in portfolio"
+                  checked={sectionVisibility.personal_documents !== false}
+                  onChange={(e) => toggleSectionVisibility('personal_documents', e.target.checked)}
+                />
+              </span>
             </button>
             <button
               type="button"
@@ -3679,9 +3767,21 @@ export default function PortfolioEditor() {
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
               title={SECTION_TOOLTIPS.licences_accreditations}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
+              className="relative px-3 pr-7 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Licences
+              <span
+                className="absolute top-1 right-1"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Show Licences in portfolio"
+                  checked={sectionVisibility.licences_accreditations !== false}
+                  onChange={(e) => toggleSectionVisibility('licences_accreditations', e.target.checked)}
+                />
+              </span>
             </button>
             <button
               type="button"
@@ -3690,9 +3790,21 @@ export default function PortfolioEditor() {
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
               title={SECTION_TOOLTIPS.family_community}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
+              className="relative px-3 pr-7 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Family
+              <span
+                className="absolute top-1 right-1"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Show Family in portfolio"
+                  checked={sectionVisibility.family_community !== false}
+                  onChange={(e) => toggleSectionVisibility('family_community', e.target.checked)}
+                />
+              </span>
             </button>
             <button
               type="button"
@@ -3701,9 +3813,21 @@ export default function PortfolioEditor() {
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
               title={SECTION_TOOLTIPS.attachments}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
+              className="relative px-3 pr-7 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Attachments
+              <span
+                className="absolute top-1 right-1"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Show Attachments in portfolio"
+                  checked={sectionVisibility.attachments !== false}
+                  onChange={(e) => toggleSectionVisibility('attachments', e.target.checked)}
+                />
+              </span>
                   </button>
                 </div>
         </div>
@@ -5311,50 +5435,6 @@ export default function PortfolioEditor() {
             <>
               <div className="text-xs text-slate-400 mb-3">
                 Business users will see sections in this order. Keep the most important sections at the top.
-              </div>
-              <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 mb-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="text-sm font-semibold text-slate-100">Portfolio visibility</div>
-                  <label className="flex items-center gap-2 text-xs text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={allSectionsSelected}
-                      onChange={(e) => {
-                        const checked = e.target.checked
-                        const next: Record<string, boolean> = {}
-                        for (const key of SECTION_VISIBILITY_KEYS) next[String(key)] = checked
-                        setSectionVisibility(next)
-                      }}
-                    />
-                    Select all
-                  </label>
-                </div>
-                <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {SECTION_VISIBILITY_KEYS.map((key) => (
-                    <label key={String(key)} className="flex items-center gap-2 text-sm text-slate-200">
-                      <input
-                        type="checkbox"
-                        checked={sectionVisibility[String(key)] !== false}
-                        onChange={(e) =>
-                          setSectionVisibility((prev) => ({ ...prev, [String(key)]: e.target.checked }))
-                        }
-                      />
-                      {sectionLabel(String(key))}
-                    </label>
-                  ))}
-                </div>
-                <div className="mt-3 text-xs text-slate-400">
-                  Unchecked sections are hidden in View Portfolio.
-                </div>
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    className="px-3 py-1 rounded bg-slate-800 border border-slate-700 text-xs hover:bg-slate-700"
-                    onClick={() => savePortfolio({ redirect: false, source: 'visibility:layout' })}
-                  >
-                    Save visibility
-                  </button>
-                </div>
               </div>
               <ul className="space-y-2">
                 {(Array.isArray(portfolio.sectionOrder) ? portfolio.sectionOrder : []).map((k, idx) => (

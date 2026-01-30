@@ -430,6 +430,20 @@ export default function PortfolioEditor() {
     family_community: 'Family',
     attachments: 'Attachments',
   }
+  const SECTION_TOOLTIPS: Record<string, string> = {
+    basic: 'Add your name, title, bio, avatar, banner, and contact basics.',
+    intro: 'Add a short intro video to introduce yourself.',
+    social: 'Add social links like LinkedIn, GitHub, YouTube, or your website.',
+    skills: 'List your key skills so businesses know what you do best.',
+    experience: 'Add your work history, roles, and impact.',
+    education: 'Add your education, courses, and qualifications.',
+    referees: 'Add referees or references who can vouch for you.',
+    projects: 'Showcase projects with links and attachments.',
+    personal_documents: 'Add personal documents you want to share.',
+    licences_accreditations: 'Add licences and accreditations you hold.',
+    family_community: 'Share family or community items (optional).',
+    attachments: 'Attach Talent Bank items to your portfolio.',
+  }
   type SectionKey = (typeof DEFAULT_SECTION_ORDER)[number]
   const SOCIAL_PLATFORMS = [
     'LinkedIn',
@@ -3570,6 +3584,7 @@ export default function PortfolioEditor() {
                 const el = document.getElementById('section-basic')
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
+              title={SECTION_TOOLTIPS.basic}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Basic
@@ -3580,6 +3595,7 @@ export default function PortfolioEditor() {
                 const el = document.getElementById('section-intro')
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
+              title={SECTION_TOOLTIPS.intro}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Intro Video
@@ -3590,6 +3606,7 @@ export default function PortfolioEditor() {
                 const el = document.getElementById('section-social')
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
+              title={SECTION_TOOLTIPS.social}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Social
@@ -3600,6 +3617,7 @@ export default function PortfolioEditor() {
                 const el = document.getElementById('section-skills')
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
+              title={SECTION_TOOLTIPS.skills}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Skills
@@ -3610,6 +3628,7 @@ export default function PortfolioEditor() {
                 const el = document.getElementById('section-experience')
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
+              title={SECTION_TOOLTIPS.experience}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Experience
@@ -3620,6 +3639,7 @@ export default function PortfolioEditor() {
                 const el = document.getElementById('section-education')
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
+              title={SECTION_TOOLTIPS.education}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Education
@@ -3630,6 +3650,7 @@ export default function PortfolioEditor() {
                 const el = document.getElementById('section-referees')
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
+              title={SECTION_TOOLTIPS.referees}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Referees
@@ -3640,6 +3661,7 @@ export default function PortfolioEditor() {
                 const el = document.getElementById('section-projects')
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
+              title={SECTION_TOOLTIPS.projects}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Projects
@@ -3650,6 +3672,7 @@ export default function PortfolioEditor() {
                 const el = document.getElementById('section-personal-documents')
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
+              title={SECTION_TOOLTIPS.personal_documents}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Documents
@@ -3660,6 +3683,7 @@ export default function PortfolioEditor() {
                 const el = document.getElementById('section-licences')
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
+              title={SECTION_TOOLTIPS.licences_accreditations}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Licences
@@ -3670,6 +3694,7 @@ export default function PortfolioEditor() {
                 const el = document.getElementById('section-family-community')
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
+              title={SECTION_TOOLTIPS.family_community}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Family
@@ -3680,6 +3705,7 @@ export default function PortfolioEditor() {
                 const el = document.getElementById('section-attachments')
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
+              title={SECTION_TOOLTIPS.attachments}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm font-medium whitespace-nowrap"
             >
               Attachments

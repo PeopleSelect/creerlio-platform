@@ -123,10 +123,10 @@ export function BusinessProfilePage({ data }: { data: BusinessProfilePageData })
     }
   }, [data.slug])
 
-  const connectHref = useMemo(() => `/dashboard/talent/connect/${data.slug}`, [data.slug])
+  const connectHref = useMemo(() => `/portfolio/view?connect=${encodeURIComponent(data.slug)}`, [data.slug])
   const signInHref = useMemo(() => `/login?redirect=/business/${data.slug}`, [data.slug])
   const connectAnonHref = useMemo(
-    () => `/login/talent?mode=signup&redirect=/dashboard/talent/connect/${data.slug}`,
+    () => `/login/talent?mode=signup&redirect=/portfolio/view?connect=${encodeURIComponent(data.slug)}`,
     [data.slug]
   )
   const isAnon = connectState === 'anon'

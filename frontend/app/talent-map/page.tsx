@@ -1417,7 +1417,7 @@ function TalentMapPageInner() {
                             View Profile
                           </Link>
                           <Link
-                            href={`/dashboard/talent/connect/${selectedBusiness.properties.slug}`}
+                            href={`/portfolio/view?connect=${encodeURIComponent(selectedBusiness.properties.slug)}`}
                             className="w-full px-3 py-2 bg-blue-500 text-white rounded text-center font-semibold hover:bg-blue-600 text-xs"
                           >
                             Connect

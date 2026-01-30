@@ -3938,7 +3938,7 @@ export function TalentDashboardShell({
                               markNotificationRead(notif.id)
                               // Navigate to reconnect with the business
                               if (notif.business_id) {
-                                router.push(`/dashboard/talent/connect/${notif.business_id}?reconnect=true`)
+                                router.push(`/portfolio/view?connect=${encodeURIComponent(notif.business_id)}`)
                               }
                             }}
                             className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg font-semibold transition-colors"

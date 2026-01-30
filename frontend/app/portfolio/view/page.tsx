@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { ensureTalentProfile } from '@/lib/ensureProfile'
+import { ensureTalentProfile } from '@/lib/ensureProfile'
 import VideoChat from '@/components/VideoChat'
 
 export const dynamic = 'force-dynamic'
@@ -107,6 +109,7 @@ function PortfolioViewPageInner() {
   const viewTalentId = searchParams?.get('talent_id') // For businesses viewing talent profiles
   const requestId = searchParams?.get('request_id') // Connection request ID
   const selectedSectionsParam = searchParams?.get('sections')
+  const connectSlug = searchParams?.get('connect') || searchParams?.get('connect_business')
   
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -192,6 +195,104 @@ function PortfolioViewPageInner() {
     return selectedSections.has(visibilityKey) || selectedSections.has(key)
   }
   const showConnectWithMe = isSectionVisible('basic') || isSectionVisible('social') || isSectionVisible('skills')
+  const connectSections = useMemo(
+    () => Object.entries(sectionVisibility).filter(([, v]) => v).map(([k]) => k),
+    [sectionVisibility]
+  )
+
+  async function handleConnectBusiness() {
+    if (!viewerId || !connectBusinessId) return
+    setConnectError(null)
+    if (!connectSections.length) {
+      setConnectError('Please enable at least one section to share.')
+      return
+    }
+    setConnectBusy(true)
+    try {
+      const talentProfile = await ensureTalentProfile(viewerId)
+      const talentId = String(talentProfile.id)
+
+      const existingReq = await supabase
+        .from('talent_connection_requests')
+        .select('id')
+        .eq('talent_id', talentId)
+        .eq('business_id', connectBusinessId)
+        .maybeSingle()
+
+      if (existingReq.data?.id) {
+        const upd = await supabase
+          .from('talent_connection_requests')
+          .update({ selected_sections: connectSections })
+          .eq('id', existingReq.data.id)
+          .eq('talent_id', talentId)
+        if (upd.error) throw upd.error
+      } else {
+        const ins = await supabase
+          .from('talent_connection_requests')
+          .insert({ talent_id: talentId, business_id: connectBusinessId, status: 'pending', selected_sections: connectSections })
+        if (ins.error) throw ins.error
+      }
+      setConnectSuccess(true)
+      router.push('/dashboard/talent?tab=connections')
+    } catch (err: any) {
+      setConnectError(err?.message || 'Failed to send connection request.')
+    } finally {
+      setConnectBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadConnectBusiness() {
+      if (!connectSlug || viewTalentId) return
+      try {
+        setConnectError(null)
+        let businessData: any = null
+        const slugRes = await supabase
+          .from('business_profiles')
+          .select('id, business_name, description')
+          .eq('slug', connectSlug)
+          .maybeSingle()
+        if (!slugRes.error && slugRes.data) {
+          businessData = slugRes.data
+        } else {
+          if (connectSlug.startsWith('business-')) {
+            const extractedId = connectSlug.replace('business-', '')
+            const idRes = await supabase
+              .from('business_profiles')
+              .select('id, business_name, description')
+              .eq('id', extractedId)
+              .maybeSingle()
+            if (!idRes.error && idRes.data) {
+              businessData = idRes.data
+            }
+          } else {
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(connectSlug)
+            if (isUUID) {
+              const idRes = await supabase
+                .from('business_profiles')
+                .select('id, business_name, description')
+                .eq('id', connectSlug)
+                .maybeSingle()
+              if (!idRes.error && idRes.data) {
+                businessData = idRes.data
+              }
+            }
+          }
+        }
+        if (!cancelled && businessData) {
+          setConnectBusinessId(String(businessData.id))
+          setConnectBusinessName(String(businessData.business_name || 'Business'))
+        }
+      } catch (err: any) {
+        if (!cancelled) setConnectError(err?.message || 'Failed to load business')
+      }
+    }
+    loadConnectBusiness()
+    return () => {
+      cancelled = true
+    }
+  }, [connectSlug, viewTalentId])
   
   // Video Chat and Messaging state (for business viewing talent profiles)
   const [videoChatSession, setVideoChatSession] = useState<any | null>(null)
@@ -199,6 +300,11 @@ function PortfolioViewPageInner() {
   const [videoChatError, setVideoChatError] = useState<string | null>(null)
   const [connectionRequestId, setConnectionRequestId] = useState<string | null>(null) // Store connection request ID for video chat/messaging
   const [talentName, setTalentName] = useState<string | null>(null) // Store talent name for video chat
+  const [connectBusinessId, setConnectBusinessId] = useState<string | null>(null)
+  const [connectBusinessName, setConnectBusinessName] = useState<string | null>(null)
+  const [connectBusy, setConnectBusy] = useState(false)
+  const [connectError, setConnectError] = useState<string | null>(null)
+  const [connectSuccess, setConnectSuccess] = useState(false)
 
   const isPublicView = !!viewTalentId || !viewerId
   useEffect(() => {
@@ -1839,6 +1945,23 @@ function PortfolioViewPageInner() {
           )}
           {!viewTalentId && (
             <div className="flex items-center gap-3">
+            {connectSlug ? (
+              <div className="flex flex-col items-end">
+                <button
+                  type="button"
+                  onClick={handleConnectBusiness}
+                  disabled={connectBusy || !connectBusinessId}
+                  className="px-4 py-2 rounded-lg bg-white text-slate-900 font-semibold hover:bg-slate-100 transition-colors disabled:opacity-60"
+                >
+                  {connectBusy ? 'Sending...' : `Connect with ${connectBusinessName || 'Business'}`}
+                </button>
+                {connectError ? (
+                  <div className="mt-1 text-xs text-red-300">{connectError}</div>
+                ) : connectSuccess ? (
+                  <div className="mt-1 text-xs text-emerald-300">Request sent.</div>
+                ) : null}
+              </div>
+            ) : null}
               <div className="relative group">
                 <button
                   type="button"

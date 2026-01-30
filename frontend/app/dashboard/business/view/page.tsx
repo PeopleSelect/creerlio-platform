@@ -429,11 +429,11 @@ function BusinessProfileViewPageInner() {
   }, [viewingBusinessSlug, viewingBusinessId])
   const publicConnectHref = useMemo(() => {
     if (!publicConnectSlug) return '/login/talent?mode=signup'
-    return `/login/talent?mode=signup&redirect=/dashboard/talent/connect/${publicConnectSlug}`
+    return `/login/talent?mode=signup&redirect=/portfolio/view?connect=${encodeURIComponent(publicConnectSlug)}`
   }, [publicConnectSlug])
   const talentConnectHref = useMemo(() => {
     if (!publicConnectSlug) return '/dashboard/talent'
-    return `/dashboard/talent/connect/${publicConnectSlug}`
+    return `/portfolio/view?connect=${encodeURIComponent(publicConnectSlug)}`
   }, [publicConnectSlug])
 
   useEffect(() => {

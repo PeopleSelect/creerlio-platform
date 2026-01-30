@@ -3220,125 +3220,127 @@ function PortfolioViewPageInner() {
                 </div>
 
                 {/* Licences and Accreditations: placed under Personal Documents in the right column */}
-                <div className="flex-1 rounded-2xl border border-white/10 bg-slate-950/40 p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-slate-200 font-semibold">Licences and Accreditations</div>
-                    {licencesAccreditations.length > 2 ? (
-                      <button
-                        type="button"
-                        className="text-blue-300 hover:text-blue-200 text-sm font-medium"
-                        onClick={() => setLicenceListExpanded((v) => !v)}
-                      >
-                        {licenceListExpanded ? 'Show less' : 'Show all'}
-                      </button>
-                    ) : null}
-                  </div>
+                {isSectionVisible('licences_accreditations') ? (
+                  <div className="flex-1 rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-slate-200 font-semibold">Licences and Accreditations</div>
+                      {licencesAccreditations.length > 2 ? (
+                        <button
+                          type="button"
+                          className="text-blue-300 hover:text-blue-200 text-sm font-medium"
+                          onClick={() => setLicenceListExpanded((v) => !v)}
+                        >
+                          {licenceListExpanded ? 'Show less' : 'Show all'}
+                        </button>
+                      ) : null}
+                    </div>
 
-                  {licencesAccreditations.length ? (
-                    <div className="space-y-3">
-                      {(licenceListExpanded ? licencesAccreditations : licencesAccreditations.slice(0, 2)).map((lic, idx) => (
-                        <div key={idx} className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
-                          <div className="font-semibold text-slate-200">{lic.title || `Licence/Accreditation ${idx + 1}`}</div>
-                          {(lic.issuer || lic.issueDate || lic.expiryDate) && (
-                            <div className="text-slate-300 text-sm mt-1">
-                              {lic.issuer ? `${lic.issuer} • ` : ''}
-                              {lic.issueDate ? `Issued: ${lic.issueDate} • ` : ''}
-                              {lic.expiryDate ? `Expires: ${lic.expiryDate}` : ''}
-                            </div>
-                          )}
-                          {lic.description ? (
-                            <div className="mt-2">
-                              <div className="text-slate-300 whitespace-pre-wrap text-sm" style={licenceExpanded[idx] ? undefined : clampStyle(5)}>
-                                {lic.description}
+                    {licencesAccreditations.length ? (
+                      <div className="space-y-3">
+                        {(licenceListExpanded ? licencesAccreditations : licencesAccreditations.slice(0, 2)).map((lic, idx) => (
+                          <div key={idx} className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+                            <div className="font-semibold text-slate-200">{lic.title || `Licence/Accreditation ${idx + 1}`}</div>
+                            {(lic.issuer || lic.issueDate || lic.expiryDate) && (
+                              <div className="text-slate-300 text-sm mt-1">
+                                {lic.issuer ? `${lic.issuer} • ` : ''}
+                                {lic.issueDate ? `Issued: ${lic.issueDate} • ` : ''}
+                                {lic.expiryDate ? `Expires: ${lic.expiryDate}` : ''}
                               </div>
-                              {lic.description.split('\n').length > 5 ? (
-                                <button
-                                  type="button"
-                                  className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
-                                  onClick={() => setLicenceExpanded((prev) => ({ ...prev, [idx]: !prev[idx] }))}
-                                >
-                                  {licenceExpanded[idx] ? 'Show less' : 'Show more'}
-                                </button>
-                              ) : null}
-                            </div>
-                          ) : null}
-                          {(() => {
-                            const attachmentIds = Array.isArray(lic.attachmentIds) ? lic.attachmentIds : []
-                            if (attachmentIds.length === 0) return null
-                            
-                            return (
-                              <div className="mt-3">
-                                <div className="text-xs text-slate-400 mb-2">
-                                  Attached files:{' '}
-                                  <span className="text-slate-200 font-semibold">{attachmentIds.length}</span>
+                            )}
+                            {lic.description ? (
+                              <div className="mt-2">
+                                <div className="text-slate-300 whitespace-pre-wrap text-sm" style={licenceExpanded[idx] ? undefined : clampStyle(5)}>
+                                  {lic.description}
                                 </div>
-                                <div className="grid grid-cols-4 gap-2">
-                                  {attachmentIds.slice(0, 4).map((id: any) => {
-                                    const numId = typeof id === 'number' ? id : Number(id)
-                                    if (!Number.isFinite(numId) || numId <= 0) return null
-                                    const it = tbItemCache[numId]
-                                    if (!it) {
-                                      return (
-                                        <div key={numId} className="w-[15mm] h-[15mm] rounded-lg border border-white/10 bg-slate-950/40 flex items-center justify-center">
-                                          <div className="text-xs text-slate-400">…</div>
-                                        </div>
-                                      )
-                                    }
-                                    const path = String(it?.file_path ?? '')
-                                    const open = () => {
-                                      if (path) {
-                                        openPath(path, it?.file_type ?? null, String(it?.title || 'Document'))
-                                        return
-                                      }
-                                      if (it?.file_url) {
-                                        window.open(it.file_url, '_blank')
-                                        return
-                                      }
-                                    }
-                                    const isImg = it.file_type?.startsWith('image') || it.item_type === 'image'
-                                    const isVid = it.file_type?.startsWith('video') || it.item_type === 'video'
-                                    const ext = path ? path.split('.').pop()?.toUpperCase().slice(0, 4) : null
-                                    const label = isImg ? 'IMG' : isVid ? 'VID' : ext || 'FILE'
-                                    if (path && (isImg || isVid) && !thumbUrls[path]) ensureSignedUrl(path).catch(() => {})
-                                    const url = path ? thumbUrls[path] : null
-                                    return (
-                                      <button
-                                        key={numId}
-                                        type="button"
-                                        onClick={open}
-                                        className="w-[15mm] h-[15mm] rounded-lg border border-white/10 bg-slate-900/30 overflow-hidden flex items-center justify-center hover:border-blue-400 transition-colors"
-                                        title={String(it?.title || 'Document')}
-                                      >
-                                        {url && isImg ? (
-                                          // eslint-disable-next-line @next/next/no-img-element
-                                          <img src={url} alt={String(it?.title || 'Document')} className="w-full h-full object-cover" />
-                                        ) : url && isVid ? (
-                                          <div className="relative w-full h-full">
-                                            <video className="w-full h-full object-cover" src={url} muted playsInline preload="metadata" />
-                                            <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold bg-black/30 text-white">
-                                              ▶
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          <div className="text-xs font-semibold text-slate-400">{label}</div>
-                                        )}
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                                {attachmentIds.length > 4 ? (
-                                  <div className="text-xs text-slate-400 mt-2 px-1">+{attachmentIds.length - 4} more…</div>
+                                {lic.description.split('\n').length > 5 ? (
+                                  <button
+                                    type="button"
+                                    className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
+                                    onClick={() => setLicenceExpanded((prev) => ({ ...prev, [idx]: !prev[idx] }))}
+                                  >
+                                    {licenceExpanded[idx] ? 'Show less' : 'Show more'}
+                                  </button>
                                 ) : null}
                               </div>
-                            )
-                          })()}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-slate-400 text-sm">No licences or accreditations added yet.</div>
-                  )}
-                </div>
+                            ) : null}
+                            {(() => {
+                              const attachmentIds = Array.isArray(lic.attachmentIds) ? lic.attachmentIds : []
+                              if (attachmentIds.length === 0) return null
+                              
+                              return (
+                                <div className="mt-3">
+                                  <div className="text-xs text-slate-400 mb-2">
+                                    Attached files:{' '}
+                                    <span className="text-slate-200 font-semibold">{attachmentIds.length}</span>
+                                  </div>
+                                  <div className="grid grid-cols-4 gap-2">
+                                    {attachmentIds.slice(0, 4).map((id: any) => {
+                                      const numId = typeof id === 'number' ? id : Number(id)
+                                      if (!Number.isFinite(numId) || numId <= 0) return null
+                                      const it = tbItemCache[numId]
+                                      if (!it) {
+                                        return (
+                                          <div key={numId} className="w-[15mm] h-[15mm] rounded-lg border border-white/10 bg-slate-950/40 flex items-center justify-center">
+                                            <div className="text-xs text-slate-400">…</div>
+                                          </div>
+                                        )
+                                      }
+                                      const path = String(it?.file_path ?? '')
+                                      const open = () => {
+                                        if (path) {
+                                          openPath(path, it?.file_type ?? null, String(it?.title || 'Document'))
+                                          return
+                                        }
+                                        if (it?.file_url) {
+                                          window.open(it.file_url, '_blank')
+                                          return
+                                        }
+                                      }
+                                      const isImg = it.file_type?.startsWith('image') || it.item_type === 'image'
+                                      const isVid = it.file_type?.startsWith('video') || it.item_type === 'video'
+                                      const ext = path ? path.split('.').pop()?.toUpperCase().slice(0, 4) : null
+                                      const label = isImg ? 'IMG' : isVid ? 'VID' : ext || 'FILE'
+                                      if (path && (isImg || isVid) && !thumbUrls[path]) ensureSignedUrl(path).catch(() => {})
+                                      const url = path ? thumbUrls[path] : null
+                                      return (
+                                        <button
+                                          key={numId}
+                                          type="button"
+                                          onClick={open}
+                                          className="w-[15mm] h-[15mm] rounded-lg border border-white/10 bg-slate-900/30 overflow-hidden flex items-center justify-center hover:border-blue-400 transition-colors"
+                                          title={String(it?.title || 'Document')}
+                                        >
+                                          {url && isImg ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img src={url} alt={String(it?.title || 'Document')} className="w-full h-full object-cover" />
+                                          ) : url && isVid ? (
+                                            <div className="relative w-full h-full">
+                                              <video className="w-full h-full object-cover" src={url} muted playsInline preload="metadata" />
+                                              <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold bg-black/30 text-white">
+                                                ▶
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <div className="text-xs font-semibold text-slate-400">{label}</div>
+                                          )}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                  {attachmentIds.length > 4 ? (
+                                    <div className="text-xs text-slate-400 mt-2 px-1">+{attachmentIds.length - 4} more…</div>
+                                  ) : null}
+                                </div>
+                              )
+                            })()}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-slate-400 text-sm">No licences or accreditations added yet.</div>
+                    )}
+                  </div>
+                ) : null}
 
               </aside>
             </div>

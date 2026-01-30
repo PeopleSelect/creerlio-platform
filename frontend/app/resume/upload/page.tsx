@@ -225,7 +225,7 @@ export default function ResumeUploadPage() {
 
     const prevSel: number[] = Array.isArray(meta?.portfolioSelections) ? meta.portfolioSelections : []
 
-    // Insert TB experience / education items
+    // Insert TB experience / education items (keep in Talent Bank for attachments/records)
     const expRows = (Array.isArray(parsed?.experience) ? parsed.experience : []).slice(0, 12).map((e: any) => ({
       user_id: userId,
       item_type: 'experience',
@@ -279,10 +279,35 @@ export default function ResumeUploadPage() {
     }
 
     const nextSel = Array.from(new Set<number>([...prevSel, ...newIds]))
+    const prevExperience = Array.isArray(meta?.experience) ? meta.experience : []
+    const prevEducation = Array.isArray(meta?.education) ? meta.education : []
+    const parsedExperience = (Array.isArray(parsed?.experience) ? parsed.experience : []).slice(0, 12).map((e: any) => ({
+      company: e.company || '',
+      title: e.title || '',
+      startDate: e.startDate || '',
+      endDate: e.endDate || '',
+      description: e.description || '',
+      attachmentIds: [],
+    }))
+    const parsedEducation = (Array.isArray(parsed?.education) ? parsed.education : []).slice(0, 8).map((e: any) => ({
+      institution: e.institution || '',
+      degree: e.degree || e.course || '',
+      field: e.field || '',
+      year: e.year || '',
+      attachmentIds: [],
+    }))
+    const mergedExperience = [...prevExperience, ...parsedExperience].filter(
+      (e) => String(e?.title || e?.role || '').trim() || String(e?.company || e?.organisation || '').trim()
+    )
+    const mergedEducation = [...prevEducation, ...parsedEducation].filter(
+      (e) => String(e?.institution || e?.school || '').trim() || String(e?.degree || e?.qualification || '').trim()
+    )
     const nextMeta = {
       ...meta,
       portfolioSelections: nextSel,
       skills: mergedSkills,
+      experience: mergedExperience,
+      education: mergedEducation,
       // only fill name if empty
       name: meta?.name || parsed?.fields?.name || meta?.name,
       resumeParsedAt: Date.now(),

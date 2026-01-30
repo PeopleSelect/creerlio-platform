@@ -1839,6 +1839,23 @@ function PortfolioViewPageInner() {
           )}
           {!viewTalentId && (
             <div className="flex items-center gap-3">
+              <div className="relative group">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg bg-slate-900/70 hover:bg-slate-800 border border-white/10 font-semibold"
+                >
+                  How to Build Portfolio
+                </button>
+                <div className="pointer-events-none absolute right-0 mt-2 w-[340px] rounded-xl border border-white/10 bg-slate-950/95 p-4 text-sm text-slate-200 shadow-xl opacity-0 translate-y-1 transition-all group-hover:opacity-100 group-hover:translate-y-0">
+                  <div className="font-semibold mb-2">Build a portfolio that tells your story</div>
+                  <div className="text-slate-300 space-y-2">
+                    <p>Add your basics, skills, experience, and education so businesses can understand your background fast.</p>
+                    <p>Use the Talent Bank to import items like resumes, certificates, projects, and attachments.</p>
+                    <p>Add an intro video to introduce yourself and highlight your strongest work.</p>
+                    <p>Toggle tabs on/off to control what appears in the public View Portfolio.</p>
+                  </div>
+                </div>
+              </div>
               <Link
                 href="/portfolio"
                 className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 font-semibold"

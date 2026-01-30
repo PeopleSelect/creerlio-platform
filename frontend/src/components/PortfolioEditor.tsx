@@ -3556,12 +3556,7 @@ export default function PortfolioEditor() {
           <div className="flex items-center justify-between mb-3">
           <Link href="/dashboard/talent" className="text-slate-300 hover:text-blue-400">← Back</Link>
           <div className="flex items-center gap-3">
-            <Link
-              href="/portfolio/templates"
-              className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 border border-purple-500/50 font-semibold"
-            >
-              Choose Template
-            </Link>
+            {/* Choose Template temporarily hidden */}
             <Link href="/portfolio/view" className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 border border-purple-500/50 font-semibold">
               View Portfolio
             </Link>

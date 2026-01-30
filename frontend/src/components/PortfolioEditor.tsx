@@ -3574,6 +3574,7 @@ export default function PortfolioEditor() {
                 <input
                   type="checkbox"
                   aria-label="Show Basic in portfolio"
+                  className="h-4 w-4 accent-blue-500"
                   checked={sectionVisibility.basic !== false}
                   onChange={(e) => toggleSectionVisibility('basic', e.target.checked)}
                 />
@@ -3597,6 +3598,7 @@ export default function PortfolioEditor() {
                 <input
                   type="checkbox"
                   aria-label="Show Intro Video in portfolio"
+                  className="h-4 w-4 accent-blue-500"
                   checked={sectionVisibility.intro !== false}
                   onChange={(e) => toggleSectionVisibility('intro', e.target.checked)}
                 />
@@ -3620,6 +3622,7 @@ export default function PortfolioEditor() {
                 <input
                   type="checkbox"
                   aria-label="Show Social in portfolio"
+                  className="h-4 w-4 accent-blue-500"
                   checked={sectionVisibility.social !== false}
                   onChange={(e) => toggleSectionVisibility('social', e.target.checked)}
                 />
@@ -3643,6 +3646,7 @@ export default function PortfolioEditor() {
                 <input
                   type="checkbox"
                   aria-label="Show Skills in portfolio"
+                  className="h-4 w-4 accent-blue-500"
                   checked={sectionVisibility.skills !== false}
                   onChange={(e) => toggleSectionVisibility('skills', e.target.checked)}
                 />
@@ -3666,6 +3670,7 @@ export default function PortfolioEditor() {
                 <input
                   type="checkbox"
                   aria-label="Show Experience in portfolio"
+                  className="h-4 w-4 accent-blue-500"
                   checked={sectionVisibility.experience !== false}
                   onChange={(e) => toggleSectionVisibility('experience', e.target.checked)}
                 />
@@ -3689,6 +3694,7 @@ export default function PortfolioEditor() {
                 <input
                   type="checkbox"
                   aria-label="Show Education in portfolio"
+                  className="h-4 w-4 accent-blue-500"
                   checked={sectionVisibility.education !== false}
                   onChange={(e) => toggleSectionVisibility('education', e.target.checked)}
                 />
@@ -3712,6 +3718,7 @@ export default function PortfolioEditor() {
                 <input
                   type="checkbox"
                   aria-label="Show Referees in portfolio"
+                  className="h-4 w-4 accent-blue-500"
                   checked={sectionVisibility.referees !== false}
                   onChange={(e) => toggleSectionVisibility('referees', e.target.checked)}
                 />
@@ -3735,6 +3742,7 @@ export default function PortfolioEditor() {
                 <input
                   type="checkbox"
                   aria-label="Show Projects in portfolio"
+                  className="h-4 w-4 accent-blue-500"
                   checked={sectionVisibility.projects !== false}
                   onChange={(e) => toggleSectionVisibility('projects', e.target.checked)}
                 />
@@ -3758,6 +3766,7 @@ export default function PortfolioEditor() {
                 <input
                   type="checkbox"
                   aria-label="Show Documents in portfolio"
+                  className="h-4 w-4 accent-blue-500"
                   checked={sectionVisibility.personal_documents !== false}
                   onChange={(e) => toggleSectionVisibility('personal_documents', e.target.checked)}
                 />
@@ -3781,6 +3790,7 @@ export default function PortfolioEditor() {
                 <input
                   type="checkbox"
                   aria-label="Show Licences in portfolio"
+                  className="h-4 w-4 accent-blue-500"
                   checked={sectionVisibility.licences_accreditations !== false}
                   onChange={(e) => toggleSectionVisibility('licences_accreditations', e.target.checked)}
                 />
@@ -3804,6 +3814,7 @@ export default function PortfolioEditor() {
                 <input
                   type="checkbox"
                   aria-label="Show Family in portfolio"
+                  className="h-4 w-4 accent-blue-500"
                   checked={sectionVisibility.family_community !== false}
                   onChange={(e) => toggleSectionVisibility('family_community', e.target.checked)}
                 />
@@ -3827,6 +3838,7 @@ export default function PortfolioEditor() {
                 <input
                   type="checkbox"
                   aria-label="Show Attachments in portfolio"
+                  className="h-4 w-4 accent-blue-500"
                   checked={sectionVisibility.attachments !== false}
                   onChange={(e) => toggleSectionVisibility('attachments', e.target.checked)}
                 />

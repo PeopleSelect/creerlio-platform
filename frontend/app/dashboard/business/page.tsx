@@ -2795,12 +2795,6 @@ export default function BusinessDashboard() {
             >
               Logout
             </button>
-            <button
-              onClick={handleDeleteRegistration}
-              className="px-4 py-2 text-white hover:text-red-500 transition-colors text-left"
-            >
-              Delete Registration
-            </button>
           </div>
         </div>
       </header>
@@ -3362,6 +3356,15 @@ export default function BusinessDashboard() {
                       <label className="block text-sm font-medium text-gray-600 mb-2">Role</label>
                       <p className="text-gray-900 capitalize">{activeBusinessRole}</p>
                     </div>
+                  </div>
+                  <div className="pt-4 border-t border-gray-200 mt-4">
+                    <button
+                      type="button"
+                      onClick={handleDeleteRegistration}
+                      className="px-4 py-2 text-sm text-red-600 hover:text-red-700 border border-red-300 hover:border-red-400 rounded-lg transition-colors"
+                    >
+                      Delete Registration
+                    </button>
                   </div>
                 </div>
 

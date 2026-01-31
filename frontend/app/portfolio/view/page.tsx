@@ -2545,14 +2545,6 @@ function PortfolioViewPageInner() {
                           ) : null}
                         </div>
                       </div>
-                      {!viewTalentId && (
-                        <Link
-                          href="/portfolio"
-                          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold shrink-0"
-                        >
-                          Edit Portfolio
-                        </Link>
-                      )}
                     </div>
                   </div>
                 </div>

@@ -15,6 +15,7 @@ export default function AdminUsersPage() {
   const [totalCount, setTotalCount] = useState(0)
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminApiStatus, setAdminApiStatus] = useState<'checking' | 'ready' | 'missing'>('checking')
+  const [adminApiMissing, setAdminApiMissing] = useState<string[]>([])
 
   useEffect(() => {
     async function checkAdmin() {
@@ -201,6 +202,8 @@ export default function AdminUsersPage() {
           return
         }
         const payload = await res.json().catch(() => ({}))
+        const missing = Array.isArray(payload?.missing) ? payload.missing : []
+        setAdminApiMissing(missing)
         setAdminApiStatus(payload?.configured ? 'ready' : 'missing')
       } catch {
         setAdminApiStatus('missing')
@@ -279,6 +282,13 @@ export default function AdminUsersPage() {
                     ? 'bg-green-500/10 text-green-300 border-green-500/40'
                     : 'bg-amber-500/10 text-amber-300 border-amber-500/40'
                 }`}
+                title={
+                  adminApiStatus === 'ready'
+                    ? 'Admin delete API is configured.'
+                    : adminApiMissing.length > 0
+                      ? `Missing: ${adminApiMissing.join(', ')}`
+                      : 'Admin delete API is not configured.'
+                }
               >
                 {adminApiStatus === 'ready' ? 'Admin API Ready' : 'Admin API Missing'}
               </span>

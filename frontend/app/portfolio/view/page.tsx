@@ -5,7 +5,6 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { ensureTalentProfile } from '@/lib/ensureProfile'
-import { ensureTalentProfile } from '@/lib/ensureProfile'
 import VideoChat from '@/components/VideoChat'
 
 export const dynamic = 'force-dynamic'

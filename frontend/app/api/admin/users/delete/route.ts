@@ -8,6 +8,15 @@ function getEnv(name: string) {
   return typeof v === 'string' && v.trim() ? v.trim() : null
 }
 
+function getAdminEnvStatus() {
+  const supabaseUrl = getEnv('NEXT_PUBLIC_SUPABASE_URL') ?? getEnv('SUPABASE_URL')
+  const serviceRoleKey = getEnv('SUPABASE_SERVICE_ROLE_KEY')
+  const missing: string[] = []
+  if (!serviceRoleKey) missing.push('SUPABASE_SERVICE_ROLE_KEY')
+  if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL')
+  return { supabaseUrl, serviceRoleKey, missing }
+}
+
 function isAdminUser(user: { email?: string | null; user_metadata?: Record<string, any> | null }) {
   const metadata = user.user_metadata || {}
   if (metadata.is_admin === true || metadata.admin === true) return true
@@ -21,34 +30,31 @@ function isAdminUser(user: { email?: string | null; user_metadata?: Record<strin
 }
 
 export async function GET() {
-  const supabaseUrl = getEnv('NEXT_PUBLIC_SUPABASE_URL') ?? getEnv('SUPABASE_URL')
-  const serviceRoleKey = getEnv('SUPABASE_SERVICE_ROLE_KEY')
-
-  if (!supabaseUrl || !serviceRoleKey) {
+  const { missing } = getAdminEnvStatus()
+  if (missing.length > 0) {
     return NextResponse.json(
       {
         success: false,
         configured: false,
-        message: 'Delete is not configured.',
+        missing,
+        message: `Delete is not configured. Missing: ${missing.join(', ')}`,
       },
       { status: 503 }
     )
   }
 
-  return NextResponse.json({ success: true, configured: true })
+  return NextResponse.json({ success: true, configured: true, missing: [] })
 }
 
 export async function POST(req: Request) {
   try {
-    const supabaseUrl = getEnv('NEXT_PUBLIC_SUPABASE_URL') ?? getEnv('SUPABASE_URL')
-    const serviceRoleKey = getEnv('SUPABASE_SERVICE_ROLE_KEY')
-
-    if (!supabaseUrl || !serviceRoleKey) {
+    const { supabaseUrl, serviceRoleKey, missing } = getAdminEnvStatus()
+    if (missing.length > 0 || !supabaseUrl || !serviceRoleKey) {
       return NextResponse.json(
         {
           success: false,
           message:
-            'Delete is not configured. Set SUPABASE_SERVICE_ROLE_KEY (server-side) and NEXT_PUBLIC_SUPABASE_URL.',
+            `Delete is not configured. Missing: ${missing.join(', ') || 'unknown'}.`,
         },
         { status: 503 }
       )

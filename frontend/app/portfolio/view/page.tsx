@@ -59,26 +59,28 @@ function getEmbedUrl(url?: string | null) {
   return null
 }
 
+function encodeStoragePath(p: string) {
+  return p.split('/').map(encodeURIComponent).join('/')
+}
+
 async function signedUrl(path: string, seconds = 60 * 30, usePublicUrl = false) {
   if (!path) return null
   if (isExternalUrl(path)) return path
-  
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  
+
   // If usePublicUrl is true, use public URL directly (for business viewers)
   if (usePublicUrl && supabaseUrl) {
-    const publicUrl = `${supabaseUrl}/storage/v1/object/public/talent-bank/${encodeURIComponent(path)}`
-    return publicUrl
+    return `${supabaseUrl}/storage/v1/object/public/talent-bank/${encodeStoragePath(path)}`
   }
-  
+
   try {
     const { data, error } = await supabase.storage.from('talent-bank').createSignedUrl(path, seconds)
     if (error) {
       console.warn('[View Portfolio] Signed URL failed, trying public URL:', error.message)
       // Try public URL as fallback
       if (supabaseUrl) {
-        const publicUrl = `${supabaseUrl}/storage/v1/object/public/talent-bank/${encodeURIComponent(path)}`
-        return publicUrl
+        return `${supabaseUrl}/storage/v1/object/public/talent-bank/${encodeStoragePath(path)}`
       }
       return null
     }
@@ -87,8 +89,7 @@ async function signedUrl(path: string, seconds = 60 * 30, usePublicUrl = false) 
     console.error('[View Portfolio] Error creating signed URL:', err)
     // Fallback to public URL
     if (supabaseUrl) {
-      const publicUrl = `${supabaseUrl}/storage/v1/object/public/talent-bank/${encodeURIComponent(path)}`
-      return publicUrl
+      return `${supabaseUrl}/storage/v1/object/public/talent-bank/${encodeStoragePath(path)}`
     }
     return null
   }
@@ -1486,17 +1487,17 @@ function PortfolioViewPageInner() {
     
     // When viewing from business context, use public URL directly
     if (viewTalentId && process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/talent-bank/${encodeURIComponent(path)}`
+      const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/talent-bank/${encodeStoragePath(path)}`
       setThumbUrls((prev) => ({ ...prev, [path]: publicUrl }))
       return
     }
-    
+
     const { data, error } = await supabase.storage.from('talent-bank').createSignedUrl(path, 60 * 30)
     if (data?.signedUrl) {
       setThumbUrls((prev) => ({ ...prev, [path]: data.signedUrl }))
     } else if (error && process.env.NEXT_PUBLIC_SUPABASE_URL) {
       // Fallback to public URL
-      const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/talent-bank/${encodeURIComponent(path)}`
+      const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/talent-bank/${encodeStoragePath(path)}`
       setThumbUrls((prev) => ({ ...prev, [path]: publicUrl }))
     }
   }

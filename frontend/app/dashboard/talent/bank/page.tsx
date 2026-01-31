@@ -1473,8 +1473,8 @@ export default function TalentBankPage() {
 
   function ThumbIcon({ label }: { label: string }) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950">
-        <div className="rounded-lg border border-white/10 bg-slate-950/40 px-2 py-1 text-[10px] font-semibold tracking-wide text-slate-100">
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+        <div className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-[10px] font-semibold tracking-wide text-gray-600">
           {label}
         </div>
       </div>
@@ -1601,7 +1601,7 @@ export default function TalentBankPage() {
     const isVid = (item.file_type?.startsWith('video') ?? false) || type === 'video'
 
     const base =
-      'w-[20mm] h-[20mm] rounded-lg border border-slate-700 bg-slate-950/40 overflow-hidden flex items-center justify-center shrink-0'
+      'w-[20mm] h-[20mm] rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center shrink-0'
 
     const ext = fileExt(item.title)
     const label =
@@ -2079,9 +2079,9 @@ export default function TalentBankPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
-      <header className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
-        <Link href="/dashboard/talent" className="font-bold text-xl">
+    <div className="min-h-screen bg-white text-gray-900">
+      <header className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+        <Link href="/dashboard/talent" className="font-bold text-xl text-gray-900">
           Talent Bank
         </Link>
         <div className="flex items-center gap-4">
@@ -2091,7 +2091,7 @@ export default function TalentBankPage() {
           >
             Upload Resume
           </Link>
-          <button onClick={() => router.push('/dashboard/talent')} className="px-4 py-2 text-sm">
+          <button onClick={() => router.push('/dashboard/talent')} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
             Back
           </button>
         </div>
@@ -2153,34 +2153,34 @@ export default function TalentBankPage() {
               <div className="p-4 space-y-3 text-sm">
                 {editEntry.item.item_type === 'experience' && (
                   <>
-                    <input className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500" value={editEntry.draft.company || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, company: e.target.value } }) : p)} placeholder="Company" />
-                    <input className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500" value={editEntry.draft.title || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, title: e.target.value } }) : p)} placeholder="Role / Title" />
+                    <input className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.company || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, company: e.target.value } }) : p)} placeholder="Company" />
+                    <input className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.title || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, title: e.target.value } }) : p)} placeholder="Role / Title" />
                     <div className="grid grid-cols-2 gap-3">
-                      <input className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500" value={editEntry.draft.startDate || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, startDate: e.target.value } }) : p)} placeholder="Start date" />
-                      <input className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500" value={editEntry.draft.endDate || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, endDate: e.target.value } }) : p)} placeholder="End date" />
+                      <input className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.startDate || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, startDate: e.target.value } }) : p)} placeholder="Start date" />
+                      <input className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.endDate || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, endDate: e.target.value } }) : p)} placeholder="End date" />
                     </div>
-                    <textarea className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500" value={editEntry.draft.description || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, description: e.target.value } }) : p)} placeholder="Responsibilities / achievements" rows={5} />
+                    <textarea className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.description || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, description: e.target.value } }) : p)} placeholder="Responsibilities / achievements" rows={5} />
                   </>
                 )}
 
                 {editEntry.item.item_type === 'education' && (
                   <>
-                    <input className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={editEntry.draft.institution || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, institution: e.target.value } }) : p)} placeholder="Institution" />
-                    <input className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={editEntry.draft.course || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, course: e.target.value } }) : p)} placeholder="Course / Qualification" />
-                    <input className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={editEntry.draft.year || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, year: e.target.value } }) : p)} placeholder="Year (or date range)" />
-                    <textarea className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={editEntry.draft.notes || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, notes: e.target.value } }) : p)} placeholder="Notes" rows={4} />
+                    <input className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.institution || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, institution: e.target.value } }) : p)} placeholder="Institution" />
+                    <input className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.course || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, course: e.target.value } }) : p)} placeholder="Course / Qualification" />
+                    <input className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.year || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, year: e.target.value } }) : p)} placeholder="Year (or date range)" />
+                    <textarea className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.notes || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, notes: e.target.value } }) : p)} placeholder="Notes" rows={4} />
                   </>
                 )}
 
                 {editEntry.item.item_type === 'credential' && (
                   <>
-                    <input className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500" value={editEntry.draft.credentialType || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, credentialType: e.target.value } }) : p)} placeholder="Credential type" />
-                    <input className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500" value={editEntry.draft.issuer || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, issuer: e.target.value } }) : p)} placeholder="Issuing authority" />
+                    <input className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.credentialType || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, credentialType: e.target.value } }) : p)} placeholder="Credential type" />
+                    <input className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.issuer || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, issuer: e.target.value } }) : p)} placeholder="Issuing authority" />
                     <div className="grid grid-cols-2 gap-3">
-                      <input className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500" value={editEntry.draft.expiry || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, expiry: e.target.value } }) : p)} placeholder="Expiry (optional)" />
-                      <input className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500" value={editEntry.draft.credentialId || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, credentialId: e.target.value } }) : p)} placeholder="Licence / ID number (optional)" />
+                      <input className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.expiry || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, expiry: e.target.value } }) : p)} placeholder="Expiry (optional)" />
+                      <input className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.credentialId || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, credentialId: e.target.value } }) : p)} placeholder="Licence / ID number (optional)" />
                     </div>
-                    <textarea className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500" value={editEntry.draft.notes || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, notes: e.target.value } }) : p)} placeholder="Notes" rows={4} />
+                    <textarea className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={editEntry.draft.notes || ''} onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, notes: e.target.value } }) : p)} placeholder="Notes" rows={4} />
                   </>
                 )}
 
@@ -2189,14 +2189,14 @@ export default function TalentBankPage() {
                     <select
                       value={editEntry.draft.platform || 'LinkedIn'}
                       onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, platform: e.target.value } }) : p)}
-                      className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white"
+                      className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                     >
                       {socialPlatforms.map((p) => (
                         <option key={p} className="bg-slate-900 !text-white" value={p}>{p}</option>
                       ))}
                     </select>
                     <input
-                      className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500"
+                      className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400"
                       value={editEntry.draft.url || ''}
                       onChange={(e) => setEditEntry((p) => p ? ({ ...p, draft: { ...p.draft, url: e.target.value } }) : p)}
                       placeholder="https://linkedin.com/in/yourname"
@@ -2585,7 +2585,7 @@ export default function TalentBankPage() {
                                         return { ...p, skills: nextSkills }
                                       })
                                     }}
-                                    className="flex-1 px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500"
+                                    className="flex-1 px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400"
                                   />
                                 </div>
                               ))}
@@ -2649,7 +2649,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Institution"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                         <input
                                           value={String(e?.degree ?? e?.course ?? '')}
@@ -2662,7 +2662,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Degree / Course"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                         <input
                                           value={String(e?.field ?? '')}
@@ -2675,7 +2675,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Field"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                         <input
                                           value={String(e?.year ?? '')}
@@ -2688,7 +2688,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Year"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                       </div>
                                       <textarea
@@ -2703,7 +2703,7 @@ export default function TalentBankPage() {
                                         }}
                                         placeholder="Notes"
                                         rows={3}
-                                        className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                        className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                       />
                                     </div>
                                   </div>
@@ -2769,7 +2769,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Credential name"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                         <input
                                           value={String(c?.issuer ?? '')}
@@ -2782,7 +2782,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Issuer"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                         <input
                                           value={String(c?.credentialId ?? '')}
@@ -2795,7 +2795,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Credential ID"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                         <input
                                           value={String(c?.expiry ?? '')}
@@ -2808,7 +2808,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Expiry"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                       </div>
                                       <textarea
@@ -2823,7 +2823,7 @@ export default function TalentBankPage() {
                                         }}
                                         placeholder="Notes"
                                         rows={3}
-                                        className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                        className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                       />
                                     </div>
                                   </div>
@@ -2889,7 +2889,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Name"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                         <input
                                           value={String(r?.relationship ?? '')}
@@ -2902,7 +2902,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Relationship"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                         <input
                                           value={String(r?.company ?? '')}
@@ -2915,7 +2915,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Company"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                         <input
                                           value={String(r?.title ?? '')}
@@ -2928,7 +2928,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Title"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                         <input
                                           value={String(r?.email ?? '')}
@@ -2941,7 +2941,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Email"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                         <input
                                           value={String(r?.phone ?? '')}
@@ -2954,7 +2954,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Phone"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                       </div>
                                       <textarea
@@ -2969,7 +2969,7 @@ export default function TalentBankPage() {
                                         }}
                                         placeholder="Notes"
                                         rows={3}
-                                        className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                        className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                       />
                                     </div>
                                   </div>
@@ -3035,7 +3035,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="Platform (e.g., LinkedIn)"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                         <input
                                           value={String((s as any)?.url ?? '')}
@@ -3048,7 +3048,7 @@ export default function TalentBankPage() {
                                             })
                                           }}
                                           placeholder="https://…"
-                                          className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                          className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                                         />
                                       </div>
                                     </div>
@@ -3348,7 +3348,7 @@ export default function TalentBankPage() {
         )}
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="text-sm text-slate-200">Save files under:</div>
+          <div className="text-sm text-gray-700">Save files under:</div>
           <select
             value={saveCategory}
             onChange={(e) => {
@@ -3356,20 +3356,20 @@ export default function TalentBankPage() {
               setSaveCategory(v)
               log('saveCategory changed', 'TB_CATEGORY', { saveCategory: v })
             }}
-            className="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm !text-white"
+            className="px-3 py-2 rounded bg-white border border-gray-300 text-sm text-gray-900"
           >
-            <option className="bg-slate-900 !text-white" value="document">Document</option>
-            <option className="bg-slate-900 !text-white" value="education">Education</option>
-            <option className="bg-slate-900 !text-white" value="credential">Credential</option>
+            <option value="document">Document</option>
+            <option value="education">Education</option>
+            <option value="credential">Credential</option>
           </select>
-          <div className="text-xs text-slate-400">
+          <div className="text-xs text-gray-500">
             (Images/videos remain images/videos for thumbnails, but will be saved under your chosen category for easier filtering.)
           </div>
         </div>
 
         <div
           className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer ${
-            dragActive ? 'border-blue-400' : 'border-slate-700'
+            dragActive ? 'border-blue-400' : 'border-gray-300'
           }`}
           onDrop={onDrop}
           onDragOver={e => {
@@ -3389,7 +3389,7 @@ export default function TalentBankPage() {
             onChange={onFileChange}
           />
           <p>Drag files here or click to upload</p>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-gray-500">
             Max file size: ~{Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))}MB per file
           </p>
           {isUploading && <p className="mt-2 text-blue-400">Uploading…</p>}
@@ -3403,7 +3403,7 @@ export default function TalentBankPage() {
               key={t}
               onClick={() => setFilter(t)}
               className={`px-3 py-1 rounded-full text-xs ${
-                filter === t ? 'bg-blue-600' : 'bg-slate-800'
+                filter === t ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               {t}
@@ -3412,7 +3412,7 @@ export default function TalentBankPage() {
         </div>
 
         {(filter === 'experience' || filter === 'education' || filter === 'credential') && (
-          <div className="border border-slate-800 rounded-xl p-4 bg-slate-950/30">
+          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
             <div className="font-semibold mb-3">
               {filter === 'experience'
                 ? 'Add work experience (editable later)'
@@ -3423,11 +3423,11 @@ export default function TalentBankPage() {
 
             {filter === 'experience' && (
               <div className="grid md:grid-cols-2 gap-3 text-sm">
-                <input className="px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={expCompany} onChange={(e) => setExpCompany(e.target.value)} placeholder="Company" />
-                <input className="px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={expTitle} onChange={(e) => setExpTitle(e.target.value)} placeholder="Role / Title" />
-                <input className="px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={expStart} onChange={(e) => setExpStart(e.target.value)} placeholder="Start date (e.g. Jan 2022)" />
-                <input className="px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={expEnd} onChange={(e) => setExpEnd(e.target.value)} placeholder="End date (or Present)" />
-                <textarea className="md:col-span-2 px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={expDescription} onChange={(e) => setExpDescription(e.target.value)} placeholder="Responsibilities / achievements" rows={4} />
+                <input className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={expCompany} onChange={(e) => setExpCompany(e.target.value)} placeholder="Company" />
+                <input className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={expTitle} onChange={(e) => setExpTitle(e.target.value)} placeholder="Role / Title" />
+                <input className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={expStart} onChange={(e) => setExpStart(e.target.value)} placeholder="Start date (e.g. Jan 2022)" />
+                <input className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={expEnd} onChange={(e) => setExpEnd(e.target.value)} placeholder="End date (or Present)" />
+                <textarea className="md:col-span-2 px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={expDescription} onChange={(e) => setExpDescription(e.target.value)} placeholder="Responsibilities / achievements" rows={4} />
                 <div className="md:col-span-2 flex justify-end">
                   <button className="px-3 py-2 rounded bg-blue-600" onClick={() => addStructuredEntry('experience')}>Add Experience</button>
                 </div>
@@ -3437,19 +3437,19 @@ export default function TalentBankPage() {
             {filter === 'education' && (
               <div className="grid md:grid-cols-2 gap-3 text-sm">
                 <div>
-                  <input list="institutions" className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={eduInstitution} onChange={(e) => setEduInstitution(e.target.value)} placeholder="Institution" />
+                  <input list="institutions" className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={eduInstitution} onChange={(e) => setEduInstitution(e.target.value)} placeholder="Institution" />
                   <datalist id="institutions">
                     {institutions.map((x) => <option key={x} value={x} />)}
                   </datalist>
                 </div>
-                <input className="px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={eduCourse} onChange={(e) => setEduCourse(e.target.value)} placeholder="Course / Qualification" />
-                <input className="px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={eduYear} onChange={(e) => setEduYear(e.target.value)} placeholder="Year (or date range)" />
-                <textarea className="md:col-span-2 px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={eduNotes} onChange={(e) => setEduNotes(e.target.value)} placeholder="Notes (optional)" rows={3} />
+                <input className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={eduCourse} onChange={(e) => setEduCourse(e.target.value)} placeholder="Course / Qualification" />
+                <input className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={eduYear} onChange={(e) => setEduYear(e.target.value)} placeholder="Year (or date range)" />
+                <textarea className="md:col-span-2 px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={eduNotes} onChange={(e) => setEduNotes(e.target.value)} placeholder="Notes (optional)" rows={3} />
                 <div className="md:col-span-2 flex justify-end">
                   <button className="px-3 py-2 rounded bg-blue-600" onClick={() => addStructuredEntry('education')}>Add Education</button>
                 </div>
-                <div className="md:col-span-2 text-xs text-slate-400">
-                  Tip: To add education certificates (PDF/JPG), set “Save files under: Education” above and upload.
+                <div className="md:col-span-2 text-xs text-gray-500">
+                  Tip: To add education certificates (PDF/JPG), set &ldquo;Save files under: Education&rdquo; above and upload.
                 </div>
               </div>
             )}
@@ -3457,20 +3457,20 @@ export default function TalentBankPage() {
             {filter === 'credential' && (
               <div className="grid md:grid-cols-2 gap-3 text-sm">
                 <div>
-                  <input list="credTypes" className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={credType} onChange={(e) => setCredType(e.target.value)} placeholder="Credential type (start typing…)" />
+                  <input list="credTypes" className="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={credType} onChange={(e) => setCredType(e.target.value)} placeholder="Credential type (start typing…)" />
                   <datalist id="credTypes">
                     {credentialTypes.map((x) => <option key={x} value={x} />)}
                   </datalist>
                 </div>
-                <input className="px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={credIssuer} onChange={(e) => setCredIssuer(e.target.value)} placeholder="Issuing authority (e.g. State Govt / Bar Association)" />
-                <input className="px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={credExpiry} onChange={(e) => setCredExpiry(e.target.value)} placeholder="Expiry (optional)" />
-                <input className="px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={credId} onChange={(e) => setCredId(e.target.value)} placeholder="Licence / ID number (optional)" />
-                <textarea className="md:col-span-2 px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white placeholder:text-slate-500" value={credNotes} onChange={(e) => setCredNotes(e.target.value)} placeholder="Notes (optional)" rows={3} />
+                <input className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={credIssuer} onChange={(e) => setCredIssuer(e.target.value)} placeholder="Issuing authority (e.g. State Govt / Bar Association)" />
+                <input className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={credExpiry} onChange={(e) => setCredExpiry(e.target.value)} placeholder="Expiry (optional)" />
+                <input className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={credId} onChange={(e) => setCredId(e.target.value)} placeholder="Licence / ID number (optional)" />
+                <textarea className="md:col-span-2 px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400" value={credNotes} onChange={(e) => setCredNotes(e.target.value)} placeholder="Notes (optional)" rows={3} />
                 <div className="md:col-span-2 flex justify-end">
                   <button className="px-3 py-2 rounded bg-blue-600" onClick={() => addStructuredEntry('credential')}>Add Credential</button>
                 </div>
-                <div className="md:col-span-2 text-xs text-slate-400">
-                  Tip: To attach credential documents/images, set “Save files under: Credential” above and upload.
+                <div className="md:col-span-2 text-xs text-gray-500">
+                  Tip: To attach credential documents/images, set &ldquo;Save files under: Credential&rdquo; above and upload.
                 </div>
               </div>
             )}
@@ -3478,11 +3478,11 @@ export default function TalentBankPage() {
         )}
 
         {filter === 'video' && (
-          <div className="border border-slate-800 rounded-xl p-4 bg-slate-950/30">
+          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="font-semibold">Record a video introduction</div>
-                <div className="text-xs text-slate-400 mt-1">
+                <div className="text-xs text-gray-500 mt-1">
                   Record a short video with your camera. It will upload to your Talent Bank and show under the Videos tab.
                 </div>
               </div>
@@ -3503,30 +3503,30 @@ export default function TalentBankPage() {
         )}
 
         {filter === 'social' && (
-          <div className="border border-slate-800 rounded-xl p-4 bg-slate-950/30">
+          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
             <div className="font-semibold mb-3">Add social media link (shareable in Portfolio)</div>
             <div className="grid md:grid-cols-3 gap-3 items-end text-sm">
-              <label className="text-sm text-slate-200">
+              <label className="text-sm text-gray-700">
                 Platform
                 <select
                   value={socialPlatform}
                   onChange={(e) => setSocialPlatform(e.target.value)}
-                  className="mt-1 w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white"
+                  className="mt-1 w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900"
                 >
                   {socialPlatforms.map((p) => (
-                    <option key={p} className="bg-slate-900 !text-white" value={p}>
+                    <option key={p} value={p}>
                       {p}
                     </option>
                   ))}
                 </select>
               </label>
-              <label className="md:col-span-2 text-sm text-slate-200">
+              <label className="md:col-span-2 text-sm text-gray-700">
                 Profile URL
                 <input
                   value={socialUrl}
                   onChange={(e) => setSocialUrl(e.target.value)}
                   placeholder="https://linkedin.com/in/yourname"
-                  className="mt-1 w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500"
+                  className="mt-1 w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400"
                 />
               </label>
               <div className="md:col-span-3 flex justify-end">
@@ -3534,8 +3534,8 @@ export default function TalentBankPage() {
                   Add Social Link
                 </button>
               </div>
-              <div className="md:col-span-3 text-xs text-slate-400">
-                Tip: Tick “Show in Portfolio” on any social link to include it when sharing your portfolio with businesses.
+              <div className="md:col-span-3 text-xs text-gray-500">
+                Tip: Tick &ldquo;Show in Portfolio&rdquo; on any social link to include it when sharing your portfolio with businesses.
               </div>
             </div>
           </div>
@@ -3550,24 +3550,24 @@ export default function TalentBankPage() {
             return (
               <div
                 key={item.id}
-                className="border border-slate-800 rounded-lg p-4 flex gap-4"
+                className="border border-gray-200 rounded-lg p-4 flex gap-4"
               >
                 {renderThumb(item)}
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold break-words">{item.title}</div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-gray-500">
                   {item.item_type}
                     {item.file_type ? ` • ${item.file_type}` : ''}
                     {isResume && ' • Resume detected'}
                 </div>
                   {item.item_type === 'social' && !!socialUrl && (
-                    <div className="mt-1 text-xs text-slate-300 break-all">
+                    <div className="mt-1 text-xs text-gray-500 break-all">
                       {socialUrl}
                     </div>
                   )}
 
                   {item.title !== 'Portfolio' && (
-                    <label className="mt-2 flex items-center gap-2 text-xs text-slate-300">
+                    <label className="mt-2 flex items-center gap-2 text-xs text-gray-600">
                       <input
                         type="checkbox"
                         checked={!!portfolioSelected[item.id]}
@@ -3581,7 +3581,7 @@ export default function TalentBankPage() {
                     <div className="mt-2 flex items-center gap-3">
                       {item.item_type === 'social' && !!socialUrl && (
                         <button
-                          className="text-blue-400 text-xs underline"
+                          className="text-blue-600 text-xs underline"
                           onClick={() => window.open(socialUrl, '_blank')}
                         >
                           Open
@@ -3607,7 +3607,7 @@ export default function TalentBankPage() {
                       )}
                       {item.item_type === 'social' && (
                         <button
-                          className="px-2 py-1 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-white rounded border border-white/10"
+                          className="px-2 py-1 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded border border-gray-300"
                           onClick={() => parseSocialFromItem(item)}
                           title="Parse public profile data (GitHub/YouTube/Website) and import selected info into your portfolio"
                         >
@@ -3615,7 +3615,7 @@ export default function TalentBankPage() {
                         </button>
                       )}
                       <button
-                        className="text-blue-400 text-xs underline"
+                        className="text-blue-600 text-xs underline"
                         onClick={() => {
                           if (item.item_type === 'social') {
                             setEditEntry({
@@ -3634,7 +3634,7 @@ export default function TalentBankPage() {
                         Edit
                       </button>
                       <button
-                        className="text-red-400 text-xs underline"
+                        className="text-red-600 text-xs underline"
                         onClick={() => deleteItem(item)}
                       >
                         Delete
@@ -3645,7 +3645,7 @@ export default function TalentBankPage() {
                 {item.file_path && (
                     <div className="mt-2 flex items-center gap-3 flex-wrap">
                       <button
-                        className="text-blue-400 text-xs underline"
+                        className="text-blue-600 text-xs underline"
                         onClick={() => openFile(item.file_path!)}
                       >
                         Open
@@ -3663,7 +3663,7 @@ export default function TalentBankPage() {
                         </button>
                       )}
                       <button
-                        className="text-red-400 text-xs underline"
+                        className="text-red-600 text-xs underline"
                         onClick={() => deleteItem(item)}
                       >
                         Delete

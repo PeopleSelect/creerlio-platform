@@ -2293,6 +2293,7 @@ export function TalentDashboardShell({
             {(['overview'] as TabType[]).map((tab) => (
               <button
                 key={tab}
+                title="Your dashboard home — see a summary of your profile, recent activity, and quick actions"
                 onClick={() => {
                   if (isBusinessRoute) {
                     router.push(`/dashboard/talent?tab=${tab}`)
@@ -2321,6 +2322,7 @@ export function TalentDashboardShell({
             ))}
             <Link
               href="/portfolio/view"
+              title="Preview your public portfolio as businesses and recruiters will see it"
               className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
             >
               View Portfolio
@@ -2328,6 +2330,11 @@ export function TalentDashboardShell({
             {(['applications', 'connections'] as TabType[]).map((tab) => (
               <button
                 key={tab}
+                title={
+                  tab === 'applications'
+                    ? 'Track your job applications — see which roles you\'ve applied for and their status'
+                    : 'Manage connection requests from businesses and recruiters interested in your profile'
+                }
                 onClick={() => {
                   if (isBusinessRoute) {
                     router.push(`/dashboard/talent?tab=${tab}`)
@@ -2356,12 +2363,14 @@ export function TalentDashboardShell({
             ))}
             <Link
               href="/dashboard/talent/calendar"
+              title="Schedule and manage your interviews, meetings, and availability"
               className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
             >
               Calendar ↗
             </Link>
             <Link
               href="/dashboard/talent/bank"
+              title="Store and manage your resumes, certificates, projects, and attachments in one place"
               className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
             >
               Talent Bank ↗
@@ -2369,6 +2378,7 @@ export function TalentDashboardShell({
             {/* Portfolio Templates temporarily hidden */}
             <Link
               href="/dashboard/talent/business-connections"
+              title="View and manage your connections with businesses — message, review, and collaborate"
               className={`px-6 py-3 text-sm font-medium transition-colors ${
                 isBusinessRoute
                   ? 'text-blue-600 border-b-2 border-blue-600'

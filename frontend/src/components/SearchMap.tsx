@@ -41,7 +41,7 @@ export default function SearchMap({ markers, className = '', center, zoom = 11, 
   const map = useRef<any>(null)
   const markersRef = useRef<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [activeStyle, setActiveStyle] = useState<MapStyle>('dark')
+  const [activeStyle, setActiveStyle] = useState<MapStyle>('streets')
 
   useEffect(() => {
     if (!mapContainer.current || typeof window === 'undefined' || !mapboxgl) return

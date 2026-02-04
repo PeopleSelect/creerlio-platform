@@ -1170,8 +1170,8 @@ function SearchPageInner() {
       )}
 
       {/* Main Content */}
-      <main className={isEmbedded ? 'h-full px-6 py-6' : 'max-w-7xl mx-auto px-8 py-16'}>
-        <div className="space-y-12">
+      <main className={isEmbedded ? 'h-full px-6 py-6' : 'max-w-7xl mx-auto px-8 py-4'}>
+        <div className="space-y-6">
           {/* Hero Section */}
           <div className="text-center space-y-6">
             {!isAuthenticated ? (

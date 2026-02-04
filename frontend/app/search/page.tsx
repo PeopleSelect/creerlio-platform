@@ -1174,9 +1174,6 @@ function SearchPageInner() {
         <div className="space-y-12">
           {/* Hero Section */}
           <div className="text-center space-y-6">
-            <h1 className="text-3xl lg:text-4xl font-extrabold leading-tight text-gray-900">
-              Search <span className="text-[#2B4EA2]">{isPublicTalentAudience ? 'Businesses or Jobs' : 'Talent, Businesses or Jobs'}</span>
-            </h1>
             {!isAuthenticated ? (
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Link

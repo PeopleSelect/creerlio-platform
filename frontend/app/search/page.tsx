@@ -441,7 +441,6 @@ function SearchPageInner() {
                 <Link href="/#talent" className="hover:text-[#2B4EA2] transition-colors">Talent</Link>
                 <Link href="/#business" className="hover:text-[#2B4EA2] transition-colors">Business</Link>
                 <Link href="/search" className="hover:text-[#2B4EA2] transition-colors text-[#2B4EA2]">Search</Link>
-                <Link href="/jobs" className="hover:text-[#2B4EA2] transition-colors">Jobs</Link>
                 {isAdmin && (
                   <Link href="/admin" className="hover:text-[#2B4EA2] transition-colors">
                     Admin

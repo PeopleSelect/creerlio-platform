@@ -81,6 +81,7 @@ interface BusinessDiscoveryMapProps {
   intentStatus?: string
   intentCompatibility?: boolean
   fitBounds?: [[number, number], [number, number]] | null
+  returnTo?: string
   jobs?: Array<{
     id: string | number
     title: string
@@ -109,6 +110,7 @@ const emitDebugLog = (payload: Record<string, unknown>) => {
 }
 
 const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDiscoveryMapProps>((props, ref) => {
+  const returnTo = props.returnTo || '/dashboard/talent'
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<any>(null)
   const markersRef = useRef<any[]>([])
@@ -862,7 +864,7 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
                 })
               } else if (jobsList.length === 1) {
                 // Single job - go directly to it
-                router.push(`/jobs/${jobsList[0].id}?fromMap=true&returnTo=/dashboard/talent`)
+                router.push(`/jobs/${jobsList[0].id}?fromMap=true&returnTo=${encodeURIComponent(returnTo)}`)
               } else {
                 // No jobs found - show message or navigate to business profile
                 alert('No jobs available for this business.')
@@ -1111,19 +1113,19 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
                 })
               } else if (jobsList.length === 1) {
                 // Single job - go directly to it
-                router.push(`/jobs/${jobsList[0].id}?fromMap=true&returnTo=/dashboard/talent`)
+                router.push(`/jobs/${jobsList[0].id}?fromMap=true&returnTo=${encodeURIComponent(returnTo)}`)
               } else {
                 // No jobs found - go to the job we clicked
-                router.push(`/jobs/${job.id}?fromMap=true&returnTo=/dashboard/talent`)
+                router.push(`/jobs/${job.id}?fromMap=true&returnTo=${encodeURIComponent(returnTo)}`)
               }
             } else {
               // If API fails, go to the job we clicked
-              router.push(`/jobs/${job.id}?fromMap=true&returnTo=/dashboard/talent`)
+              router.push(`/jobs/${job.id}?fromMap=true&returnTo=${encodeURIComponent(returnTo)}`)
             }
           } catch (error) {
             console.error('[BusinessDiscoveryMap] Error fetching jobs for business:', error)
             // On error, go to the job we clicked
-            router.push(`/jobs/${job.id}?fromMap=true&returnTo=/dashboard/talent`)
+            router.push(`/jobs/${job.id}?fromMap=true&returnTo=${encodeURIComponent(returnTo)}`)
           }
         }
         
@@ -1856,7 +1858,7 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
                         <button
                           onClick={() => {
                             setJobListModal({ open: false, businessId: null, businessName: '', jobs: [] })
-                            router.push(`/jobs/${job.id}?fromMap=true&returnTo=/dashboard/talent`)
+                            router.push(`/jobs/${job.id}?fromMap=true&returnTo=${encodeURIComponent(returnTo)}`)
                           }}
                           className="shrink-0 px-3 py-1.5 rounded-md bg-purple-600 text-white text-xs font-semibold hover:bg-purple-700 transition-colors"
                         >

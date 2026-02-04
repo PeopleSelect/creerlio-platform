@@ -757,7 +757,6 @@ function BusinessMapPageInner() {
                 <Link href="/talent" className="hover:text-blue-600 transition-colors">Talent</Link>
                 <Link href="/business" className="hover:text-blue-600 transition-colors">Business</Link>
                 <Link href="/search" className="hover:text-blue-600 transition-colors">Search</Link>
-                <Link href="/jobs" className="hover:text-blue-600 transition-colors">Jobs</Link>
               </nav>
 
               <div className="flex gap-3">

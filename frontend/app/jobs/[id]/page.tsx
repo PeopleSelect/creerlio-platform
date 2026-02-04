@@ -418,7 +418,7 @@ export default function JobDetailPage() {
             </Link>
             <nav className="hidden lg:flex items-center gap-x-8 text-sm text-slate-300">
               <Link href="/" className="hover:text-blue-400 transition-colors">Home</Link>
-              <Link href="/jobs" className="hover:text-blue-400 transition-colors">Jobs</Link>
+              <Link href="/search" className="hover:text-blue-400 transition-colors">Search</Link>
             </nav>
             {fromMap ? (
               <Link

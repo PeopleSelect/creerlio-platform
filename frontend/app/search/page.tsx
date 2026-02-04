@@ -429,20 +429,19 @@ function SearchPageInner() {
   return (
     <div className={isEmbedded ? 'h-full bg-white' : 'min-h-screen bg-white'}>
       {!isEmbedded && (
-        <header className="sticky top-0 z-50 bg-black border-0">
+        <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-8 py-4">
             <div className="flex items-center justify-between">
-              <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-white hover:text-[#2B4EA2] transition-colors">
+              <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-gray-900">
                 Creerlio
               </Link>
 
-              <nav className="hidden lg:flex items-center gap-x-8 text-sm text-white">
-                <Link href="/about" className="hover:text-[#2B4EA2] transition-colors">About</Link>
-                <Link href="/#talent" className="hover:text-[#2B4EA2] transition-colors">Talent</Link>
-                <Link href="/#business" className="hover:text-[#2B4EA2] transition-colors">Business</Link>
-                <Link href="/search" className="hover:text-[#2B4EA2] transition-colors text-[#2B4EA2]">Search</Link>
+              <nav className="hidden lg:flex items-center gap-x-8 text-sm text-gray-600">
+                <Link href="/talent" className="hover:text-blue-600 transition-colors">Talent</Link>
+                <Link href="/business" className="hover:text-blue-600 transition-colors">Business</Link>
+                <Link href="/search" className="hover:text-blue-600 transition-colors text-blue-600">Search</Link>
                 {isAdmin && (
-                  <Link href="/admin" className="hover:text-[#2B4EA2] transition-colors">
+                  <Link href="/admin" className="hover:text-blue-600 transition-colors">
                     Admin
                   </Link>
                 )}
@@ -451,14 +450,14 @@ function SearchPageInner() {
                     {userType === 'business' ? (
                       <Link
                         href="/dashboard/business"
-                        className="hover:text-[#2B4EA2] transition-colors"
+                        className="hover:text-blue-600 transition-colors"
                       >
                         Business Dashboard
                       </Link>
                     ) : userType === 'talent' ? (
                       <Link
                         href="/dashboard/talent"
-                        className="hover:text-[#2B4EA2] transition-colors"
+                        className="hover:text-blue-600 transition-colors"
                       >
                         Talent Dashboard
                       </Link>
@@ -475,55 +474,57 @@ function SearchPageInner() {
                         setActiveRole(null)
                         router.push('/')
                       }}
-                      className="hover:text-[#2B4EA2] transition-colors"
+                      className="hover:text-blue-600 transition-colors"
                     >
-                      Logout
+                      Sign out
                     </button>
                   </>
                 ) : null}
               </nav>
 
-              {!isAuthenticated ? (
-                <>
-                  <Link
-                    href="/login/talent?mode=signup&redirect=/dashboard/talent"
-                    className="px-4 py-2 rounded-lg bg-[#2B4EA2] hover:bg-[#243F86] font-semibold text-sm text-white transition-colors"
-                  >
-                    Create Talent Account
-                  </Link>
-                  <Link
-                    href="/login/business?mode=signup&redirect=/dashboard/business"
-                    className="px-4 py-2 rounded-lg bg-[#2B4EA2] hover:bg-[#243F86] font-semibold text-sm text-white transition-colors"
-                  >
-                    Create Business Account
-                  </Link>
-                  <Link
-                    href="/login/talent?mode=signin&redirect=/dashboard/talent"
-                    className="px-5 py-2 rounded-lg bg-[#2B4EA2] hover:bg-[#243F86] font-semibold text-sm text-white transition-colors"
-                  >
-                    Sign In
-                  </Link>
-                </>
-              ) : (
-                <>
-                  {userType === 'talent' ? (
+              <div className="flex gap-3">
+                {!isAuthenticated ? (
+                  <>
                     <Link
-                      href="/dashboard/talent"
-                      className="px-5 py-2 rounded-lg bg-[#2B4EA2] hover:bg-[#243F86] font-semibold text-sm text-white transition-colors"
+                      href="/login/talent?mode=signup&redirect=/dashboard/talent"
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
                     >
-                      Talent Dashboard
+                      Create Talent Account
                     </Link>
-                  ) : null}
-                  {userType === 'business' ? (
                     <Link
-                      href="/dashboard/business"
-                      className="px-5 py-2 rounded-lg bg-[#2B4EA2] hover:bg-[#243F86] font-semibold text-sm text-white transition-colors"
+                      href="/login/business?mode=signup&redirect=/dashboard/business"
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
                     >
-                      Business Dashboard
+                      Create Business Account
                     </Link>
-                  ) : null}
-                </>
-              )}
+                    <Link
+                      href="/login/talent?mode=signin&redirect=/dashboard/talent"
+                      className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+                    >
+                      Sign In
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    {userType === 'talent' ? (
+                      <Link
+                        href="/dashboard/talent"
+                        className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+                      >
+                        Talent Dashboard
+                      </Link>
+                    ) : null}
+                    {userType === 'business' ? (
+                      <Link
+                        href="/dashboard/business"
+                        className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+                      >
+                        Business Dashboard
+                      </Link>
+                    ) : null}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </header>

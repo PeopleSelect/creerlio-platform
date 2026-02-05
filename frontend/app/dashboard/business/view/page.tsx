@@ -2610,7 +2610,56 @@ function BusinessProfileViewPageInner() {
               </div>
             </nav>
 
-            {/* Banner removed */}
+            {/* Header (avatar + business info) */}
+            <section className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+              <div className="flex flex-col md:flex-row md:items-center gap-5">
+                <div className="shrink-0">
+                  <div className="w-20 h-20 md:w-24 md:h-24 rounded-3xl overflow-hidden border border-white/10 bg-white shadow-xl">
+                    {avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img 
+                        src={avatarUrl} 
+                        alt="Avatar" 
+                        className="w-full h-full object-contain p-2"
+                        onError={(e) => {
+                          console.error('[View Profile] Avatar image failed to load:', avatarUrl)
+                          e.currentTarget.style.display = 'none'
+                        }}
+                        onLoad={() => {
+                          console.log('[View Profile] Avatar image loaded successfully:', avatarUrl)
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center font-bold text-3xl">
+                        {name.slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <h1 className="text-3xl md:text-4xl font-bold truncate">{name}</h1>
+                      <p className="text-slate-300 mt-1">{title}</p>
+                      <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300 mt-3">
+                        {location ? <span>📍 {location}</span> : null}
+                        {yearsExperience ? (
+                          <span className="px-3 py-1 rounded-xl bg-white/5 border border-white/10">{yearsExperience}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                    {isOwner && (
+                      <Link
+                        href="/dashboard/business/edit"
+                        className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold shrink-0"
+                      >
+                        Edit Profile
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
 
             <div className="grid lg:grid-cols-12 gap-6">
               {/* Main */}

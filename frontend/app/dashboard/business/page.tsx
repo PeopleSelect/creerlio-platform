@@ -2793,11 +2793,12 @@ export default function BusinessDashboard() {
       {/* Header */}
       <header className="bg-black border-0">
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
+          <Link href="/" className="flex items-center space-x-3">
             <div className="px-4 py-2 rounded-full bg-[#20C997] text-white text-base font-bold">
               C
             </div>
             <span className="text-white text-2xl font-bold">Creerlio</span>
+            <span className="text-white/80 text-lg font-semibold">Business Dashboard</span>
           </Link>
           
           <div className="flex items-center space-x-4">
@@ -2824,7 +2825,6 @@ export default function BusinessDashboard() {
       {/* Dashboard Content */}
       <div className="max-w-7xl mx-auto px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Business Dashboard</h1>
           <p className="text-gray-600">Manage your profile, jobs, and talent connections</p>
         </div>
 

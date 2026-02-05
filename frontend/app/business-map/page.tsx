@@ -57,14 +57,6 @@ const ROLE_TITLES = [
   'Accountant', 'Financial Analyst', 'Consultant', 'Operations Manager', 'Customer Success Manager'
 ] as const
 
-const QUICK_SEARCHES = [
-  { label: 'Software Engineers', role: 'Software Engineer', skills: ['JavaScript', 'React'] },
-  { label: 'Data Scientists', role: 'Data Scientist', skills: ['Python', 'Machine Learning'] },
-  { label: 'Designers', role: 'Designer', skills: ['UI/UX Design', 'Figma'] },
-  { label: 'Marketing', role: 'Marketing', skills: ['Marketing', 'Sales'] },
-  { label: 'Project Managers', role: 'Project Manager', skills: ['Project Management', 'Agile'] },
-]
-
 export default function BusinessMapPage() {
   return (
     <Suspense fallback={null}>
@@ -94,7 +86,7 @@ function BusinessMapPageInner() {
   const RADIUS_KEY = 'creerlio_business_map_radius_km_v1'
   const [radiusKm, setRadiusKm] = useState<number>(50) // Increased default radius
   const [searchCenter, setSearchCenter] = useState<{ lng: number; lat: number; label?: string } | null>(null)
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const [showAdvancedFilters] = useState(true)
   const [resultsCollapsed, setResultsCollapsed] = useState(false)
 
   // Simplified filters
@@ -504,14 +496,8 @@ function BusinessMapPageInner() {
     setSkillsInputOpen(false)
   }
 
-  // Handle quick search
-  const handleQuickSearch = (quickSearch: typeof QUICK_SEARCHES[0]) => {
-    setSearchQuery(quickSearch.role)
-    setFilters(prev => ({
-      ...prev,
-      role: quickSearch.role,
-      skills: quickSearch.skills
-    }))
+  const handleRemoveSkill = (skill: string) => {
+    setFilters(prev => ({ ...prev, skills: prev.skills.filter(s => s !== skill) }))
   }
 
   // Clear all filters
@@ -790,40 +776,37 @@ function BusinessMapPageInner() {
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Filters Section - 1/4 width */}
           <div className="lg:w-[320px]">
-            <div className="dashboard-card rounded-xl p-3">
-              <h1 className="text-lg font-bold text-white mb-3">Find Talent</h1>
+            <div className="rounded-xl p-4 border border-white/10 bg-slate-900/50 backdrop-blur-sm">
+              <div className="mb-1">
+                <div className="text-white font-semibold text-sm">Filters</div>
+              </div>
+              <div className="text-xs text-slate-400 mb-5">Filters update the map in real time. No page reloads.</div>
             
-            {/* Main Search Bar */}
-            <div className="mb-3">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by role, skill, or industry"
-                className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
-              />
-            </div>
-
-            {/* Quick Search Buttons */}
-            <div className="mb-3">
-              <p className="text-xs text-gray-300 mb-1.5">Quick searches:</p>
-              <div className="flex flex-wrap gap-1.5">
-                {QUICK_SEARCHES.map((qs) => (
-                  <button
-                    key={qs.label}
-                    onClick={() => handleQuickSearch(qs)}
-                    className="px-2 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded text-xs transition-colors"
-                  >
-                    {qs.label}
-                  </button>
-                ))}
+            {/* Search */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-200 mb-2.5">Search</label>
+              <div className="flex items-center gap-2.5">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Role, skill, or industry…"
+                  className="w-full px-4 py-2.5 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
+                />
+                <button
+                  type="button"
+                  disabled={!searchQuery.trim()}
+                  className="px-5 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm shrink-0"
+                >
+                  Go
+                </button>
               </div>
             </div>
 
-            {/* Location (Optional) */}
-            <div className="mb-3">
-              <label className="block text-xs font-medium text-gray-300 mb-1.5">
-                Location (Optional)
+            {/* Location */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-200 mb-2.5">
+                Within {radiusKm} km of…
               </label>
               <div className="relative">
                 <input
@@ -831,17 +814,20 @@ function BusinessMapPageInner() {
                   value={locQuery}
                   onChange={(e) => setLocQuery(e.target.value)}
                   onFocus={() => locSuggestions.length > 0 && setLocOpen(true)}
-                  placeholder="City, state, or country"
-                  className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+                  onBlur={() => setTimeout(() => setLocOpen(false), 150)}
+                  placeholder="Suburb, city, or region…"
+                  className="w-full px-4 py-2.5 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
                 />
                 {locOpen && locSuggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
+                  <div className="absolute left-0 right-0 mt-1.5 rounded-lg border border-white/10 bg-slate-950/98 backdrop-blur shadow-2xl overflow-hidden z-50">
                     {locSuggestions.map((s, idx) => (
                       <button
                         key={s.id}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleLocationSelect(s)}
-                        className={`w-full text-left px-4 py-2 hover:bg-white/10 transition-colors ${
-                          idx === locActiveIdx ? 'bg-blue-500/20' : ''
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                          idx === locActiveIdx ? 'bg-blue-500/20 text-white' : 'bg-transparent text-slate-200 hover:bg-white/5'
                         }`}
                       >
                         {s.label}
@@ -850,40 +836,19 @@ function BusinessMapPageInner() {
                   </div>
                 )}
               </div>
-              {searchCenter && (
-                <div className="mt-1.5">
-                  <label className="block text-xs font-medium text-gray-300 mb-1">
-                    Search radius: {radiusKm} km
-                  </label>
-                  <input
-                    type="range"
-                    min="5"
-                    max="200"
-                    step="5"
-                    value={radiusKm}
-                    onChange={(e) => setRadiusKm(parseInt(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Advanced Filters Toggle */}
-            <div className="flex items-center justify-between mb-2">
-              <button
-                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className="text-xs text-blue-400 hover:text-blue-300"
-              >
-                {showAdvancedFilters ? '▼ Hide' : '▶ Show'} Advanced
-              </button>
-              {(searchQuery || locQuery || filters.role || filters.skills.length > 0 || filters.minExperience) && (
-                <button
-                  onClick={handleClearFilters}
-                  className="text-xs text-gray-400 hover:text-gray-300"
-                >
-                  Clear all
-                </button>
-              )}
+              <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+                <span className="font-medium">Radius: {radiusKm} km</span>
+                <input
+                  type="range"
+                  min="5"
+                  max="200"
+                  step="5"
+                  value={radiusKm}
+                  onChange={(e) => setRadiusKm(parseInt(e.target.value))}
+                  className="w-32 accent-blue-500"
+                />
+              </div>
+              {locError ? <div className="mt-2 text-xs text-red-400 font-medium">{locError}</div> : null}
             </div>
 
             {/* Advanced Filters (Collapsible) */}
@@ -891,38 +856,40 @@ function BusinessMapPageInner() {
               <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
                 {/* Role Filter */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-300 mb-1">Role/Title</label>
+                  <label className="block text-sm font-medium text-slate-200 mb-2.5">Role/Title</label>
                   <input
                     type="text"
                     value={filters.role}
                     onChange={(e) => setFilters(prev => ({ ...prev, role: e.target.value }))}
                     placeholder="e.g., Software Engineer"
-                    className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+                    className="w-full px-3 py-2 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
                   />
                 </div>
 
                 {/* Skills Filter */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-300 mb-1">Skills</label>
+                  <label className="block text-sm font-medium text-slate-200 mb-2.5">Skills</label>
                   <div className="relative">
                     <input
                       type="text"
                       value={skillsInput}
                       onChange={(e) => handleSkillsInputChange(e.target.value)}
-                      placeholder="Type to search skills..."
-                      className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+                      placeholder="Type to search skills…"
+                      className="w-full px-3 py-2 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
                     />
                     {skillsInputOpen && (
-                      <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
+                      <div className="absolute left-0 right-0 mt-1 rounded-lg border border-white/10 bg-slate-950/95 backdrop-blur shadow-xl overflow-hidden z-20">
                         {SKILLS_OPTIONS.filter(s => s.toLowerCase().includes(skillsInput.toLowerCase()))
                           .slice(0, 10)
                           .map((skill, idx) => (
                             <button
                               key={skill}
-                              onClick={() => handleAddSkill(skill)}
-                              className={`w-full text-left px-4 py-2 hover:bg-white/10 transition-colors ${
-                                idx === skillsInputActiveIdx ? 'bg-blue-500/20' : ''
+                              type="button"
+                              className={`w-full text-left px-3 py-2 text-sm ${
+                                idx === skillsInputActiveIdx ? 'bg-white/10 text-white' : 'bg-transparent text-slate-200 hover:bg-white/5'
                               }`}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => handleAddSkill(skill)}
                             >
                               {skill}
                             </button>
@@ -931,16 +898,14 @@ function BusinessMapPageInner() {
                     )}
                   </div>
                   {filters.skills.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
+                    <div className="mt-2 flex flex-wrap gap-2">
                       {filters.skills.map(skill => (
-                        <span
-                          key={skill}
-                          className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded text-sm flex items-center gap-1"
-                        >
+                        <span key={skill} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-500/20 text-blue-200 text-xs">
                           {skill}
                           <button
-                            onClick={() => setFilters(prev => ({ ...prev, skills: prev.skills.filter(s => s !== skill) }))}
-                            className="hover:text-red-400"
+                            type="button"
+                            onClick={() => handleRemoveSkill(skill)}
+                            className="text-blue-200 hover:text-white"
                           >
                             ×
                           </button>
@@ -952,24 +917,24 @@ function BusinessMapPageInner() {
 
                 {/* Experience Filter */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-300 mb-1">Min Experience (Years)</label>
+                  <label className="block text-sm font-medium text-slate-200 mb-2.5">Minimum experience (years)</label>
                   <input
                     type="number"
                     min="0"
                     value={filters.minExperience}
                     onChange={(e) => setFilters(prev => ({ ...prev, minExperience: e.target.value }))}
                     placeholder="e.g., 5"
-                    className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+                    className="w-full px-3 py-2 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
                   />
                 </div>
 
                 {/* Intent Filter */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-300 mb-1">Intent Status</label>
+                  <label className="block text-sm font-medium text-slate-200 mb-2.5">Intent filters</label>
                   <select
                     value={intentStatusFilter}
                     onChange={(e) => setIntentStatusFilter(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
+                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-sm"
                   >
                     <option value="">All intent statuses</option>
                     <option value="open_to_conversations">Open to conversations</option>
@@ -979,6 +944,16 @@ function BusinessMapPageInner() {
                 </div>
               </div>
             )}
+
+            <div className="pt-3 flex items-center justify-between gap-3 border-t border-white/10 mt-4">
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 hover:bg-white/10 text-xs font-medium transition-colors"
+                onClick={handleClearFilters}
+              >
+                Clear filters
+              </button>
+            </div>
 
             {/* Results Count */}
             {!loading && (

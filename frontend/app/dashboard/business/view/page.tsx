@@ -2610,78 +2610,7 @@ function BusinessProfileViewPageInner() {
               </div>
             </nav>
 
-            {/* Hero */}
-            <section className="overflow-hidden rounded-3xl border border-white/10 bg-slate-950/40">
-              <div className="h-64 md:h-[24rem] bg-slate-900 relative">
-                {bannerUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img 
-                    src={bannerUrl} 
-                    alt="Banner" 
-                    className="w-full h-full object-contain opacity-80"
-                    onError={(e) => {
-                      console.error('[View Profile] Banner image failed to load:', bannerUrl)
-                      e.currentTarget.style.display = 'none'
-                    }}
-                    onLoad={() => {
-                      console.log('[View Profile] Banner image loaded successfully')
-                    }}
-                  />
-                ) : (
-                  <div className="w-full h-full bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,0.35),transparent_45%),radial-gradient(circle_at_80%_30%,rgba(16,185,129,0.25),transparent_45%)]" />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/10 to-transparent" />
-              </div>
-              <div className="p-6 md:p-8">
-                <div className="flex flex-col md:flex-row md:items-end gap-5">
-                  <div className="shrink-0 -mt-8 md:-mt-10">
-                    <div className="w-20 h-20 md:w-24 md:h-24 rounded-3xl overflow-hidden border border-white/10 bg-white shadow-xl">
-                      {avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img 
-                          src={avatarUrl} 
-                          alt="Avatar" 
-                          className="w-full h-full object-contain p-2"
-                          onError={(e) => {
-                            console.error('[View Profile] Avatar image failed to load:', avatarUrl)
-                            e.currentTarget.style.display = 'none'
-                          }}
-                          onLoad={() => {
-                            console.log('[View Profile] Avatar image loaded successfully:', avatarUrl)
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center font-bold text-3xl">
-                          {name.slice(0, 1).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <h1 className="text-3xl md:text-4xl font-bold truncate">{name}</h1>
-                        <p className="text-slate-300 mt-1">{title}</p>
-                        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300 mt-3">
-                          {location ? <span>📍 {location}</span> : null}
-                          {yearsExperience ? (
-                            <span className="px-3 py-1 rounded-xl bg-white/5 border border-white/10">{yearsExperience}</span>
-                          ) : null}
-                        </div>
-                      </div>
-                      {isOwner && (
-                        <Link
-                          href="/dashboard/business/edit"
-                          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold shrink-0"
-                        >
-                          Edit Profile
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+            {/* Banner removed */}
 
             <div className="grid lg:grid-cols-12 gap-6">
               {/* Main */}

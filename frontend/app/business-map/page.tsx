@@ -95,6 +95,7 @@ function BusinessMapPageInner() {
   const [radiusKm, setRadiusKm] = useState<number>(50) // Increased default radius
   const [searchCenter, setSearchCenter] = useState<{ lng: number; lat: number; label?: string } | null>(null)
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const [resultsCollapsed, setResultsCollapsed] = useState(false)
 
   // Simplified filters
   const [filters, setFilters] = useState({
@@ -786,9 +787,9 @@ function BusinessMapPageInner() {
 
       <div className={`${embedded ? 'px-0 py-0' : 'max-w-7xl mx-auto px-8 py-6'}`}>
         {/* Map and Filters Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="flex flex-col lg:flex-row gap-4">
           {/* Filters Section - 1/4 width */}
-          <div className="lg:col-span-1">
+          <div className="lg:w-[320px]">
             <div className="dashboard-card rounded-xl p-3">
               <h1 className="text-lg font-bold text-white mb-3">Find Talent</h1>
             
@@ -1004,96 +1005,105 @@ function BusinessMapPageInner() {
             </div>
           </div>
 
-          {/* Map - 3/4 width */}
-          <div className="lg:col-span-3">
-            <div className="dashboard-card rounded-xl p-0 overflow-hidden" style={{ height: '600px' }}>
-              {typeof window !== 'undefined' && (searchCenter || talents.length > 0) ? (
-                <SearchMap
-                  markers={mapMarkers}
-                  center={mapCenter}
-                  zoom={mapMarkers.length > 0 ? (mapMarkers.length === 1 ? 12 : 11) : 10}
-                  className="w-full h-full"
-                  onMarkerClick={handleTalentMarkerClick}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-400">
-                  <div className="text-center">
-                    <p className="text-lg mb-2">📍 Search for Talent</p>
-                    <p className="text-sm">Enter a search term above to find talent</p>
-                    <p className="text-xs text-gray-500 mt-1">Location is optional - you can search everywhere or filter by location</p>
+          {/* Right side: Results + Map (Talent Map layout without Route Intelligence) */}
+          <div className="flex-1 flex gap-4">
+            {/* Results Panel */}
+            {resultsCollapsed ? (
+              <div className="flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setResultsCollapsed(false)}
+                  className="h-full px-2 py-4 rounded-xl border border-white/10 bg-slate-900/50 backdrop-blur-sm hover:bg-white/5 transition-colors flex flex-col items-center justify-center gap-2"
+                  title="Expand Results"
+                >
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  <div className="text-white font-semibold text-xs whitespace-nowrap" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                    Results ({talents.length})
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
+                </button>
+              </div>
+            ) : (
+              <div className="w-56 flex-shrink-0 rounded-xl p-3 border border-white/10 bg-slate-900/50 backdrop-blur-sm overflow-y-auto relative">
+                <button
+                  type="button"
+                  onClick={() => setResultsCollapsed(true)}
+                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors z-10"
+                  title="Collapse Results"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
 
-          {/* Talent Results List - moved below map */}
-          <div className="lg:col-span-4 mt-4">
-            {talents.length > 0 ? (
-              <div className="dashboard-card rounded-xl p-4">
-                <h2 className="text-lg font-bold text-white mb-4">Results ({talents.length})</h2>
-                <div className="space-y-3 max-h-[600px] overflow-auto">
-                  {talents.map((talent) => (
-                    <div
-                      key={talent.id}
-                      className="border border-white/10 rounded-lg p-3 hover:border-blue-500/50 transition-colors cursor-pointer bg-white/5"
-                      onClick={() => handleTalentMarkerClick(talent.id)}
-                    >
-                      {talent.title && (
-                        <div className="flex items-center gap-2 mb-2">
-                          {talent.intent_visibility && talent.intent_status ? (
-                            <span
-                              className={`inline-flex h-2 w-2 rounded-full ${
-                                talent.intent_status === 'open_to_conversations' ? 'bg-emerald-400' :
-                                talent.intent_status === 'passive_exploring' ? 'bg-blue-400' :
-                                'bg-slate-400'
-                              }`}
-                              title={`Intent: ${talent.intent_status.replace(/_/g, ' ')}`}
-                            />
-                          ) : null}
-                          <h3 className="text-base font-semibold text-white">{talent.title}</h3>
-                        </div>
-                      )}
-                      {talent.search_summary && (
-                        <p className="text-xs text-gray-300 mb-2 line-clamp-2">{talent.search_summary}</p>
-                      )}
-                      {talent.experience_years !== null && (
-                        <p className="text-xs text-gray-400 mb-1">
-                          {talent.experience_years} {talent.experience_years === 1 ? 'year' : 'years'} experience
-                        </p>
-                      )}
-                      {talent.skills && talent.skills.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {talent.skills.slice(0, 3).map((skill, idx) => (
-                            <span
-                              key={idx}
-                              className="px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded text-xs"
-                            >
-                              {skill}
-                            </span>
-                          ))}
-                          {talent.skills.length > 3 && (
-                            <span className="px-1.5 py-0.5 bg-gray-500/20 text-gray-400 rounded text-xs">
-                              +{talent.skills.length - 3}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {(talent.city || talent.state) && (
-                        <p className="text-xs text-gray-400">
-                          📍 {[talent.city, talent.state].filter(Boolean).join(', ')}
-                          {talent.distance_km && ` (${talent.distance_km} km)`}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-white font-semibold text-sm">Results</div>
+                  <div className="text-xs text-slate-400">{talents.length}</div>
                 </div>
+
+                {talents.length === 0 ? (
+                  <div className="text-center py-4 text-slate-400 text-xs">
+                    No talent found
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {talents.map((talent) => (
+                      <button
+                        key={talent.id}
+                        type="button"
+                        onClick={() => handleTalentMarkerClick(talent.id)}
+                        className="w-full text-left p-2 rounded border transition-all bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20"
+                      >
+                        {talent.title ? (
+                          <div className="flex items-center gap-2">
+                            {talent.intent_visibility && talent.intent_status ? (
+                              <span
+                                className={`inline-flex h-2 w-2 rounded-full ${
+                                  talent.intent_status === 'open_to_conversations' ? 'bg-emerald-400' :
+                                  talent.intent_status === 'passive_exploring' ? 'bg-blue-400' :
+                                  'bg-slate-400'
+                                }`}
+                                title={`Intent: ${talent.intent_status.replace(/_/g, ' ')}`}
+                              />
+                            ) : null}
+                            <div className="font-medium text-white text-xs truncate">{talent.title}</div>
+                          </div>
+                        ) : (
+                          <div className="font-medium text-white text-xs truncate">Talent</div>
+                        )}
+                        <div className="text-[10px] text-slate-400 mt-0.5 truncate">
+                          {talent.skills && talent.skills.length ? talent.skills[0] : 'Skills not set'}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            ) : !loading && (searchQuery || locQuery) ? (
-              <div className="dashboard-card rounded-xl p-6 text-center">
-                <p className="text-gray-400">No talent found matching your search. Try adjusting your filters.</p>
+            )}
+
+            {/* Map */}
+            <div className="flex-1">
+              <div className="dashboard-card rounded-xl p-0 overflow-hidden" style={{ height: '70vh' }}>
+                {typeof window !== 'undefined' && (searchCenter || talents.length > 0) ? (
+                  <SearchMap
+                    markers={mapMarkers}
+                    center={mapCenter}
+                    zoom={mapMarkers.length > 0 ? (mapMarkers.length === 1 ? 12 : 11) : 10}
+                    className="w-full h-full"
+                    onMarkerClick={handleTalentMarkerClick}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-400">
+                    <div className="text-center">
+                      <p className="text-lg mb-2">📍 Search for Talent</p>
+                      <p className="text-sm">Enter a search term above to find talent</p>
+                      <p className="text-xs text-gray-500 mt-1">Location is optional - you can search everywhere or filter by location</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            ) : null}
+            </div>
           </div>
         </div>
       </div>

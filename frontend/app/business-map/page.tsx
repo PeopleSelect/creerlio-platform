@@ -88,6 +88,7 @@ function BusinessMapPageInner() {
   const [searchCenter, setSearchCenter] = useState<{ lng: number; lat: number; label?: string } | null>(null)
   const [showAdvancedFilters] = useState(true)
   const [resultsCollapsed, setResultsCollapsed] = useState(false)
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false)
 
   // Simplified filters
   const [filters, setFilters] = useState({
@@ -775,8 +776,34 @@ function BusinessMapPageInner() {
         {/* Map and Filters Layout */}
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Filters Section - 1/4 width */}
-          <div className="lg:w-[320px]">
-            <div className="rounded-xl p-4 border border-white/10 bg-slate-900/50 backdrop-blur-sm">
+          <aside className={`${filtersCollapsed ? 'w-16' : 'lg:w-[320px]'} flex-shrink-0 overflow-y-auto z-20 transition-all duration-300`}>
+            <div className="rounded-xl p-4 border border-white/10 bg-slate-900/50 backdrop-blur-sm h-full relative">
+              {filtersCollapsed && (
+                <div className="flex flex-col items-center justify-center h-full">
+                  <div className="text-white font-semibold text-sm whitespace-nowrap" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                    FILTERS
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+                className="absolute top-4 right-4 p-2 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors z-10"
+                title={filtersCollapsed ? 'Expand filters' : 'Collapse filters'}
+              >
+                <svg
+                  className={`w-4 h-4 transition-transform duration-300 ${filtersCollapsed ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+
+              {!filtersCollapsed && (
+              <>
               <div className="mb-1">
                 <div className="text-white font-semibold text-sm">Filters</div>
               </div>
@@ -977,8 +1004,10 @@ function BusinessMapPageInner() {
                 <p className="text-xs text-gray-400 mt-1">Searching...</p>
               </div>
             )}
+              </>
+              )}
             </div>
-          </div>
+          </aside>
 
           {/* Right side: Results + Map (Talent Map layout without Route Intelligence) */}
           <div className="flex-1 flex gap-4">

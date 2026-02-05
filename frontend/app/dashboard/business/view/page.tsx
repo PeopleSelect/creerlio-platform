@@ -2648,14 +2648,6 @@ function BusinessProfileViewPageInner() {
                         ) : null}
                       </div>
                     </div>
-                    {isOwner && (
-                      <Link
-                        href="/dashboard/business/edit"
-                        className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold shrink-0"
-                      >
-                        Edit Profile
-                      </Link>
-                    )}
                   </div>
                 </div>
               </div>

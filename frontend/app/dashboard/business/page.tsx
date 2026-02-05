@@ -697,10 +697,23 @@ export default function BusinessDashboard() {
     setProfileEditSuccess(null)
     try {
       const nextEmail = profileEditDraft.email.trim()
-      const nextUsername = profileEditDraft.username.trim()
+      let nextUsername = profileEditDraft.username.trim()
       const nextBusinessName = profileEditDraft.businessName.trim()
 
-      const emailChanged = nextEmail !== user.email
+      const prevEmail = user.email || ''
+      const prevUsername = user.username || ''
+      const emailChanged = nextEmail !== prevEmail
+      const prevEmailLower = prevEmail.toLowerCase()
+      const nextUsernameLower = nextUsername.toLowerCase()
+      const prevUsernameLower = prevUsername.toLowerCase()
+      const shouldSyncUsernameToEmail =
+        emailChanged &&
+        (!!prevEmailLower &&
+          (nextUsernameLower === prevEmailLower || prevUsernameLower === prevEmailLower || !nextUsernameLower))
+      if (shouldSyncUsernameToEmail) {
+        nextUsername = nextEmail
+        setProfileEditDraft((prev) => ({ ...prev, username: nextEmail }))
+      }
       if (!nextEmail) {
         setProfileEditError('Email is required.')
         return
@@ -771,6 +784,15 @@ export default function BusinessDashboard() {
       if (profileRes.error) {
         setProfileEditError(profileRes.error.message || 'Failed to update business profile.')
         return
+      }
+
+      // Best-effort: keep public.users in sync for login/username display
+      if (user.id) {
+        const updatePayload: any = { email: nextEmail, username: nextUsername }
+        let usersUpdate = await supabase.from('users').update(updatePayload).eq('id', user.id)
+        if (usersUpdate.error && isMissingColumnError(usersUpdate.error)) {
+          usersUpdate = await supabase.from('users').update(updatePayload).eq('user_id', user.id)
+        }
       }
 
       setUser((prev) =>

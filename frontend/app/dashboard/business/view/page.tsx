@@ -2612,7 +2612,7 @@ function BusinessProfileViewPageInner() {
 
             {/* Hero */}
             <section className="overflow-hidden rounded-3xl border border-white/10 bg-slate-950/40">
-              <div className="h-96 md:h-[36rem] bg-slate-900 relative">
+              <div className="h-64 md:h-[24rem] bg-slate-900 relative">
                 {bannerUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img 

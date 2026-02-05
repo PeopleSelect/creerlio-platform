@@ -234,7 +234,14 @@ export default function SearchMap({ markers, className = '', center, zoom = 11, 
 
   useEffect(() => {
     if (map.current) {
-      map.current.resize()
+      const frameId = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (map.current) {
+            map.current.resize()
+          }
+        })
+      })
+      return () => cancelAnimationFrame(frameId)
     }
   }, [resizeTrigger])
 

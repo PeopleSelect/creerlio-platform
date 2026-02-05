@@ -1015,7 +1015,7 @@ function BusinessMapPageInner() {
           </aside>
 
           {/* Right side: Results + Map (Talent Map layout without Route Intelligence) */}
-          <div className="flex-1 flex gap-4">
+          <div className="flex-1 min-w-0 flex gap-4">
             {/* Results Panel */}
             {resultsCollapsed ? (
               <div className="flex-shrink-0">
@@ -1092,7 +1092,7 @@ function BusinessMapPageInner() {
             )}
 
             {/* Map */}
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="dashboard-card rounded-xl p-0 overflow-hidden" style={{ height: '70vh' }}>
                 {typeof window !== 'undefined' && (searchCenter || talents.length > 0) ? (
                   <SearchMap

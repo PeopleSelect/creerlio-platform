@@ -89,6 +89,7 @@ function BusinessMapPageInner() {
   const [showAdvancedFilters] = useState(true)
   const [resultsCollapsed, setResultsCollapsed] = useState(false)
   const [filtersCollapsed, setFiltersCollapsed] = useState(false)
+  const [mapResizeTrigger, setMapResizeTrigger] = useState(0)
 
   // Simplified filters
   const [filters, setFilters] = useState({
@@ -114,6 +115,10 @@ function BusinessMapPageInner() {
   const roleDebounced = useDebouncedValue(filters.role, 300)
   const skillsDebounced = useDebouncedValue(filters.skills.join(','), 300)
   const locAbort = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    setMapResizeTrigger((prev) => prev + 1)
+  }, [filtersCollapsed])
 
   // Check authentication
   useEffect(() => {
@@ -1096,6 +1101,7 @@ function BusinessMapPageInner() {
                     zoom={mapMarkers.length > 0 ? (mapMarkers.length === 1 ? 12 : 11) : 10}
                     className="w-full h-full"
                     onMarkerClick={handleTalentMarkerClick}
+                    resizeTrigger={mapResizeTrigger}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-400">

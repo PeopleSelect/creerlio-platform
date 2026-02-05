@@ -25,6 +25,7 @@ interface SearchMapProps {
   zoom?: number
   isExpanded?: boolean
   onMarkerClick?: (markerId: string | number) => void
+  resizeTrigger?: number
 }
 
 type MapStyle = 'dark' | 'light' | 'satellite' | 'streets'
@@ -36,7 +37,7 @@ const mapStyles: Record<MapStyle, string> = {
   streets: 'mapbox://styles/mapbox/streets-v12',
 }
 
-export default function SearchMap({ markers, className = '', center, zoom = 11, isExpanded = false, onMarkerClick }: SearchMapProps) {
+export default function SearchMap({ markers, className = '', center, zoom = 11, isExpanded = false, onMarkerClick, resizeTrigger }: SearchMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<any>(null)
   const markersRef = useRef<any[]>([])
@@ -230,6 +231,12 @@ export default function SearchMap({ markers, className = '', center, zoom = 11, 
       return () => cancelAnimationFrame(frameId)
     }
   }, [isExpanded])
+
+  useEffect(() => {
+    if (map.current) {
+      map.current.resize()
+    }
+  }, [resizeTrigger])
 
   // Also handle window resize events
   useEffect(() => {

@@ -458,7 +458,7 @@ type BusinessProductRoadmap = {
 
 export default function BusinessProfileEditor() {
   const router = useRouter()
-  const DEFAULT_SECTION_ORDER = ['intro', 'social', 'skills', 'experience', 'education', 'referees', 'projects', 'attachments'] as const
+  const DEFAULT_SECTION_ORDER = ['intro', 'social', 'skills', 'experience', 'projects', 'attachments'] as const
   type SectionKey = (typeof DEFAULT_SECTION_ORDER)[number]
   const SOCIAL_PLATFORMS = [
     'LinkedIn',
@@ -1208,44 +1208,6 @@ export default function BusinessProfileEditor() {
                   </section>
                 )
               }
-              if (k === 'education') {
-                const list = eduListExpanded ? (profile.education || []) : (profile.education || []).slice(0, 2)
-                return (
-                  <section key={k} className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
-                    <h2 className="text-xl font-semibold mb-4">Education</h2>
-                    {list.map((e, idx) => (
-                      <div key={idx} className="rounded-xl border border-white/10 bg-slate-900/40 p-4 mb-3">
-                        <div className="font-semibold">{e.degree || 'Qualification'}</div>
-                        <div className="text-slate-300 text-sm mt-1">{e.institution || 'Institution'}</div>
-                        {normalizeDisplayText(String((e as any)?.notes || '')) ? (
-                          <div className="mt-3">
-                            <div className="text-slate-300 text-sm whitespace-pre-wrap" style={eduExpanded[idx] ? undefined : clampStyle(5)}>
-                              {normalizeDisplayText(String((e as any)?.notes || ''))}
-                            </div>
-                            <button
-                              type="button"
-                              className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
-                              onClick={() => setEduExpanded((p) => ({ ...p, [idx]: !p[idx] }))}
-                            >
-                              {eduExpanded[idx] ? 'Show less' : 'Show more'}
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
-                    {!profile.education?.length ? <div className="text-slate-400 text-sm">No education yet.</div> : null}
-                    {(profile.education || []).length > 2 ? (
-                      <button
-                        type="button"
-                        className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
-                        onClick={() => setEduListExpanded((v) => !v)}
-                      >
-                        {eduListExpanded ? 'Show fewer entries' : 'Show all education'}
-                      </button>
-                    ) : null}
-                  </section>
-                )
-              }
               if (k === 'attachments') {
                 return (
                   <section key={k} className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
@@ -1269,51 +1231,6 @@ export default function BusinessProfileEditor() {
                     ) : (
                       <div className="text-slate-400 text-sm">No attachments yet.</div>
                     )}
-                  </section>
-                )
-              }
-              if (k === 'referees') {
-                const list = refListExpanded ? (profile.referees || []) : (profile.referees || []).slice(0, 2)
-                return (
-                  <section key={k} className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
-                    <h2 className="text-xl font-semibold mb-4">Referees</h2>
-                    {list.length ? (
-                      <div className="space-y-3">
-                        {list.map((r, idx) => (
-                          <div key={idx} className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
-                            <div className="font-semibold">{r.name || 'Referee'}</div>
-                            <div className="text-slate-300 text-sm mt-1">
-                              {(r.title ? `${r.title} • ` : '') + (r.company ? `${r.company} • ` : '') + (r.relationship ? r.relationship : '')}
-                            </div>
-                            {normalizeDisplayText(r.notes || '') ? (
-                              <div className="mt-3">
-                                <div className="text-slate-300 text-sm whitespace-pre-wrap" style={refExpanded[idx] ? undefined : clampStyle(5)}>
-                                  {normalizeDisplayText(r.notes || '')}
-                                </div>
-                                <button
-                                  type="button"
-                                  className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
-                                  onClick={() => setRefExpanded((p) => ({ ...p, [idx]: !p[idx] }))}
-                                >
-                                  {refExpanded[idx] ? 'Show less' : 'Show more'}
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-slate-400 text-sm">No referees yet.</div>
-                    )}
-                    {(profile.referees || []).length > 2 ? (
-                      <button
-                        type="button"
-                        className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
-                        onClick={() => setRefListExpanded((v) => !v)}
-                      >
-                        {refListExpanded ? 'Show fewer referees' : 'Show all referees'}
-                      </button>
-                    ) : null}
                   </section>
                 )
               }
@@ -2270,6 +2187,7 @@ export default function BusinessProfileEditor() {
             const kk = String(k)
             if (!mergedOrder.includes(kk)) mergedOrder.push(kk)
           }
+          const filteredOrder = mergedOrder.filter((k) => k !== 'education' && k !== 'referees')
 
           return {
             ...prev,
@@ -2312,7 +2230,7 @@ export default function BusinessProfileEditor() {
                   attachmentIds: Array.isArray(p?.attachmentIds) ? p.attachmentIds : [],
                 }))
               : prev.projects,
-            sectionOrder: mergedOrder,
+            sectionOrder: filteredOrder,
             introVideoId:
               typeof saved.introVideoId === 'number' ? saved.introVideoId : (saved.introVideoId == null ? null : prev.introVideoId),
           }
@@ -4191,8 +4109,6 @@ export default function BusinessProfileEditor() {
               { id: 'section-social', label: 'Social' },
               { id: 'section-products', label: 'Products & Services' },
               { id: 'section-culture', label: 'Culture & Values' },
-              { id: 'section-education', label: 'Education' },
-              { id: 'section-referees', label: 'Referees' },
               { id: 'section-attachments', label: 'Attachments' },
               { id: 'section-projects', label: 'Projects' },
               { id: 'section-layout', label: 'Layout' },
@@ -5455,382 +5371,6 @@ export default function BusinessProfileEditor() {
               />
             </div>
           </div>
-        </section>
-
-        {/* Education */}
-        <section id="section-education" className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <h2 className="text-xl font-semibold">Education</h2>
-              <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer" title="Show in public profile">
-                <input
-                  type="checkbox"
-                  checked={sectionVisibility.education ?? true}
-                  onChange={(e) => {
-                    setSectionVisibility(prev => ({ ...prev, education: e.target.checked }))
-                    // Auto-save visibility when changed
-                    setTimeout(() => savePortfolio({ redirect: false, source: 'visibility:education' }), 100)
-                  }}
-                  className="w-4 h-4 rounded border-gray-600 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-2"
-                />
-                <span>Public</span>
-              </label>
-            </div>
-            <div className="flex items-center gap-3">
-              {!sectionEdit.education ? (
-                <button className="text-sm underline text-blue-300" onClick={() => setSectionEdit((p) => ({ ...p, education: true }))}>
-                  Edit
-                </button>
-              ) : (
-          <button
-                  className="text-sm underline text-blue-300 disabled:opacity-60"
-                  disabled={savingSection === 'education'}
-                  onClick={() => saveSection('education')}
-                >
-                  {savingSection === 'education' ? 'Saving…' : 'Save'}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={addEducation}
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500"
-              >
-                Add Education
-              </button>
-              <button
-                type="button"
-                onClick={openImportModal}
-                disabled={isImporting || !sectionEdit.education}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-60"
-              >
-                {isImporting ? 'Importing…' : 'Import from Business Bank'}
-          </button>
-        </div>
-      </div>
-
-          {sectionEdit.education && (
-            <div className="flex items-center justify-between mb-3">
-              <label className="flex items-center gap-2 text-xs text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={bulkIsAllSelected(profile.education.map((_, i) => String(i)), bulkSel.education)}
-                  onChange={(e) => bulkSetAll('education', profile.education.map((_, i) => String(i)), e.target.checked)}
-                  disabled={profile.education.length === 0}
-                />
-                Select all
-              </label>
-              <button
-                type="button"
-                disabled={bulkCount(bulkSel.education) === 0}
-                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs disabled:opacity-50"
-                onClick={() => bulkDeleteSelected('education')}
-              >
-                Delete selected ({bulkCount(bulkSel.education)})
-              </button>
-            </div>
-          )}
-
-          {profile.education.length === 0 ? (
-            <div className="text-sm text-slate-400">No education added yet.</div>
-          ) : (
-            <div className="space-y-4">
-              {profile.education.map((edu, index) => (
-                <div key={index} className="p-4 border border-white/10 rounded-xl bg-slate-900/40">
-                  <div className="flex items-center justify-between gap-3 mb-2">
-                    <div className="flex items-center gap-3 min-w-0">
-                      {sectionEdit.education && (
-                        <input
-                          type="checkbox"
-                          checked={!!bulkSel.education[String(index)]}
-                          onChange={(e) => bulkToggleKey('education', String(index), e.target.checked)}
-                        />
-                      )}
-                      <div className="text-sm font-semibold text-slate-200">Education entry {index + 1}</div>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={!sectionEdit.education}
-                      className="text-xs text-red-300 underline disabled:opacity-60"
-                      onClick={() => removeEducation(index)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                  <div className="grid md:grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      placeholder="Institution"
-                      value={edu.institution}
-                      onChange={(e) => updateEducation(index, 'institution', e.target.value)}
-                      disabled={!sectionEdit.education}
-                      className="p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Degree / Qualification"
-                      value={edu.degree}
-                      onChange={(e) => updateEducation(index, 'degree', e.target.value)}
-                      disabled={!sectionEdit.education}
-                      className="p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Field of Study"
-                      value={edu.field}
-                      onChange={(e) => updateEducation(index, 'field', e.target.value)}
-                      disabled={!sectionEdit.education}
-                      className="p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Year (or date range)"
-                      value={edu.year}
-                      onChange={(e) => updateEducation(index, 'year', e.target.value)}
-                      disabled={!sectionEdit.education}
-                      className="p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                    />
-                  </div>
-                  {sectionEdit.education && (
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        onClick={() => openEducationImportModal(index)}
-                        disabled={isImporting}
-                        className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-60"
-                      >
-                        {isImporting ? 'Loading…' : 'Attach Degree Document'}
-                      </button>
-                      {Array.isArray(edu.attachmentIds) && edu.attachmentIds.length > 0 && (
-                        <div className="mt-2">
-                          <div className="text-xs text-slate-400 mb-2">
-                            Attached files: <span className="text-slate-200 font-semibold">{edu.attachmentIds.length}</span>
-                          </div>
-                          <div className="space-y-2">
-                            {edu.attachmentIds.slice(0, 3).map((id: any) => (
-                              <ProjectAttachmentChip key={id} id={Number(id)} onRemove={() => {}} />
-                            ))}
-                            {edu.attachmentIds.length > 3 && (
-                              <div className="text-xs text-slate-400 px-1">+{edu.attachmentIds.length - 3} more…</div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-3 text-xs text-slate-400">
-            Tip: Upload certificates in Business Bank under “Education” then import them here.
-          </div>
-        </section>
-
-        {/* Referees */}
-        <section id="section-referees" className="border border-white/10 bg-slate-950/50 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <h2 className="text-xl font-semibold">Referees</h2>
-              <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer" title="Show in public profile">
-                <input
-                  type="checkbox"
-                  checked={sectionVisibility.referees ?? true}
-                  onChange={(e) => {
-                    setSectionVisibility(prev => ({ ...prev, referees: e.target.checked }))
-                    // Auto-save visibility when changed
-                    setTimeout(() => savePortfolio({ redirect: false, source: 'visibility:referees' }), 100)
-                  }}
-                  className="w-4 h-4 rounded border-gray-600 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-2"
-                />
-                <span>Public</span>
-              </label>
-            </div>
-            <div className="flex items-center gap-3">
-              {!sectionEdit.referees ? (
-                <button className="text-sm underline text-blue-300" onClick={() => setSectionEdit((p) => ({ ...p, referees: true }))}>
-                  Edit
-                </button>
-              ) : (
-                <button
-                  className="text-sm underline text-blue-300 disabled:opacity-60"
-                  disabled={savingSection === 'referees'}
-                  onClick={() => saveSection('referees')}
-                >
-                  {savingSection === 'referees' ? 'Saving…' : 'Save'}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={addReferee}
-                disabled={!sectionEdit.referees}
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 disabled:opacity-60"
-              >
-                Add Referee
-              </button>
-            </div>
-          </div>
-
-          {sectionEdit.referees && (
-            <div className="flex items-center justify-between mb-3">
-              <label className="flex items-center gap-2 text-xs text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={bulkIsAllSelected(profile.referees.map((_, i) => String(i)), bulkSel.referees)}
-                  onChange={(e) => bulkSetAll('referees', profile.referees.map((_, i) => String(i)), e.target.checked)}
-                  disabled={profile.referees.length === 0}
-                />
-                Select all
-              </label>
-              <button
-                type="button"
-                disabled={bulkCount(bulkSel.referees) === 0}
-                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs disabled:opacity-50"
-                onClick={() => bulkDeleteSelected('referees')}
-              >
-                Delete selected ({bulkCount(bulkSel.referees)})
-              </button>
-            </div>
-          )}
-
-          {profile.referees.length === 0 ? (
-            <div className="text-sm text-slate-400">No referees added yet.</div>
-          ) : (
-            <div className="space-y-4">
-              {profile.referees.map((r, index) => (
-                <div key={index} className="p-4 border border-white/10 rounded-xl bg-slate-900/40">
-                  <div className="flex items-center justify-between gap-3 mb-2">
-                    <div className="flex items-center gap-3 min-w-0">
-                      {sectionEdit.referees && (
-                        <input
-                          type="checkbox"
-                          checked={!!bulkSel.referees[String(index)]}
-                          onChange={(e) => bulkToggleKey('referees', String(index), e.target.checked)}
-                        />
-                      )}
-                      <div className="text-sm font-semibold text-slate-200 truncate">Referee {index + 1}</div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer" title="Show this referee in public profile">
-                        <input
-                          type="checkbox"
-                          checked={itemVisibility.referees?.[index] ?? true}
-                          onChange={(e) => {
-                            setItemVisibility(prev => ({
-                              ...prev,
-                              referees: { ...prev.referees, [index]: e.target.checked }
-                            }))
-                            setTimeout(() => savePortfolio({ redirect: false, source: 'visibility:referee-item' }), 100)
-                          }}
-                          className="w-4 h-4 rounded border-gray-600 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-2"
-                        />
-                        <span>Public</span>
-                      </label>
-                      <button
-                        type="button"
-                        disabled={!sectionEdit.referees}
-                        className="text-xs text-red-300 underline disabled:opacity-60"
-                        onClick={() => removeReferee(index)}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      placeholder="Name"
-                      value={r.name}
-                      onChange={(e) => updateReferee(index, 'name', e.target.value)}
-                      disabled={!sectionEdit.referees}
-                      className="p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Relationship"
-                      value={r.relationship}
-                      onChange={(e) => updateReferee(index, 'relationship', e.target.value)}
-                      disabled={!sectionEdit.referees}
-                      className="p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Company"
-                      value={r.company}
-                      onChange={(e) => updateReferee(index, 'company', e.target.value)}
-                      disabled={!sectionEdit.referees}
-                      className="p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Title"
-                      value={r.title}
-                      onChange={(e) => updateReferee(index, 'title', e.target.value)}
-                      disabled={!sectionEdit.referees}
-                      className="p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                    />
-                    <input
-                      type="email"
-                      placeholder="Email"
-                      value={r.email}
-                      onChange={(e) => updateReferee(index, 'email', e.target.value)}
-                      disabled={!sectionEdit.referees}
-                      className="p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Phone"
-                      value={r.phone}
-                      onChange={(e) => updateReferee(index, 'phone', e.target.value)}
-                      disabled={!sectionEdit.referees}
-                      className="p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                    />
-                    <div className="md:col-span-2">
-                      <CollapsibleTextarea
-                        value={r.notes}
-                        onChange={(e) => updateReferee(index, 'notes', e.target.value)}
-                        placeholder="Notes"
-                        disabled={!sectionEdit.referees}
-                        className="w-full p-3 rounded bg-slate-900 border border-slate-700 !text-white !placeholder:text-slate-500 disabled:opacity-60"
-                        expandKey={`referee-${index}`}
-                        expanded={!!expandedTextareas[`referee-${index}`]}
-                        onToggle={toggleTextarea}
-                        defaultRows={5}
-                      />
-                    </div>
-                  </div>
-                  {sectionEdit.referees && (
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        onClick={() => openRefereeImportModal(index)}
-                        disabled={isImporting}
-                        className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-60"
-                      >
-                        {isImporting ? 'Loading…' : 'Attach Document'}
-                      </button>
-                      {Array.isArray(r.attachmentIds) && r.attachmentIds.length > 0 && (
-                        <div className="mt-2">
-                          <div className="text-xs text-slate-400 mb-2">
-                            Attached files: <span className="text-slate-200 font-semibold">{r.attachmentIds.length}</span>
-                          </div>
-                          <div className="space-y-2">
-                            {r.attachmentIds.slice(0, 3).map((id: any) => (
-                              <ProjectAttachmentChip key={id} id={Number(id)} onRemove={() => {}} />
-                            ))}
-                            {r.attachmentIds.length > 3 && (
-                              <div className="text-xs text-slate-400 px-1">+{r.attachmentIds.length - 3} more…</div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </section>
 
         {/* Attachments imported from Business Bank */}

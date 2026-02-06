@@ -50,6 +50,14 @@ export default function BusinessBankPage() {
   const [introVideoTitle, setIntroVideoTitle] = useState('Business Introduction Video')
   const [introVideoSource, setIntroVideoSource] = useState<'record' | 'upload' | 'link'>('link')
 
+  // Website/brochure parsing
+  const [websiteUrl, setWebsiteUrl] = useState('')
+  const [websiteParseBusy, setWebsiteParseBusy] = useState(false)
+  const [websiteParseError, setWebsiteParseError] = useState<string | null>(null)
+  const [brochureFile, setBrochureFile] = useState<File | null>(null)
+  const [brochureParseBusy, setBrochureParseBusy] = useState(false)
+  const [brochureParseError, setBrochureParseError] = useState<string | null>(null)
+
   // Video recording state
   const [recOpen, setRecOpen] = useState(false)
   const [recBusy, setRecBusy] = useState(false)
@@ -286,6 +294,136 @@ export default function BusinessBankPage() {
     } catch (err: any) {
       console.error('Error creating link:', err)
       setUploadError(err.message || err.details || 'Failed to create link')
+    }
+  }
+
+  async function createTextItem(title: string, description: string, metadata?: any) {
+    if (!userId) return
+    const { error } = await supabase.from('business_bank_items').insert({
+      user_id: userId,
+      item_type: 'text',
+      title,
+      description,
+      metadata: metadata || null,
+    })
+    if (error) throw error
+  }
+
+  async function parseWebsiteAndSave() {
+    if (!websiteUrl.trim() || !userId) {
+      setWebsiteParseError('Website URL is required.')
+      return
+    }
+    setWebsiteParseBusy(true)
+    setWebsiteParseError(null)
+    try {
+      const res = await fetch('/api/website/metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: websiteUrl.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to parse website.')
+      }
+
+      const name = String(data?.name || '').trim()
+      const description = String(data?.description || '').trim()
+      const services = Array.isArray(data?.services) ? data.services : []
+      const address = data?.address?.full || ''
+      const phone = data?.phone || ''
+      const email = data?.email || ''
+      const website = data?.website || websiteUrl.trim()
+      const socials = Array.isArray(data?.socialLinks) ? data.socialLinks : []
+
+      const summaryParts = [
+        description ? `Summary: ${description}` : null,
+        services.length ? `Services: ${services.join(', ')}` : null,
+        address ? `Address: ${address}` : null,
+        phone ? `Phone: ${phone}` : null,
+        email ? `Email: ${email}` : null,
+        socials.length ? `Socials: ${socials.join(', ')}` : null,
+      ].filter(Boolean)
+
+      const summary = summaryParts.join('\n')
+      const title = name ? `Website Summary: ${name}` : 'Website Summary'
+
+      await createTextItem(title, summary || `Website: ${website}`, {
+        source: 'website',
+        website,
+        name,
+        description,
+        services,
+        address: data?.address || null,
+        phone,
+        email,
+        socials,
+        raw: data,
+      })
+
+      if (website) {
+        await supabase.from('business_bank_items').insert({
+          user_id: userId,
+          item_type: 'link',
+          title: name ? `${name} Website` : 'Business Website',
+          description: description || null,
+          file_url: website,
+          metadata: { url: website, source: 'website' },
+        })
+      }
+
+      setWebsiteUrl('')
+      await loadItems()
+    } catch (err: any) {
+      console.error('Website parse error:', err)
+      setWebsiteParseError(err.message || 'Failed to parse website.')
+    } finally {
+      setWebsiteParseBusy(false)
+    }
+  }
+
+  async function parseBrochureAndSave() {
+    if (!brochureFile || !userId) {
+      setBrochureParseError('Brochure file is required.')
+      return
+    }
+    setBrochureParseBusy(true)
+    setBrochureParseError(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', brochureFile)
+      const res = await fetch('/api/business/parse-brochure', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to parse brochure.')
+      }
+
+      const summary = String(data?.summary || '').trim()
+      const highlights = Array.isArray(data?.highlights) ? data.highlights : []
+      const descriptionParts = [
+        summary ? summary : null,
+        highlights.length ? `Highlights:\n- ${highlights.join('\n- ')}` : null,
+      ].filter(Boolean)
+      const description = descriptionParts.join('\n\n') || 'Brochure parsed.'
+
+      await createTextItem(`Brochure Summary: ${brochureFile.name}`, description, {
+        source: 'brochure',
+        fileName: brochureFile.name,
+        highlights,
+        summary,
+        rawText: data?.rawText || null,
+      })
+
+      setBrochureFile(null)
+      await loadItems()
+    } catch (err: any) {
+      console.error('Brochure parse error:', err)
+      setBrochureParseError(err.message || 'Failed to parse brochure.')
+    } finally {
+      setBrochureParseBusy(false)
     }
   }
 
@@ -901,6 +1039,55 @@ export default function BusinessBankPage() {
             >
               {isUploading ? 'Uploading...' : 'Upload Files'}
             </button>
+          </div>
+        </div>
+
+        {/* Business Website & Brochure Parsing */}
+        <div className="mb-8 p-6 bg-gray-800/50 rounded-lg border border-gray-700">
+          <h3 className="text-lg font-semibold text-white mb-2">Business Website & Brochure Parsing</h3>
+          <p className="text-sm text-gray-400 mb-4">
+            Parse a business website or brochure to auto-create Business Bank entries you can reuse in your Business Profile.
+          </p>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-300">Website URL</label>
+              <input
+                type="text"
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                placeholder="https://example.com"
+                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
+              />
+              {websiteParseError && <div className="text-xs text-red-300">{websiteParseError}</div>}
+              <button
+                type="button"
+                onClick={parseWebsiteAndSave}
+                disabled={websiteParseBusy}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-60"
+              >
+                {websiteParseBusy ? 'Parsing…' : 'Parse Website'}
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-300">Brochure (PDF)</label>
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={(e) => setBrochureFile(e.target.files?.[0] || null)}
+                className="w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gray-700 file:text-white hover:file:bg-gray-600"
+              />
+              {brochureParseError && <div className="text-xs text-red-300">{brochureParseError}</div>}
+              <button
+                type="button"
+                onClick={parseBrochureAndSave}
+                disabled={brochureParseBusy || !brochureFile}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-60"
+              >
+                {brochureParseBusy ? 'Parsing…' : 'Parse Brochure'}
+              </button>
+            </div>
           </div>
         </div>
 

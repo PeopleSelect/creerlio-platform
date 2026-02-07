@@ -67,7 +67,6 @@ function BusinessMapPageInner() {
   const [businessUserId, setBusinessUserId] = useState<string | null>(null)
 
   // Simplified search state
-  const [searchQuery, setSearchQuery] = useState('') // Main search bar
   const [locQuery, setLocQuery] = useState('')
   const [locBusy, setLocBusy] = useState(false)
   const [locError, setLocError] = useState<string | null>(null)
@@ -77,7 +76,6 @@ function BusinessMapPageInner() {
   const RADIUS_KEY = 'creerlio_business_map_radius_km_v1'
   const [radiusKm, setRadiusKm] = useState<number>(50) // Increased default radius
   const [searchCenter, setSearchCenter] = useState<{ lng: number; lat: number; label?: string } | null>(null)
-  const [showAdvancedFilters] = useState(true)
   const [resultsCollapsed, setResultsCollapsed] = useState(false)
   const [filtersCollapsed, setFiltersCollapsed] = useState(false)
   const [mapResizeTrigger, setMapResizeTrigger] = useState(0)
@@ -85,10 +83,8 @@ function BusinessMapPageInner() {
   // Simplified filters
   const [filters, setFilters] = useState({
     role: '',
-    minExperience: '',
     location: ''
   })
-  const [intentStatusFilter, setIntentStatusFilter] = useState<string>('')
 
   const [talents, setTalents] = useState<AnonymizedTalent[]>([])
   const [selectedTalentId, setSelectedTalentId] = useState<string | null>(null)
@@ -96,9 +92,7 @@ function BusinessMapPageInner() {
   const [requestingConnection, setRequestingConnection] = useState(false)
   const [showTalentPopup, setShowTalentPopup] = useState(false)
 
-  const searchQueryDebounced = useDebouncedValue(searchQuery, 500)
   const locDebounced = useDebouncedValue(locQuery, 300)
-  const roleDebounced = useDebouncedValue(filters.role, 300)
   const locAbort = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -307,9 +301,6 @@ function BusinessMapPageInner() {
             }
           })
 
-          if (intentStatusFilter) {
-            data = data.filter((t: any) => t.intent_visibility && t.intent_status === intentStatusFilter)
-          }
         }
         
         // Now filter by search query, location, and other criteria
@@ -349,26 +340,9 @@ function BusinessMapPageInner() {
         // Process all talents
         const processedTalents = await Promise.all(
           (data || []).map(async (t: any) => {
-            // Filter by main search query (role/title only)
-            if (searchQueryDebounced.trim()) {
-              const queryLower = searchQueryDebounced.toLowerCase()
-              const titleMatch = t.title?.toLowerCase().includes(queryLower)
-              if (!titleMatch) {
-                return null
-              }
-            }
-
             // Filter by role
             if (filters.role && t.title) {
               if (!t.title.toLowerCase().includes(filters.role.toLowerCase())) {
-                return null
-              }
-            }
-
-            // Filter by minimum experience
-            if (filters.minExperience && t.experience_years !== null && t.experience_years !== undefined) {
-              const minExp = parseInt(filters.minExperience)
-              if (!isNaN(minExp) && t.experience_years < minExp) {
                 return null
               }
             }
@@ -444,7 +418,7 @@ function BusinessMapPageInner() {
     }
 
     loadTalents()
-  }, [searchQueryDebounced, searchCenter, radiusKm, filters.role, filters.minExperience, intentStatusFilter])
+  }, [searchCenter, radiusKm, filters.role])
 
   // Handle location selection
   const handleLocationSelect = (suggestion: LocSuggestion) => {
@@ -456,11 +430,9 @@ function BusinessMapPageInner() {
 
   // Clear all filters
   const handleClearFilters = () => {
-    setSearchQuery('')
     setLocQuery('')
     setSearchCenter(null)
-    setFilters({ role: '', minExperience: '', location: '' })
-    setIntentStatusFilter('')
+    setFilters({ role: '', location: '' })
   }
 
   // Request connection handler (same as before)
@@ -762,20 +734,20 @@ function BusinessMapPageInner() {
               </div>
               <div className="text-xs text-slate-400 mb-5">Filters update the map in real time. No page reloads.</div>
             
-            {/* Search */}
+            {/* Role */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-slate-200 mb-2.5">Role</label>
               <div className="flex items-center gap-2.5">
                 <input
                   type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={filters.role}
+                  onChange={(e) => setFilters(prev => ({ ...prev, role: e.target.value }))}
                   placeholder="Role or title…"
                   className="w-full px-4 py-2.5 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
                 />
                 <button
                   type="button"
-                  disabled={!searchQuery.trim()}
+                  disabled={!filters.role.trim()}
                   className="px-5 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm shrink-0"
                 >
                   Go
@@ -831,50 +803,6 @@ function BusinessMapPageInner() {
               {locError ? <div className="mt-2 text-xs text-red-400 font-medium">{locError}</div> : null}
             </div>
 
-            {/* Advanced Filters (Collapsible) */}
-            {showAdvancedFilters && (
-              <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
-                {/* Role Filter */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-2.5">Role/Title</label>
-                  <input
-                    type="text"
-                    value={filters.role}
-                    onChange={(e) => setFilters(prev => ({ ...prev, role: e.target.value }))}
-                    placeholder="e.g., Software Engineer"
-                    className="w-full px-3 py-2 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
-                  />
-                </div>
-
-                {/* Experience Filter */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-2.5">Minimum experience (years)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={filters.minExperience}
-                    onChange={(e) => setFilters(prev => ({ ...prev, minExperience: e.target.value }))}
-                    placeholder="e.g., 5"
-                    className="w-full px-3 py-2 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
-                  />
-                </div>
-
-                {/* Intent Filter */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-2.5">Intent filters</label>
-                  <select
-                    value={intentStatusFilter}
-                    onChange={(e) => setIntentStatusFilter(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-sm"
-                  >
-                    <option value="">All intent statuses</option>
-                    <option value="open_to_conversations">Open to conversations</option>
-                    <option value="passive_exploring">Passive exploring</option>
-                    <option value="not_available">Not available</option>
-                  </select>
-                </div>
-              </div>
-            )}
 
             <div className="pt-3 flex items-center justify-between gap-3 border-t border-white/10 mt-4">
               <button

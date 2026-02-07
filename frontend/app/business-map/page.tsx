@@ -56,10 +56,10 @@ export default function BusinessMapPage() {
   )
 }
 
-function BusinessMapPageInner() {
+export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolean } = {}) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const embedded = searchParams?.get('embed') === '1'
+  const embedded = forceEmbedded ?? searchParams?.get('embed') === '1'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -74,7 +74,7 @@ function BusinessMapPageInner() {
   const [locSuggestions, setLocSuggestions] = useState<LocSuggestion[]>([])
   const [locActiveIdx, setLocActiveIdx] = useState(0)
   const RADIUS_KEY = 'creerlio_business_map_radius_km_v1'
-  const [radiusKm, setRadiusKm] = useState<number>(50) // Increased default radius
+  const [radiusKm, setRadiusKm] = useState<number>(5)
   const [searchCenter, setSearchCenter] = useState<{ lng: number; lat: number; label?: string } | null>(null)
   const [resultsCollapsed, setResultsCollapsed] = useState(false)
   const [filtersCollapsed, setFiltersCollapsed] = useState(false)
@@ -657,51 +657,22 @@ function BusinessMapPageInner() {
   }
 
   return (
-    <div className={`${embedded ? 'bg-transparent' : 'min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900'} text-white`}>
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white">
       {!embedded && (
-        <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-8 py-4">
-            <div className="flex items-center justify-between">
-              <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-gray-900">
-                Creerlio
-              </Link>
-
-              <nav className="hidden lg:flex items-center gap-x-8 text-sm text-gray-600">
-                <Link href="/talent" className="hover:text-blue-600 transition-colors">Talent</Link>
-                <Link href="/business" className="hover:text-blue-600 transition-colors">Business</Link>
-                <Link href="/search" className="hover:text-blue-600 transition-colors">Search</Link>
-              </nav>
-
-              <div className="flex gap-3">
-                <Link
-                  href="/login/talent?mode=signup&redirect=/dashboard/talent"
-                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
-                >
-                  Create Talent Account
-                </Link>
-                <Link
-                  href="/login/business?mode=signup&redirect=/dashboard/business"
-                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
-                >
-                  Create Business Account
-                </Link>
-                <Link
-                  href="/login/talent?mode=signin&redirect=/dashboard/talent"
-                  className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
-                >
-                  Sign In
-                </Link>
-              </div>
-            </div>
+        <header className="sticky top-0 z-50 backdrop-blur bg-slate-950/70 border-b border-white/10">
+          <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
+            <Link href="/dashboard/business" className="text-slate-300 hover:text-blue-400 transition-colors">
+              ← Back to Business Dashboard
+            </Link>
           </div>
         </header>
       )}
 
-      <div className={`${embedded ? 'px-0 py-0' : 'max-w-7xl mx-auto px-8 py-6'}`}>
+      <main className={`${embedded ? 'px-0 py-0' : 'max-w-7xl mx-auto px-8 py-10'}`}>
         {/* Map and Filters Layout */}
-        <div className="flex flex-col lg:flex-row gap-4">
-          {/* Filters Section - 1/4 width */}
-          <aside className={`${filtersCollapsed ? 'w-16' : 'lg:w-[320px]'} flex-shrink-0 overflow-y-auto z-20 transition-all duration-300`}>
+        <div className={`flex ${embedded ? 'h-full' : 'h-[calc(100vh-8rem)]'} gap-4 relative`}>
+          {/* Filters Section - Full height */}
+          <aside className={`${filtersCollapsed ? 'w-16' : 'w-80'} flex-shrink-0 overflow-y-auto z-20 transition-all duration-300`}>
             <div className="rounded-xl p-4 border border-white/10 bg-slate-900/50 backdrop-blur-sm h-full relative">
               {filtersCollapsed && (
                 <div className="flex flex-col items-center justify-center h-full">
@@ -734,10 +705,9 @@ function BusinessMapPageInner() {
               </div>
               <div className="text-xs text-slate-400 mb-5">Filters update the map in real time. No page reloads.</div>
             
-            {/* Role */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-200 mb-2.5">Role</label>
-              <div className="flex items-center gap-2.5">
+            <div className="space-y-5">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <label className="block text-sm font-medium text-slate-200 mb-2.5">Role</label>
                 <input
                   type="text"
                   value={filters.role}
@@ -745,62 +715,115 @@ function BusinessMapPageInner() {
                   placeholder="Role or title…"
                   className="w-full px-4 py-2.5 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
                 />
-                <button
-                  type="button"
-                  disabled={!filters.role.trim()}
-                  className="px-5 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm shrink-0"
-                >
-                  Go
-                </button>
               </div>
-            </div>
 
-            {/* Location */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-200 mb-2.5">
-                Within {radiusKm} km of…
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={locQuery}
-                  onChange={(e) => setLocQuery(e.target.value)}
-                  onFocus={() => locSuggestions.length > 0 && setLocOpen(true)}
-                  onBlur={() => setTimeout(() => setLocOpen(false), 150)}
-                  placeholder="Suburb, city, or region…"
-                  className="w-full px-4 py-2.5 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
-                />
-                {locOpen && locSuggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 mt-1.5 rounded-lg border border-white/10 bg-slate-950/98 backdrop-blur shadow-2xl overflow-hidden z-50">
-                    {locSuggestions.map((s, idx) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => handleLocationSelect(s)}
-                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                          idx === locActiveIdx ? 'bg-blue-500/20 text-white' : 'bg-transparent text-slate-200 hover:bg-white/5'
-                        }`}
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div>
+                <label className="block text-sm font-medium text-slate-200 mb-2.5">
+                  Within {radiusKm} km of…
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={locQuery}
+                    onChange={(e) => {
+                      const newValue = e.target.value
+                      setLocQuery(newValue)
+                      if (newValue.trim().length > 0) {
+                        setLocOpen(true)
+                      } else {
+                        setLocSuggestions([])
+                        setLocOpen(false)
+                      }
+                    }}
+                    onFocus={(e) => {
+                      const hasInput = e.target.value.trim().length > 0
+                      const hasSuggestions = locSuggestions.length > 0
+                      if (hasInput || hasSuggestions) {
+                        setLocOpen(true)
+                      }
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => {
+                        setLocOpen(false)
+                      }, 300)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setLocOpen(false)
+                        return
+                      }
+                      if (!locOpen || !locSuggestions.length) {
+                        if (e.key === 'Enter' && locQuery.trim()) {
+                          geocodeAndFly()
+                        }
+                        return
+                      }
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault()
+                        setLocActiveIdx((i) => Math.min(locSuggestions.length - 1, i + 1))
+                        return
+                      }
+                      if (e.key === 'ArrowUp') {
+                        e.preventDefault()
+                        setLocActiveIdx((i) => Math.max(0, i - 1))
+                        return
+                      }
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const pick = locSuggestions[locActiveIdx]
+                        if (pick) {
+                          handleLocationSelect(pick)
+                        } else if (locQuery.trim()) {
+                          geocodeAndFly()
+                        }
+                        return
+                      }
+                    }}
+                    placeholder="Suburb, city, or region…"
+                    className="w-full px-4 py-2.5 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={locOpen}
+                    aria-controls="loc-suggestions"
+                  />
+                  {locOpen && locSuggestions.length > 0 ? (
+                    <div
+                      id="loc-suggestions"
+                      role="listbox"
+                      className="absolute left-0 right-0 mt-1.5 rounded-lg border border-white/10 bg-slate-950/98 backdrop-blur shadow-2xl overflow-hidden z-50"
+                    >
+                      {locSuggestions.map((s, idx) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                            idx === locActiveIdx ? 'bg-blue-500/20 text-white' : 'bg-transparent text-slate-200 hover:bg-white/5'
+                          }`}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => handleLocationSelect(s)}
+                          role="option"
+                          aria-selected={idx === locActiveIdx}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+                  <span className="font-medium">Radius: {radiusKm} km</span>
+                  <input
+                    type="range"
+                    min={5}
+                    max={100}
+                    step={5}
+                    value={radiusKm}
+                    onChange={(e) => setRadiusKm(parseInt(e.target.value))}
+                    className="w-32 accent-blue-500"
+                  />
+                </div>
+                {locError ? <div className="mt-2 text-xs text-red-400 font-medium">{locError}</div> : null}
               </div>
-              <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
-                <span className="font-medium">Radius: {radiusKm} km</span>
-                <input
-                  type="range"
-                  min="5"
-                  max="200"
-                  step="5"
-                  value={radiusKm}
-                  onChange={(e) => setRadiusKm(parseInt(e.target.value))}
-                  className="w-32 accent-blue-500"
-                />
-              </div>
-              {locError ? <div className="mt-2 text-xs text-red-400 font-medium">{locError}</div> : null}
             </div>
 
 
@@ -943,7 +966,7 @@ function BusinessMapPageInner() {
             </div>
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Talent Popup Modal - Same as before */}
       {showTalentPopup && selectedTalent && (

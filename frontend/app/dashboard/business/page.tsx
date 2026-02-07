@@ -4829,7 +4829,7 @@ export default function BusinessDashboard() {
           <div className="dashboard-card rounded-xl border border-gray-200 bg-white">
             <iframe
               title="Business Map"
-              src="/business-map?embed=1"
+              src="/business-map-embedded"
               className="w-full h-[75vh] rounded-xl"
             />
           </div>

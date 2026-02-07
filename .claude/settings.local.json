@@ -11,7 +11,10 @@
       "Bash(npm run lint)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npx next build)",
+      "Bash(git remote set-url:*)",
+      "Bash(gh api:*)"
     ]
   }
 }

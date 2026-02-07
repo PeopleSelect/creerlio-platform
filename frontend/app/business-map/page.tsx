@@ -40,15 +40,6 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
   return debounced
 }
 
-const SKILLS_OPTIONS = [
-  'JavaScript', 'TypeScript', 'Python', 'Java', 'React', 'Node.js', 'Vue.js', 'Angular',
-  'SQL', 'MongoDB', 'PostgreSQL', 'AWS', 'Docker', 'Kubernetes', 'CI/CD', 'Git',
-  'HTML', 'CSS', 'SASS', 'Tailwind CSS', 'GraphQL', 'REST API', 'Microservices',
-  'Machine Learning', 'Data Science', 'Analytics', 'Project Management', 'Agile', 'Scrum',
-  'UI/UX Design', 'Figma', 'Adobe Creative Suite', 'Marketing', 'Sales', 'Customer Service',
-  'Accounting', 'Finance', 'HR', 'Recruiting', 'Business Analysis', 'Consulting'
-] as const
-
 const ROLE_TITLES = [
   'Software Engineer', 'Senior Software Engineer', 'Full Stack Developer', 'Frontend Developer',
   'Backend Developer', 'DevOps Engineer', 'Data Scientist', 'Data Analyst', 'Machine Learning Engineer',
@@ -94,15 +85,10 @@ function BusinessMapPageInner() {
   // Simplified filters
   const [filters, setFilters] = useState({
     role: '',
-    skills: [] as string[],
     minExperience: '',
     location: ''
   })
   const [intentStatusFilter, setIntentStatusFilter] = useState<string>('')
-
-  const [skillsInput, setSkillsInput] = useState('')
-  const [skillsInputOpen, setSkillsInputOpen] = useState(false)
-  const [skillsInputActiveIdx, setSkillsInputActiveIdx] = useState(0)
 
   const [talents, setTalents] = useState<AnonymizedTalent[]>([])
   const [selectedTalentId, setSelectedTalentId] = useState<string | null>(null)
@@ -113,7 +99,6 @@ function BusinessMapPageInner() {
   const searchQueryDebounced = useDebouncedValue(searchQuery, 500)
   const locDebounced = useDebouncedValue(locQuery, 300)
   const roleDebounced = useDebouncedValue(filters.role, 300)
-  const skillsDebounced = useDebouncedValue(filters.skills.join(','), 300)
   const locAbort = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -364,15 +349,11 @@ function BusinessMapPageInner() {
         // Process all talents
         const processedTalents = await Promise.all(
           (data || []).map(async (t: any) => {
-            // Filter by main search query (searches title, bio, skills)
+            // Filter by main search query (role/title only)
             if (searchQueryDebounced.trim()) {
               const queryLower = searchQueryDebounced.toLowerCase()
               const titleMatch = t.title?.toLowerCase().includes(queryLower)
-              const bioMatch = t.bio?.toLowerCase().includes(queryLower)
-              const skillsMatch = Array.isArray(t.skills) && t.skills.some((s: any) => 
-                String(s).toLowerCase().includes(queryLower)
-              )
-              if (!titleMatch && !bioMatch && !skillsMatch) {
+              if (!titleMatch) {
                 return null
               }
             }
@@ -382,15 +363,6 @@ function BusinessMapPageInner() {
               if (!t.title.toLowerCase().includes(filters.role.toLowerCase())) {
                 return null
               }
-            }
-
-            // Filter by skills
-            const talentSkills = Array.isArray(t.skills) ? t.skills.map((s: any) => String(s).toLowerCase()) : []
-            if (filters.skills.length > 0) {
-              const hasMatchingSkill = filters.skills.some(skill => 
-                talentSkills.includes(skill.toLowerCase())
-              )
-              if (!hasMatchingSkill) return null
             }
 
             // Filter by minimum experience
@@ -472,7 +444,7 @@ function BusinessMapPageInner() {
     }
 
     loadTalents()
-  }, [searchQueryDebounced, searchCenter, radiusKm, filters.role, filters.skills, filters.minExperience, intentStatusFilter])
+  }, [searchQueryDebounced, searchCenter, radiusKm, filters.role, filters.minExperience, intentStatusFilter])
 
   // Handle location selection
   const handleLocationSelect = (suggestion: LocSuggestion) => {
@@ -482,36 +454,12 @@ function BusinessMapPageInner() {
     setFilters(prev => ({ ...prev, location: suggestion.label }))
   }
 
-  // Handle skills input
-  const handleSkillsInputChange = (value: string) => {
-    setSkillsInput(value)
-    const matching = SKILLS_OPTIONS.filter(s => s.toLowerCase().includes(value.toLowerCase()))
-    if (matching.length > 0) {
-      setSkillsInputOpen(true)
-      setSkillsInputActiveIdx(0)
-    } else {
-      setSkillsInputOpen(false)
-    }
-  }
-
-  const handleAddSkill = (skill: string) => {
-    if (!filters.skills.includes(skill)) {
-      setFilters(prev => ({ ...prev, skills: [...prev.skills, skill] }))
-    }
-    setSkillsInput('')
-    setSkillsInputOpen(false)
-  }
-
-  const handleRemoveSkill = (skill: string) => {
-    setFilters(prev => ({ ...prev, skills: prev.skills.filter(s => s !== skill) }))
-  }
-
   // Clear all filters
   const handleClearFilters = () => {
     setSearchQuery('')
     setLocQuery('')
     setSearchCenter(null)
-    setFilters({ role: '', skills: [], minExperience: '', location: '' })
+    setFilters({ role: '', minExperience: '', location: '' })
     setIntentStatusFilter('')
   }
 
@@ -816,13 +764,13 @@ function BusinessMapPageInner() {
             
             {/* Search */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-200 mb-2.5">Search</label>
+              <label className="block text-sm font-medium text-slate-200 mb-2.5">Role</label>
               <div className="flex items-center gap-2.5">
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Role, skill, or industry…"
+                  placeholder="Role or title…"
                   className="w-full px-4 py-2.5 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
                 />
                 <button
@@ -896,55 +844,6 @@ function BusinessMapPageInner() {
                     placeholder="e.g., Software Engineer"
                     className="w-full px-3 py-2 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
                   />
-                </div>
-
-                {/* Skills Filter */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-2.5">Skills</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={skillsInput}
-                      onChange={(e) => handleSkillsInputChange(e.target.value)}
-                      placeholder="Type to search skills…"
-                      className="w-full px-3 py-2 rounded-lg bg-white text-black border border-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-sm transition-all"
-                    />
-                    {skillsInputOpen && (
-                      <div className="absolute left-0 right-0 mt-1 rounded-lg border border-white/10 bg-slate-950/95 backdrop-blur shadow-xl overflow-hidden z-20">
-                        {SKILLS_OPTIONS.filter(s => s.toLowerCase().includes(skillsInput.toLowerCase()))
-                          .slice(0, 10)
-                          .map((skill, idx) => (
-                            <button
-                              key={skill}
-                              type="button"
-                              className={`w-full text-left px-3 py-2 text-sm ${
-                                idx === skillsInputActiveIdx ? 'bg-white/10 text-white' : 'bg-transparent text-slate-200 hover:bg-white/5'
-                              }`}
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => handleAddSkill(skill)}
-                            >
-                              {skill}
-                            </button>
-                          ))}
-                      </div>
-                    )}
-                  </div>
-                  {filters.skills.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {filters.skills.map(skill => (
-                        <span key={skill} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-500/20 text-blue-200 text-xs">
-                          {skill}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSkill(skill)}
-                            className="text-blue-200 hover:text-white"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
                 {/* Experience Filter */}

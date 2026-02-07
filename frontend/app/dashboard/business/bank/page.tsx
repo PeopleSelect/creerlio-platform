@@ -19,7 +19,7 @@ interface BusinessBankItem {
   created_at: string
 }
 
-type ItemFilter = 'all' | 'image' | 'video' | 'text' | 'link' | 'logo' | 'business_introduction'
+type ItemFilter = 'all' | 'document' | 'image' | 'video' | 'link' | 'logo' | 'business_introduction'
 
 const BUCKET = 'business-bank'
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024 // 50 MB
@@ -39,6 +39,10 @@ export default function BusinessBankPage() {
     | { kind: 'video'; url: string; title: string }
     | null
   >(null)
+
+  // Document form
+  const [docTitle, setDocTitle] = useState('')
+  const [docDescription, setDocDescription] = useState('')
 
   // Link form
   const [linkTitle, setLinkTitle] = useState('')
@@ -157,11 +161,11 @@ export default function BusinessBankPage() {
         const filePath = fileName
 
         // Determine item type
-        let itemType = 'image'
-        if (file.type.startsWith('video/')) {
+        let itemType: BusinessBankItem['item_type'] = 'document'
+        if (file.type.startsWith('image/')) {
+          itemType = file.type === 'image/svg+xml' || file.name.toLowerCase().includes('logo') ? 'logo' : 'image'
+        } else if (file.type.startsWith('video/')) {
           itemType = 'video'
-        } else if (file.type === 'image/svg+xml' || file.name.toLowerCase().includes('logo')) {
-          itemType = 'logo'
         }
 
         // Upload to Supabase Storage
@@ -301,12 +305,29 @@ export default function BusinessBankPage() {
     if (!userId) return
     const { error } = await supabase.from('business_bank_items').insert({
       user_id: userId,
-      item_type: 'text',
+      item_type: 'document',
       title,
       description,
       metadata: metadata || null,
     })
     if (error) throw error
+  }
+
+  async function handleDocumentCreate() {
+    if (!docTitle.trim() || !userId) {
+      setUploadError('Document title is required')
+      return
+    }
+    try {
+      await createTextItem(docTitle.trim(), docDescription.trim(), { source: 'manual' })
+      setDocTitle('')
+      setDocDescription('')
+      setUploadError(null)
+      await loadItems()
+    } catch (err: any) {
+      console.error('Error creating document:', err)
+      setUploadError(err.message || 'Failed to create document')
+    }
   }
 
   async function parseWebsiteAndSave() {
@@ -940,74 +961,106 @@ export default function BusinessBankPage() {
     }
   }
 
-  const filteredItems = items.filter((item) => filter === 'all' || item.item_type === filter)
+  function isExternalUrl(value: string) {
+    return /^https?:\/\//i.test(value)
+  }
+
+  async function openFile(path: string) {
+    if (isExternalUrl(path)) {
+      window.open(path, '_blank')
+      return
+    }
+    const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60 * 10)
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+  }
+
+  function renderThumb(item: BusinessBankItem) {
+    const base =
+      'w-[20mm] h-[20mm] rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center shrink-0'
+    const isImg = item.item_type === 'image' || item.item_type === 'logo'
+    const isVid = item.item_type === 'video' || item.item_type === 'business_introduction'
+    const url = thumbUrls[item.id] || item.file_url || ''
+
+    const ext = (item.title.split('.').pop() || '').toUpperCase().slice(0, 4)
+    const label = isImg ? 'IMG' : isVid ? 'VID' : ext || 'DOC'
+
+    if (isImg && url) {
+      return (
+        <button
+          type="button"
+          className={base}
+          onClick={() => setPreview({ kind: 'image', url, title: item.title })}
+          title="Click to expand"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={item.title} className="w-full h-full object-cover" />
+        </button>
+      )
+    }
+
+    if (isVid && url) {
+      return (
+        <button
+          type="button"
+          className={base}
+          onClick={() => setPreview({ kind: 'video', url, title: item.title })}
+          title="Click to expand"
+        >
+          <div className="relative w-full h-full">
+            <video
+              className="w-full h-full object-cover"
+              src={url}
+              muted
+              playsInline
+              preload="metadata"
+            />
+            <div className="absolute inset-0 flex items-center justify-center text-white/90 text-xs font-semibold bg-black/30">
+              ▶
+            </div>
+          </div>
+        </button>
+      )
+    }
+
+    return (
+      <div className={base}>
+        <span className="text-xs text-gray-600 font-semibold">{label}</span>
+      </div>
+    )
+  }
+
+  const filteredItems = items.filter((item) => {
+    if (filter === 'all') return true
+    if (filter === 'image') return item.item_type === 'image' || item.item_type === 'logo'
+    if (filter === 'video') return item.item_type === 'video' || item.item_type === 'business_introduction'
+    if (filter === 'document') return item.item_type === 'document' || item.item_type === 'text'
+    return item.item_type === filter
+  })
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
-      <header className="container mx-auto px-6 py-4 flex items-center justify-between border-b border-gray-800">
-        <Link href="/" className="flex items-center space-x-2">
-          <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-xl">C</span>
-          </div>
-          <span className="text-white text-2xl font-bold">Creerlio</span>
+    <div className="min-h-screen bg-white text-gray-900">
+      <header className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+        <Link href="/dashboard/business" className="font-bold text-xl text-gray-900">
+          Business Bank
         </Link>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard/business"
-            className="px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            Back to Dashboard
-          </Link>
+        <div className="flex items-center gap-4">
           <Link
             href="/dashboard/business/edit"
-            className="px-6 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-sm font-medium transition-colors"
           >
             Edit Profile
           </Link>
-        </div>
+          <button onClick={() => router.push('/dashboard/business')} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
+            Back
+          </button>
       </header>
 
-      <div className="container mx-auto px-6 py-8 max-w-7xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Business Bank</h1>
-          <p className="text-gray-400">
-            Store images, videos, and links for your business profile
-          </p>
-        </div>
-
+      <main className="p-6 space-y-6">
         {uploadError && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-200 rounded-lg">
+          <div className="border border-amber-500/40 bg-amber-500/10 text-amber-700 rounded-xl p-4 text-sm">
             {uploadError}
-            <button
-              onClick={() => setUploadError(null)}
-              className="ml-4 text-red-300 hover:text-red-100"
-            >
-              ×
-            </button>
           </div>
         )}
-
-        {/* Filter Tabs */}
-        <div className="mb-6 flex gap-2 border-b border-gray-700">
-          {(['all', 'image', 'video', 'text', 'link', 'logo', 'business_introduction'] as ItemFilter[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-4 py-2 font-medium transition-colors ${
-                filter === f
-                  ? 'text-blue-400 border-b-2 border-blue-400'
-                  : 'text-gray-400 hover:text-gray-300'
-              }`}
-            >
-              {f === 'business_introduction' ? 'Business Introduction' : f.charAt(0).toUpperCase() + f.slice(1)}
-              {f !== 'all' && (
-                <span className="ml-2 text-sm text-gray-500">
-                  ({items.filter((i) => i.item_type === f).length})
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
 
         {/* Upload Area */}
         <div
@@ -1016,386 +1069,255 @@ export default function BusinessBankPage() {
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
-          className={`mb-8 p-8 border-2 border-dashed rounded-lg transition-colors ${
-            dragActive
-              ? 'border-blue-500 bg-blue-500/10'
-              : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+          className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer ${
+            dragActive ? 'border-blue-400' : 'border-gray-300'
           }`}
+          onClick={() => fileInputRef.current?.click()}
         >
-          <div className="text-center">
-            <p className="text-gray-300 mb-4">Drag and drop files here, or click to browse</p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*,video/*"
-              onChange={(e) => handleFileUpload(e.target.files)}
-              className="hidden"
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="px-6 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50"
-            >
-              {isUploading ? 'Uploading...' : 'Upload Files'}
-            </button>
-          </div>
-        </div>
-
-        {/* Business Website & Brochure Parsing */}
-        <div className="mb-8 p-6 bg-gray-800/50 rounded-lg border border-gray-700">
-          <h3 className="text-lg font-semibold text-white mb-2">Business Website & Brochure Parsing</h3>
-          <p className="text-sm text-gray-400 mb-4">
-            Parse a business website or brochure to auto-create Business Bank entries you can reuse in your Business Profile.
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*,video/*,application/pdf"
+            onChange={(e) => handleFileUpload(e.target.files)}
+            className="hidden"
+          />
+          <p>Drag files here or click to upload</p>
+          <p className="mt-1 text-xs text-gray-500">
+            Max file size: ~{Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))}MB per file
           </p>
+          {isUploading && <p className="mt-2 text-blue-600">Uploading…</p>}
+        </main>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-gray-300">Website URL</label>
-              <input
-                type="text"
-                value={websiteUrl}
-                onChange={(e) => setWebsiteUrl(e.target.value)}
-                placeholder="https://example.com"
-                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
-              />
-              {websiteParseError && <div className="text-xs text-red-300">{websiteParseError}</div>}
-              <button
-                type="button"
-                onClick={parseWebsiteAndSave}
-                disabled={websiteParseBusy}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-60"
-              >
-                {websiteParseBusy ? 'Parsing…' : 'Parse Website'}
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-gray-300">Brochure (PDF)</label>
-              <input
-                type="file"
-                accept="application/pdf"
-                onChange={(e) => setBrochureFile(e.target.files?.[0] || null)}
-                className="w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gray-700 file:text-white hover:file:bg-gray-600"
-              />
-              {brochureParseError && <div className="text-xs text-red-300">{brochureParseError}</div>}
-              <button
-                type="button"
-                onClick={parseBrochureAndSave}
-                disabled={brochureParseBusy || !brochureFile}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-60"
-              >
-                {brochureParseBusy ? 'Parsing…' : 'Parse Brochure'}
-              </button>
-            </div>
-          </div>
+        {/* Filter Tabs */}
+        <div className="flex gap-2 flex-wrap">
+          {(['all', 'document', 'image', 'video', 'link', 'logo', 'business_introduction'] as ItemFilter[]).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1 rounded-full text-xs ${
+                filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {f === 'business_introduction' ? 'business introduction' : f}
+            </button>
+          ))}
         </div>
+
+        {filter === 'document' && (
+          <>
+            <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+              <div className="font-semibold mb-3">Add a business document or note</div>
+              <div className="grid md:grid-cols-2 gap-3 text-sm">
+                <input
+                  className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400"
+                  value={docTitle}
+                  onChange={(e) => setDocTitle(e.target.value)}
+                  placeholder="Title (e.g. Company Overview)"
+                />
+                <textarea
+                  className="md:col-span-2 px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400"
+                  value={docDescription}
+                  onChange={(e) => setDocDescription(e.target.value)}
+                  placeholder="Summary or notes"
+                  rows={4}
+                />
+                <div className="md:col-span-2 flex justify-end">
+                  <button className="px-3 py-2 rounded bg-blue-600 text-white" onClick={handleDocumentCreate}>
+                    Add Document
+                  </button>
+                </div>
+                <div className="md:col-span-2 text-xs text-gray-500">
+                  Tip: Use documents to capture business summaries, services, and brochure notes.
+                </div>
+              </div>
+            </div>
+
+            {/* Business Website & Brochure Parsing */}
+            <div className="p-6 bg-gray-50 rounded-xl border border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Business Website & Brochure Parsing</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Parse a business website or brochure to auto-create Business Bank entries you can reuse in your Business Profile.
+              </p>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-700">Website URL</label>
+                  <input
+                    type="text"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    placeholder="https://example.com"
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400"
+                  />
+                  {websiteParseError && <div className="text-xs text-red-600">{websiteParseError}</div>}
+                  <button
+                    type="button"
+                    onClick={parseWebsiteAndSave}
+                    disabled={websiteParseBusy}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+                  >
+                    {websiteParseBusy ? 'Parsing…' : 'Parse Website'}
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-700">Brochure (PDF)</label>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => setBrochureFile(e.target.files?.[0] || null)}
+                    className="w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gray-200 file:text-gray-800 hover:file:bg-gray-300"
+                  />
+                  {brochureParseError && <div className="text-xs text-red-600">{brochureParseError}</div>}
+                  <button
+                    type="button"
+                    onClick={parseBrochureAndSave}
+                    disabled={brochureParseBusy || !brochureFile}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+                  >
+                    {brochureParseBusy ? 'Parsing…' : 'Parse Brochure'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Business Introduction Video */}
-        <div className="mb-8 p-6 bg-gray-800/50 rounded-lg border border-gray-700">
-          <h3 className="text-lg font-semibold text-white mb-4">Business Introduction Video</h3>
-          <p className="text-sm text-gray-400 mb-4">
-            Record a video, upload a file, or link to a video from YouTube, your website, or other platforms.
-          </p>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Title</label>
-              <input
-                type="text"
-                placeholder="Business Introduction Video"
-                value={introVideoTitle}
-                onChange={(e) => setIntroVideoTitle(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
-              />
+        {(filter === 'video' || filter === 'business_introduction') && (
+          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-semibold">Record a business introduction</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Record a short video, upload a file, or link a video URL. It will appear under the Videos tab.
+                </div>
+              </div>
+              <button
+                className="px-3 py-2 rounded bg-blue-600 text-white"
+                onClick={() => {
+                  setRecOpen(true)
+                  setRecErr(null)
+                }}
+              >
+                Record Video
+              </button>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Source</label>
-              <div className="flex gap-2 mb-4">
-                <button
-                  type="button"
-                  onClick={() => setIntroVideoSource('link')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    introVideoSource === 'link'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  Link Video
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIntroVideoSource('upload')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    introVideoSource === 'upload'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  Upload File
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIntroVideoSource('record')
-                    setRecOpen(true)
-                  }}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    introVideoSource === 'record'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  Record Video
-                </button>
-              </div>
-            </div>
-
-            {introVideoSource === 'link' && (
-              <div className="space-y-4">
-                <input
-                  type="url"
-                  placeholder="Video URL (YouTube, Vimeo, or direct video link)"
-                  value={introVideoUrl}
-                  onChange={(e) => setIntroVideoUrl(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
-                />
-                <button
-                  onClick={handleIntroVideoLink}
-                  disabled={isUploading}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
-                >
-                  {isUploading ? 'Saving...' : 'Add Video Link'}
-                </button>
-              </div>
-            )}
-
-            {introVideoSource === 'upload' && (
-              <div className="space-y-4">
-                <input
-                  ref={videoFileInputRef}
-                  type="file"
-                  accept="video/*"
-                  onChange={(e) => handleIntroVideoUpload(e.target.files)}
-                  className="hidden"
-                />
-                <button
-                  onClick={() => videoFileInputRef.current?.click()}
-                  disabled={isUploading}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
-                >
-                  {isUploading ? 'Uploading...' : 'Choose Video File'}
-                </button>
-              </div>
-            )}
-
-            {introVideoSource === 'record' && (
-              <div className="space-y-4">
-                <button
-                  onClick={() => setRecOpen(true)}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                >
-                  Open Camera
-                </button>
-              </div>
-            )}
           </div>
-        </div>
+        )}
 
         {/* Add Link */}
-        <div className="mb-8 p-6 bg-gray-800/50 rounded-lg border border-gray-700">
-          <h3 className="text-lg font-semibold text-white mb-4">Add Link</h3>
-          <div className="space-y-4">
-            <input
-              type="text"
-              placeholder="Title (e.g., Company Website)"
-              value={linkTitle}
-              onChange={(e) => setLinkTitle(e.target.value)}
-              className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
-            />
-            <input
-              type="url"
-              placeholder="URL"
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
-            />
-            <textarea
-              placeholder="Description (optional)"
-              value={linkDescription}
-              onChange={(e) => setLinkDescription(e.target.value)}
-              rows={2}
-              className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
-            />
-            <button
-              onClick={handleLinkCreate}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              Add Link
-            </button>
+        {filter === 'link' && (
+          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+            <div className="font-semibold mb-3">Add link</div>
+            <div className="grid md:grid-cols-2 gap-3 text-sm">
+              <input
+                type="text"
+                placeholder="Title (e.g., Company Website)"
+                value={linkTitle}
+                onChange={(e) => setLinkTitle(e.target.value)}
+                className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400"
+              />
+              <input
+                type="url"
+                placeholder="URL"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                className="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400"
+              />
+              <textarea
+                placeholder="Description (optional)"
+                value={linkDescription}
+                onChange={(e) => setLinkDescription(e.target.value)}
+                rows={2}
+                className="md:col-span-2 px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400"
+              />
+              <div className="md:col-span-2 flex justify-end">
+                <button
+                  onClick={handleLinkCreate}
+                  className="px-3 py-2 rounded bg-blue-600 text-white"
+                >
+                  Add Link
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Items Grid */}
-        {isLoading ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          </div>
-        ) : filteredItems.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
-            <p>No items found. Upload files to get started.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredItems.map((item) => (
-              <div
-                key={item.id}
-                className="bg-gray-800/50 rounded-lg border border-gray-700 overflow-hidden hover:border-gray-600 transition-colors"
-              >
-                {(item.item_type === 'image' || item.item_type === 'logo') && thumbUrls[item.id] && (
-                  <div
-                    className="aspect-video bg-gray-900 cursor-pointer"
-                    onClick={() =>
-                      setPreview({
-                        kind: 'image',
-                        url: thumbUrls[item.id],
-                        title: item.title,
-                      })
-                    }
-                  >
-                    <img
-                      src={thumbUrls[item.id]}
-                      alt={item.title}
-                      className="w-full h-full object-cover"
-                    />
+        <div className="grid md:grid-cols-3 gap-4">
+          {isLoading && <p>Loading…</p>}
+          {!isLoading && filteredItems.length === 0 && <p>No items</p>}
+          {filteredItems.map((item) => {
+            const openPath = item.file_path || item.file_url || ''
+            const displayType = item.item_type === 'text' ? 'document' : item.item_type
+            return (
+              <div key={item.id} className="border border-gray-200 rounded-lg p-4 flex gap-4">
+                {renderThumb(item)}
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold break-words">{item.title}</div>
+                  <div className="text-xs text-gray-500">
+                    {displayType}
+                    {item.file_type ? ` • ${item.file_type}` : ''}
                   </div>
-                )}
-                {(item.item_type === 'video' || item.item_type === 'business_introduction') && thumbUrls[item.id] && (
-                  <div
-                    className="aspect-video bg-gray-900 cursor-pointer relative"
-                    onClick={() =>
-                      setPreview({
-                        kind: 'video',
-                        url: thumbUrls[item.id],
-                        title: item.title,
-                      })
-                    }
-                  >
-                    <img
-                      src={thumbUrls[item.id]}
-                      alt={item.title}
-                      className="w-full h-full object-cover opacity-75"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-16 h-16 bg-black/50 rounded-full flex items-center justify-center">
-                        <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {(item.item_type === 'video' || item.item_type === 'business_introduction') && !thumbUrls[item.id] && item.file_url && (
-                  <div
-                    className="aspect-video bg-gray-900 cursor-pointer relative"
-                    onClick={() =>
-                      setPreview({
-                        kind: 'video',
-                        url: item.file_url!,
-                        title: item.title,
-                      })
-                    }
-                  >
-                    <div className="w-full h-full flex items-center justify-center">
-                      <div className="w-16 h-16 bg-black/50 rounded-full flex items-center justify-center">
-                        <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {(item.item_type === 'text' || item.item_type === 'link') && (
-                  <div className="aspect-video bg-gray-900 flex items-center justify-center p-4">
-                    <div className="text-center">
-                      {item.item_type === 'link' ? (
-                        <svg
-                          className="w-12 h-12 text-gray-600 mx-auto mb-2"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                          />
-                        </svg>
-                      ) : (
-                        <svg
-                          className="w-12 h-12 text-gray-600 mx-auto mb-2"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
-                      )}
-                      <p className="text-xs text-gray-500 uppercase">{item.item_type}</p>
-                    </div>
-                  </div>
-                )}
-                <div className="p-4">
-                  <h3 className="text-white font-semibold mb-1 truncate">{item.title}</h3>
                   {item.description && (
-                    <p className="text-sm text-gray-400 line-clamp-2">{item.description}</p>
+                    <div className="mt-1 text-xs text-gray-500 line-clamp-2">{item.description}</div>
                   )}
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="flex-1 px-3 py-1.5 text-sm bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors"
-                    >
+                  <div className="mt-2 flex items-center gap-3 flex-wrap">
+                    {openPath && (
+                      <button
+                        className="text-blue-600 text-xs underline"
+                        onClick={() => openFile(openPath)}
+                      >
+                        Open
+                      </button>
+                    )}
+                    <button className="text-red-600 text-xs underline" onClick={() => handleDelete(item.id)}>
                       Delete
                     </button>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            )
+          })}
+        </div>
+      </main>
 
       {/* Preview Modal */}
       {preview && (
         <div
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6"
           onClick={() => setPreview(null)}
+          role="dialog"
+          aria-modal="true"
         >
-          <div className="max-w-4xl w-full">
-            <button
-              onClick={() => setPreview(null)}
-              className="absolute top-4 right-4 text-white hover:text-gray-300 text-2xl"
-            >
-              ×
-            </button>
-            {preview.kind === 'image' ? (
-              <img src={preview.url} alt={preview.title} className="w-full h-auto rounded-lg" />
-            ) : (
-              <video
-                src={preview.url}
-                controls
-                className="w-full h-auto rounded-lg"
-                autoPlay
-              />
-            )}
-            <p className="text-white text-center mt-4">{preview.title}</p>
+          <div
+            className="w-full max-w-5xl bg-slate-950 border border-white/10 rounded-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+              <div className="font-semibold truncate pr-4">{preview.title}</div>
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm"
+                onClick={() => setPreview(null)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-4 bg-black flex items-center justify-center">
+              {preview.kind === 'image' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={preview.url} alt={preview.title} className="max-h-[75vh] w-auto object-contain" />
+              ) : (
+                <video
+                  src={preview.url}
+                  controls
+                  className="max-h-[75vh] w-auto object-contain"
+                />
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1403,7 +1325,7 @@ export default function BusinessBankPage() {
       {/* Video Recording Modal */}
       {recOpen && (
         <div
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6"
           onClick={() => {
             if (!isRecording) {
               clearRecording()
@@ -1412,7 +1334,7 @@ export default function BusinessBankPage() {
           }}
         >
           <div
-            className="max-w-3xl w-full bg-gray-900 rounded-lg border border-gray-700 p-6"
+            className="max-w-3xl w-full bg-slate-950 border border-white/10 rounded-2xl p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">

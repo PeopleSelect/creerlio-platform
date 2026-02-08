@@ -11,6 +11,7 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [stats, setStats] = useState<any>(null)
+  const [viewStats, setViewStats] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'talent' | 'business' | 'users'>('overview')
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function AdminDashboard() {
         if (hasAdminFlag || isAdminEmail) {
           setIsAdmin(true)
           loadStats(u.id)
+          loadViewStats()
         } else {
           alert('Access denied. Admin privileges required.')
           router.replace('/')
@@ -79,6 +81,27 @@ export default function AdminDashboard() {
       })
     } catch (error) {
       console.error('Error loading stats:', error)
+    }
+  }
+
+  async function loadViewStats() {
+    try {
+      const { data: session } = await supabase.auth.getSession()
+      const token = session.session?.access_token
+      if (!token) return
+
+      const response = await fetch('/api/analytics/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setViewStats(data)
+      }
+    } catch (error) {
+      console.error('Error loading view stats:', error)
     }
   }
 
@@ -180,6 +203,41 @@ export default function AdminDashboard() {
                 <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
               </div>
             )}
+
+            {/* Page Views Analytics */}
+            <div className="bg-slate-900/70 border border-white/10 rounded-xl p-6">
+              <h2 className="text-xl font-bold mb-4">Page Views Analytics</h2>
+              {viewStats ? (
+                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-slate-800/50 rounded-lg p-4">
+                    <h3 className="text-gray-400 text-sm mb-1">Total Views</h3>
+                    <p className="text-2xl font-bold text-cyan-400">{viewStats.total_views?.toLocaleString() || 0}</p>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-lg p-4">
+                    <h3 className="text-gray-400 text-sm mb-1">Views Today</h3>
+                    <p className="text-2xl font-bold text-green-400">{viewStats.views_today?.toLocaleString() || 0}</p>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-lg p-4">
+                    <h3 className="text-gray-400 text-sm mb-1">Views (7 days)</h3>
+                    <p className="text-2xl font-bold text-blue-400">{viewStats.views_7d?.toLocaleString() || 0}</p>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-lg p-4">
+                    <h3 className="text-gray-400 text-sm mb-1">Views (30 days)</h3>
+                    <p className="text-2xl font-bold text-purple-400">{viewStats.views_30d?.toLocaleString() || 0}</p>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-lg p-4">
+                    <h3 className="text-gray-400 text-sm mb-1">Unique Visitors Today</h3>
+                    <p className="text-2xl font-bold text-amber-400">{viewStats.unique_visitors_today?.toLocaleString() || 0}</p>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-lg p-4">
+                    <h3 className="text-gray-400 text-sm mb-1">Unique Visitors (7 days)</h3>
+                    <p className="text-2xl font-bold text-orange-400">{viewStats.unique_visitors_7d?.toLocaleString() || 0}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-500">Loading analytics...</p>
+              )}
+            </div>
 
             <div className="bg-slate-900/70 border border-white/10 rounded-xl p-6">
               <h2 className="text-xl font-bold mb-4">Quick Actions</h2>

@@ -1,6 +1,7 @@
 import "./globals.css";
 import { ReactNode } from "react";
 import { Providers } from "@/components/providers";
+import { PageViewTracker } from "@/components/PageViewTracker";
 
 export const metadata = {
   title: "Creerlio Platform",
@@ -25,6 +26,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <Providers>
+          <PageViewTracker />
           {children}
         </Providers>
       </body>

@@ -79,6 +79,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
   const [resultsCollapsed, setResultsCollapsed] = useState(false)
   const [filtersCollapsed, setFiltersCollapsed] = useState(false)
   const [mapResizeTrigger, setMapResizeTrigger] = useState(0)
+  const [showAllTalents, setShowAllTalents] = useState<boolean>(true)
 
   // Simplified filters
   const [filters, setFilters] = useState({
@@ -375,7 +376,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
               const distanceMeters = R * c
               distanceKm = distanceMeters / 1000
 
-              if (distanceKm > radiusKm) return null
+              if (!showAllTalents && distanceKm > radiusKm) return null
             } else {
               // No location filter - just get coordinates for display if available
               coords = await geocodeTalentLocation(t)
@@ -418,7 +419,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
     }
 
     loadTalents()
-  }, [searchCenter, radiusKm, filters.role])
+  }, [searchCenter, radiusKm, filters.role, showAllTalents])
 
   // Handle location selection
   const handleLocationSelect = (suggestion: LocSuggestion) => {
@@ -426,6 +427,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
     setSearchCenter({ lng: suggestion.lng, lat: suggestion.lat, label: suggestion.label })
     setLocOpen(false)
     setFilters(prev => ({ ...prev, location: suggestion.label }))
+    setShowAllTalents(false)
   }
 
   // Clear all filters
@@ -433,6 +435,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
     setLocQuery('')
     setSearchCenter(null)
     setFilters({ role: '', location: '' })
+    setShowAllTalents(true)
   }
 
   // Request connection handler (same as before)
@@ -707,6 +710,26 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
             
             <div className="space-y-5">
               <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <label className="flex items-start gap-3 text-sm text-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 accent-blue-500"
+                    checked={showAllTalents}
+                    onChange={(e) => {
+                      const nextChecked = e.target.checked
+                      setShowAllTalents(nextChecked)
+                      if (nextChecked) {
+                        setSearchCenter(null)
+                      }
+                    }}
+                  />
+                  <span className="leading-snug">
+                    <span className="font-semibold text-white">Show all talent in Creerlio</span>
+                  </span>
+                </label>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                 <label className="block text-sm font-medium text-slate-200 mb-2.5">Role</label>
                 <input
                   type="text"
@@ -774,6 +797,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
                         if (pick) {
                           handleLocationSelect(pick)
                         } else if (locQuery.trim()) {
+                          setShowAllTalents(false)
                           geocodeAndFly()
                         }
                         return

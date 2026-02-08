@@ -1,4 +1,4 @@
-import { BusinessMapPageInner } from '@/app/business-map/page'
+import { BusinessMapPageInner } from '../business-map/page'
 
 export const dynamic = 'force-dynamic'
 

@@ -2274,6 +2274,12 @@ export function TalentDashboardShell({
               )}
             </Link>
             <span className="text-gray-700">Welcome, {userFirstName || user?.full_name || user?.username}</span>
+            <Link
+              href="/dashboard/talent/view"
+              className="text-sm font-medium text-blue-600 hover:text-blue-700"
+            >
+              View Profile
+            </Link>
           </div>
           <button
             onClick={handleLogout}
@@ -3311,14 +3317,7 @@ export function TalentDashboardShell({
                   )}
                 </div>
 
-                <div className="pt-4 border-t border-gray-200">
-                  <Link
-                    href="/dashboard/talent/edit"
-                    className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Edit Profile
-                  </Link>
-                </div>
+                {/* Actions moved to header and View Profile page */}
               </div>
             )}
           </div>
@@ -3338,32 +3337,7 @@ export function TalentDashboardShell({
                       <p className="text-gray-700"><span className="text-gray-600">Title:</span> {talentProfile.title}</p>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-3">
-                    <Link
-                      href="/dashboard/talent/view"
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-                    >
-                      View Profile
-                    </Link>
-                    <Link
-                      href="/dashboard/talent/edit"
-                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
-                    >
-                      Edit Profile
-                    </Link>
-                    <Link
-                      href="/portfolio/view"
-                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
-                    >
-                      View Portfolio
-                    </Link>
-                    <Link
-                      href="/portfolio"
-                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
-                    >
-                      Edit Portfolio
-                    </Link>
-                  </div>
+                  {/* Actions moved to top nav and View Portfolio page */}
                 </div>
               )}
             </div>

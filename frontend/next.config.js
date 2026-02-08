@@ -30,6 +30,16 @@ const nextConfig = {
     };
     return config;
   },
+
+  async redirects() {
+    return [
+      {
+        source: '/dashboard/talent',
+        destination: '/dashboard/talent-v2',
+        permanent: false,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

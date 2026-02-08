@@ -1,4 +1,4 @@
-import { TalentDashboardShell } from '@/app/dashboard/talent/page'
+import { TalentDashboardShell } from '../talent/page'
 
 export const dynamic = 'force-dynamic'
 

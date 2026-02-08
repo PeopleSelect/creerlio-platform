@@ -1053,6 +1053,7 @@ export default function BusinessBankPage() {
           <button onClick={() => router.push('/dashboard/business')} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
             Back
           </button>
+        </div>
       </header>
 
       <main className="p-6 space-y-6">
@@ -1087,7 +1088,7 @@ export default function BusinessBankPage() {
             Max file size: ~{Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))}MB per file
           </p>
           {isUploading && <p className="mt-2 text-blue-600">Uploading…</p>}
-        </main>
+        </div>
 
         {/* Filter Tabs */}
         <div className="flex gap-2 flex-wrap">

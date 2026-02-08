@@ -2267,26 +2267,6 @@ export function TalentDashboardShell({
         </Link>
         
         <div className="flex items-center space-x-4">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard/talent/edit"
-              className="w-10 h-10 rounded-full border border-gray-200 bg-gray-100 overflow-hidden flex items-center justify-center text-gray-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
-              title="View Profile"
-            >
-              {portfolioAvatarUrl ? (
-                <img src={portfolioAvatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-sm font-semibold">{(userFirstName || user?.full_name || user?.username || 'U').charAt(0)}</span>
-              )}
-            </Link>
-            <span className="text-gray-700">Welcome, {userFirstName || user?.full_name || user?.username}</span>
-            <Link
-              href="/dashboard/talent/view"
-              className="text-sm font-medium text-blue-600 hover:text-blue-700"
-            >
-              View Profile
-            </Link>
-          </div>
           <button
             onClick={handleLogout}
             className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
@@ -2295,6 +2275,43 @@ export function TalentDashboardShell({
           </button>
         </div>
       </header>
+
+      {/* Welcome Banner */}
+      <div className="container mx-auto px-6 py-6 border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link
+              href="/dashboard/talent/view"
+              className="w-12 h-12 rounded-full border-2 border-gray-200 bg-gray-100 overflow-hidden flex items-center justify-center text-gray-500 hover:border-blue-300 transition-colors"
+              title="View Profile"
+            >
+              {portfolioAvatarUrl ? (
+                <img src={portfolioAvatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-lg font-semibold">{(userFirstName || user?.full_name || user?.username || 'U').charAt(0)}</span>
+              )}
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Welcome back, {userFirstName || user?.full_name || user?.username}!</h1>
+              <p className="text-gray-500">Manage your profile and portfolio</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard/talent/view"
+              className="px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              View Profile
+            </Link>
+            <Link
+              href="/dashboard/talent/edit"
+              className="px-5 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
+            >
+              Edit
+            </Link>
+          </div>
+        </div>
+      </div>
 
       {/* Dashboard Content */}
       <div className="container mx-auto px-6 py-6">

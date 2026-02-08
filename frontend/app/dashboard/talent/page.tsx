@@ -2389,17 +2389,7 @@ export function TalentDashboardShell({
               Talent Bank ↗
             </Link>
             {/* Portfolio Templates temporarily hidden */}
-            <Link
-              href="/dashboard/talent/business-connections"
-              title="View and manage your connections with businesses — message, review, and collaborate"
-              className={`px-6 py-3 text-sm font-medium transition-colors ${
-                isBusinessRoute
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-blue-600'
-              }`}
-            >
-              Business Connections
-            </Link>
+            {/* Business Connections tab temporarily hidden */}
           </div>
         </div>
 

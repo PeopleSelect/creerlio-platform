@@ -538,12 +538,12 @@ export default function JobDetailPage() {
               <button
                 onClick={handleApply}
                 disabled={isApplying || hasApplied}
-                className="px-8 py-3 bg-[#20C997] text-white rounded-lg font-semibold hover:bg-[#1DB886] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-8 py-3 bg-[#20C997] text-gray-900 rounded-lg font-semibold hover:bg-[#1DB886] transition-colors disabled:bg-[#20C997]/70"
               >
                 {isApplying ? 'Applying...' : hasApplied ? 'Applied' : 'Apply for Job'}
               </button>
               {hasApplied && (
-                <span className="px-4 py-2 bg-green-500/20 text-green-300 rounded-lg border border-green-500/50 text-sm">
+                <span className="px-4 py-2 bg-green-100 text-gray-900 rounded-lg border border-green-300 text-sm">
                   You have applied to this job
                 </span>
               )}

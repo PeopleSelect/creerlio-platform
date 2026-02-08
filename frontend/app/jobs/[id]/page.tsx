@@ -562,34 +562,34 @@ export default function JobDetailPage() {
           {/* Description */}
           {job.description && (
             <div className="dashboard-card rounded-xl p-6">
-              <h2 className="text-2xl font-bold text-white mb-4">Job Description</h2>
-              <div className="text-gray-300 whitespace-pre-wrap">{job.description}</div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Job Description</h2>
+              <div className="text-gray-900 whitespace-pre-wrap">{job.description}</div>
             </div>
           )}
 
           {/* Requirements */}
           {job.requirements && (
             <div className="dashboard-card rounded-xl p-6">
-              <h2 className="text-2xl font-bold text-white mb-4">Requirements</h2>
-              <div className="text-gray-300 whitespace-pre-wrap">{job.requirements}</div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Requirements</h2>
+              <div className="text-gray-900 whitespace-pre-wrap">{job.requirements}</div>
             </div>
           )}
 
           {/* Responsibilities */}
           {job.responsibilities && (
             <div className="dashboard-card rounded-xl p-6">
-              <h2 className="text-2xl font-bold text-white mb-4">Responsibilities</h2>
-              <div className="text-gray-300 whitespace-pre-wrap">{job.responsibilities}</div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Responsibilities</h2>
+              <div className="text-gray-900 whitespace-pre-wrap">{job.responsibilities}</div>
             </div>
           )}
 
           {/* Skills */}
           {(job.required_skills?.length || job.preferred_skills?.length) && (
             <div className="dashboard-card rounded-xl p-6">
-              <h2 className="text-2xl font-bold text-white mb-4">Skills</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Skills</h2>
               {job.required_skills && job.required_skills.length > 0 && (
                 <div className="mb-4">
-                  <h3 className="text-lg font-semibold text-gray-300 mb-2">Required Skills</h3>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Required Skills</h3>
                   <div className="flex flex-wrap gap-2">
                     {job.required_skills.map((skill, idx) => (
                       <span key={idx} className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full text-sm">
@@ -601,7 +601,7 @@ export default function JobDetailPage() {
               )}
               {job.preferred_skills && job.preferred_skills.length > 0 && (
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-300 mb-2">Preferred Skills</h3>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Preferred Skills</h3>
                   <div className="flex flex-wrap gap-2">
                     {job.preferred_skills.map((skill, idx) => (
                       <span key={idx} className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">
@@ -617,8 +617,8 @@ export default function JobDetailPage() {
           {/* Additional Details */}
           {(job.experience_level || job.education_level) && (
             <div className="dashboard-card rounded-xl p-6">
-              <h2 className="text-2xl font-bold text-white mb-4">Additional Details</h2>
-              <div className="space-y-2 text-gray-300">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Additional Details</h2>
+              <div className="space-y-2 text-gray-900">
                 {job.experience_level && (
                   <div>
                     <span className="font-semibold">Experience Level: </span>

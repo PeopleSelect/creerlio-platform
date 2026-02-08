@@ -139,6 +139,12 @@ export function TalentDashboardShell({
   const [savedTemplatesLoading, setSavedTemplatesLoading] = useState(false)
 
   useEffect(() => {
+    if (pathname === '/dashboard/talent') {
+      router.replace('/dashboard/talent-v2')
+    }
+  }, [pathname, router])
+
+  useEffect(() => {
     // Set active role context for mixed-profile accounts
     try {
       localStorage.setItem('creerlio_active_role', 'talent')

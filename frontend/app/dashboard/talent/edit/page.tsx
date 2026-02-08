@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import LocationDropdownsString from '@/components/LocationDropdownsString'
+import { CollapsibleTextarea } from '@/components/CollapsibleTextarea'
 
 // Helper function to geocode location using Mapbox
 async function geocodeLocation(location: string): Promise<{ lat: number; lng: number } | null> {
@@ -47,6 +48,11 @@ export default function EditTalentProfilePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({})
+
+  const toggleExpanded = (key: string) => {
+    setExpandedFields(prev => ({ ...prev, [key]: !prev[key] }))
+  }
 
   const [formData, setFormData] = useState({
     name: '',
@@ -492,13 +498,16 @@ export default function EditTalentProfilePage() {
           {/* Bio */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
-            <textarea
-              name="bio"
+            <CollapsibleTextarea
               value={formData.bio}
-              onChange={handleChange}
-              rows={4}
-              className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
               placeholder="Tell us about yourself..."
+              className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              expandKey="bio"
+              defaultRows={4}
+              expanded={expandedFields.bio || false}
+              onToggle={toggleExpanded}
+              showVoiceButtons={true}
             />
           </div>
 
@@ -573,17 +582,21 @@ export default function EditTalentProfilePage() {
                   <p className="text-xs text-gray-600 mb-2">
                     Write a brief summary that businesses will see when searching for talent. Include your role, experience, location, and what you're looking for. Example: "Actor with 10 years experience, lives in Sydney, looking for acting roles in the next 3 months"
                   </p>
-                  <textarea
-                    name="search_summary"
+                  <CollapsibleTextarea
                     value={formData.search_summary}
-                    onChange={handleChange}
-                    required={formData.search_visible}
-                    maxLength={500}
-                    rows={4}
+                    onChange={(e) => {
+                      const newValue = e.target.value.slice(0, 500)
+                      setFormData(prev => ({ ...prev, search_summary: newValue }))
+                    }}
+                    placeholder="e.g., Actor with 10 years experience, lives in Sydney, looking for acting roles in the next 3 months"
                     className={`w-full px-4 py-3 bg-white border rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500 resize-y ${
                       errors.search_summary ? 'border-red-500' : 'border-blue-500/20'
                     }`}
-                    placeholder="e.g., Actor with 10 years experience, lives in Sydney, looking for acting roles in the next 3 months"
+                    expandKey="search_summary"
+                    defaultRows={4}
+                    expanded={expandedFields.search_summary || false}
+                    onToggle={toggleExpanded}
+                    showVoiceButtons={true}
                   />
                   <p className={`text-xs mt-1 ${formData.search_summary.length >= 500 ? 'text-red-400' : 'text-gray-400'}`}>
                     {formData.search_summary.length} / 500 characters
@@ -599,13 +612,16 @@ export default function EditTalentProfilePage() {
                   <p className="text-xs text-gray-600 mb-2">
                     Additional details about when you're looking for roles, availability, or preferences
                   </p>
-                  <textarea
-                    name="availability_description"
+                  <CollapsibleTextarea
                     value={formData.availability_description}
-                    onChange={handleChange}
-                    rows={3}
-                    className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500 resize-y"
+                    onChange={(e) => setFormData(prev => ({ ...prev, availability_description: e.target.value }))}
                     placeholder="e.g., Looking for acting roles in the next 3 months, available for auditions on weekends"
+                    className="w-full px-4 py-3 bg-white border border-blue-500/20 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-blue-500 resize-y"
+                    expandKey="availability_description"
+                    defaultRows={3}
+                    expanded={expandedFields.availability_description || false}
+                    onToggle={toggleExpanded}
+                    showVoiceButtons={true}
                   />
                 </div>
               </>

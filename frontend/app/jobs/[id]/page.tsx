@@ -463,8 +463,8 @@ export default function JobDetailPage() {
       <div className="max-w-4xl mx-auto px-8 py-12">
         {/* Job Header */}
         <div className="dashboard-card rounded-xl p-8 mb-6">
-          <h1 className="text-4xl font-bold text-white mb-4">{job.title}</h1>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400 mb-6">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">{job.title}</h1>
+          <div className="flex flex-wrap items-center gap-6 text-lg text-gray-900 mb-6">
             {job.location && (
               <span className="flex items-center gap-1">
                 📍 {job.location}

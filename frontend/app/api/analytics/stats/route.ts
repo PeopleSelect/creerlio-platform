@@ -62,6 +62,25 @@ export async function GET(request: NextRequest) {
       return seen.size
     }
 
+    // Get page-by-page breakdown (last 7 days)
+    const { data: pageBreakdown } = await supabase
+      .from('page_views')
+      .select('page_path')
+      .gte('created_at', sevenDaysAgo)
+
+    // Count views per page
+    const pageCounts: Record<string, number> = {}
+    pageBreakdown?.forEach(row => {
+      const path = row.page_path
+      pageCounts[path] = (pageCounts[path] || 0) + 1
+    })
+
+    // Convert to sorted array (most viewed first)
+    const pageStats = Object.entries(pageCounts)
+      .map(([path, views]) => ({ path, views }))
+      .sort((a, b) => b.views - a.views)
+      .slice(0, 20) // Top 20 pages
+
     return NextResponse.json({
       total_views: totalRes.count || 0,
       views_today: todayRes.count || 0,
@@ -69,6 +88,7 @@ export async function GET(request: NextRequest) {
       views_30d: monthRes.count || 0,
       unique_visitors_today: countUnique(uniqueToday || []),
       unique_visitors_7d: countUnique(uniqueWeek || []),
+      page_stats: pageStats,
     })
   } catch (error) {
     console.error('Error getting analytics stats:', error)

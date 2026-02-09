@@ -208,32 +208,59 @@ export default function AdminDashboard() {
             <div className="bg-slate-900/70 border border-white/10 rounded-xl p-6">
               <h2 className="text-xl font-bold mb-4">Page Views Analytics</h2>
               {viewStats ? (
-                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-slate-800/50 rounded-lg p-4">
-                    <h3 className="text-gray-400 text-sm mb-1">Total Views</h3>
-                    <p className="text-2xl font-bold text-cyan-400">{viewStats.total_views?.toLocaleString() || 0}</p>
+                <>
+                  <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div className="bg-slate-800/50 rounded-lg p-4">
+                      <h3 className="text-gray-400 text-sm mb-1">Total Views</h3>
+                      <p className="text-2xl font-bold text-cyan-400">{viewStats.total_views?.toLocaleString() || 0}</p>
+                    </div>
+                    <div className="bg-slate-800/50 rounded-lg p-4">
+                      <h3 className="text-gray-400 text-sm mb-1">Views Today</h3>
+                      <p className="text-2xl font-bold text-green-400">{viewStats.views_today?.toLocaleString() || 0}</p>
+                    </div>
+                    <div className="bg-slate-800/50 rounded-lg p-4">
+                      <h3 className="text-gray-400 text-sm mb-1">Views (7 days)</h3>
+                      <p className="text-2xl font-bold text-blue-400">{viewStats.views_7d?.toLocaleString() || 0}</p>
+                    </div>
+                    <div className="bg-slate-800/50 rounded-lg p-4">
+                      <h3 className="text-gray-400 text-sm mb-1">Views (30 days)</h3>
+                      <p className="text-2xl font-bold text-purple-400">{viewStats.views_30d?.toLocaleString() || 0}</p>
+                    </div>
+                    <div className="bg-slate-800/50 rounded-lg p-4">
+                      <h3 className="text-gray-400 text-sm mb-1">Unique Visitors Today</h3>
+                      <p className="text-2xl font-bold text-amber-400">{viewStats.unique_visitors_today?.toLocaleString() || 0}</p>
+                    </div>
+                    <div className="bg-slate-800/50 rounded-lg p-4">
+                      <h3 className="text-gray-400 text-sm mb-1">Unique Visitors (7 days)</h3>
+                      <p className="text-2xl font-bold text-orange-400">{viewStats.unique_visitors_7d?.toLocaleString() || 0}</p>
+                    </div>
                   </div>
-                  <div className="bg-slate-800/50 rounded-lg p-4">
-                    <h3 className="text-gray-400 text-sm mb-1">Views Today</h3>
-                    <p className="text-2xl font-bold text-green-400">{viewStats.views_today?.toLocaleString() || 0}</p>
-                  </div>
-                  <div className="bg-slate-800/50 rounded-lg p-4">
-                    <h3 className="text-gray-400 text-sm mb-1">Views (7 days)</h3>
-                    <p className="text-2xl font-bold text-blue-400">{viewStats.views_7d?.toLocaleString() || 0}</p>
-                  </div>
-                  <div className="bg-slate-800/50 rounded-lg p-4">
-                    <h3 className="text-gray-400 text-sm mb-1">Views (30 days)</h3>
-                    <p className="text-2xl font-bold text-purple-400">{viewStats.views_30d?.toLocaleString() || 0}</p>
-                  </div>
-                  <div className="bg-slate-800/50 rounded-lg p-4">
-                    <h3 className="text-gray-400 text-sm mb-1">Unique Visitors Today</h3>
-                    <p className="text-2xl font-bold text-amber-400">{viewStats.unique_visitors_today?.toLocaleString() || 0}</p>
-                  </div>
-                  <div className="bg-slate-800/50 rounded-lg p-4">
-                    <h3 className="text-gray-400 text-sm mb-1">Unique Visitors (7 days)</h3>
-                    <p className="text-2xl font-bold text-orange-400">{viewStats.unique_visitors_7d?.toLocaleString() || 0}</p>
-                  </div>
-                </div>
+
+                  {/* Page-by-Page Breakdown */}
+                  {viewStats.page_stats && viewStats.page_stats.length > 0 && (
+                    <div className="mt-6">
+                      <h3 className="text-lg font-semibold mb-3 text-gray-300">Top Pages (Last 7 Days)</h3>
+                      <div className="bg-slate-800/50 rounded-lg overflow-hidden">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-gray-700">
+                              <th className="text-left p-3 text-gray-400 text-sm font-medium">Page Path</th>
+                              <th className="text-right p-3 text-gray-400 text-sm font-medium">Views</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {viewStats.page_stats.map((page: { path: string; views: number }, index: number) => (
+                              <tr key={page.path} className={index % 2 === 0 ? 'bg-slate-800/30' : ''}>
+                                <td className="p-3 text-gray-200 font-mono text-sm">{page.path}</td>
+                                <td className="p-3 text-right text-blue-400 font-semibold">{page.views.toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <p className="text-gray-500">Loading analytics...</p>
               )}

@@ -4087,11 +4087,9 @@ export function TalentDashboardShell({
                         }
                       }
                       
-                      const handleOpenMessages = async () => {
-                        // Load messaging for this business
-                        await loadMessaging()
-                        setMsgSelectedBusinessId(String(r.business_id))
-                        await loadConversation(String(r.business_id))
+                      const handleOpenMessages = () => {
+                        // Navigate to dedicated messages page
+                        router.push(`/dashboard/talent/messages?business_id=${r.business_id}&connection_id=${r.id}`)
                       }
                       
                       return (
@@ -4206,93 +4204,6 @@ export function TalentDashboardShell({
             </div>
             )}
 
-            {/* Messaging UI - shown when a business is selected */}
-            {msgSelectedBusinessId && (
-              <div className="mt-6 border border-gray-200 rounded-lg overflow-hidden">
-                <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-                  <p className="text-gray-900 font-medium">
-                    {`Messages with ${getBusinessDisplayName(String(msgSelectedBusinessId))}`}
-                  </p>
-                  <button
-                    onClick={() => {
-                      setMsgSelectedBusinessId(null)
-                      setMsgConversationId(null)
-                      setMsgItems([])
-                    }}
-                    className="text-gray-600 hover:text-gray-900 transition-colors"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                {msgError && (
-                  <div className="p-4 border-b border-gray-200 bg-red-50 text-red-700 text-sm">
-                    {msgError}
-                  </div>
-                )}
-
-                {msgLoading && (
-                  <div className="p-6 text-center">
-                    <p className="text-gray-600">Loading messages…</p>
-                  </div>
-                )}
-
-                {!msgLoading && msgConversationId === null && !msgError && (
-                  <div className="p-6 text-center">
-                    <p className="text-gray-700 mb-2">No messages yet</p>
-                    <p className="text-gray-500 text-sm">Start the conversation by sending a message below.</p>
-                  </div>
-                )}
-
-                {!msgLoading && msgConversationId && (
-                  <div className="p-4 space-y-3 max-h-[300px] overflow-auto bg-gray-50">
-                    {msgItems.length === 0 ? (
-                      <p className="text-gray-600 text-center">No messages yet.</p>
-                    ) : (
-                      msgItems.map((m) => (
-                        <div
-                          key={m.id}
-                          className={`max-w-[85%] rounded-lg px-3 py-2 ${
-                            m.sender_type === 'talent'
-                              ? 'ml-auto bg-blue-100 border border-blue-200 text-blue-900'
-                              : 'mr-auto bg-gray-100 border border-gray-200 text-gray-900'
-                          }`}
-                        >
-                          <p className="text-sm whitespace-pre-wrap">{m.body}</p>
-                          <p className="text-[11px] text-gray-500 mt-1">
-                            {new Date(m.created_at).toLocaleString()}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-
-                {msgSelectedBusinessId && (
-                  <div className="p-4 border-t border-gray-200 bg-gray-50">
-                    <div className="flex items-end gap-3">
-                      <textarea
-                        value={msgBody}
-                        onChange={(e) => setMsgBody(e.target.value)}
-                        placeholder="Write a message…"
-                        rows={2}
-                        className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                      />
-                      <button
-                        onClick={sendMessage}
-                        disabled={msgLoading || !msgBody.trim()}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
-                      >
-                        Send
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                      If the connection is expired or revoked, messaging will be blocked.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Declined Requests */}
             <div className="mt-6 border border-gray-200 rounded-lg p-4 md:col-span-2">

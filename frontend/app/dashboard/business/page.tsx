@@ -53,6 +53,7 @@ export default function BusinessDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [connectionsMenuOpen, setConnectionsMenuOpen] = useState(false)
   const [vacanciesMenuOpen, setVacanciesMenuOpen] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const handleLocationProfileDropdowns = (next: { city?: string | null; state?: string | null; country?: string | null }) => {
     setLocationEditDraft((prev) => ({
       ...prev,
@@ -2803,6 +2804,81 @@ export default function BusinessDashboard() {
           
           <div className="flex items-center space-x-4">
             <span className="text-white">Welcome, {userFirstName || user?.full_name || user?.username}</span>
+
+            {/* Business Avatar with Profile Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
+              >
+                <div className="w-10 h-10 rounded-full bg-[#20C997] flex items-center justify-center text-white font-bold text-lg">
+                  {(businessProfile?.business_name || businessProfile?.name || user?.full_name || 'B').charAt(0).toUpperCase()}
+                </div>
+                <span className="text-white font-medium hidden md:block">
+                  {businessProfile?.business_name || businessProfile?.name || 'Business'}
+                </span>
+                <svg className={`w-4 h-4 text-white transition-transform ${profileMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {/* Profile Summary Dropdown */}
+              {profileMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setProfileMenuOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
+                    <div className="p-4 bg-gray-50 border-b border-gray-200">
+                      <h3 className="text-lg font-bold text-gray-900">Profile Summary</h3>
+                    </div>
+                    <div className="p-4 space-y-2">
+                      <p className="text-gray-700"><span className="text-gray-500">Name:</span> {businessProfile?.business_name || businessProfile?.name || user?.full_name || user?.username}</p>
+                      <p className="text-gray-700"><span className="text-gray-500">Email:</span> {businessProfile?.email || user?.email}</p>
+                      <p className="text-gray-700"><span className="text-gray-500">Username:</span> {user?.username}</p>
+                      {businessProfile?.industry && (
+                        <p className="text-gray-700"><span className="text-gray-500">Industry:</span> {businessProfile.industry}</p>
+                      )}
+                      <p className="text-gray-700"><span className="text-gray-500">User Type:</span> {user?.user_type ? user.user_type.charAt(0).toUpperCase() + user.user_type.slice(1) : 'Business'}</p>
+                      {businessProfile?.location ? (
+                        <p className="text-gray-700"><span className="text-gray-500">Location:</span> {businessProfile.location}</p>
+                      ) : (businessProfile?.city || businessProfile?.state || businessProfile?.country) ? (
+                        <p className="text-gray-700">
+                          <span className="text-gray-500">Location:</span>{' '}
+                          {[businessProfile?.city, businessProfile?.state, businessProfile?.country].filter(Boolean).join(', ') || 'Not set'}
+                        </p>
+                      ) : null}
+                      <div className="pt-3 mt-3 border-t border-gray-200">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-gray-500 text-sm">Profile Completion</span>
+                          <span className="text-[#20C997] font-semibold text-sm">{calculateProfileCompletion()}%</span>
+                        </div>
+                        <div className="bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-[#20C997] h-2 rounded-full transition-all"
+                            style={{ width: `${calculateProfileCompletion()}%` }}
+                          ></div>
+                        </div>
+                        {calculateProfileCompletion() < 100 && (
+                          <p className="text-gray-400 text-xs mt-2">Complete your profile to attract more talent</p>
+                        )}
+                      </div>
+                      <div className="pt-3 mt-3 border-t border-gray-200">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab('profile')
+                            setProfileMenuOpen(false)
+                          }}
+                          className="w-full px-4 py-2 bg-[#20C997] hover:bg-[#1DB886] text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          Edit Profile
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             {isAdmin && (
               <button
                 type="button"
@@ -3174,58 +3250,6 @@ export default function BusinessDashboard() {
                 </div>
               </div>
 
-              {/* Profile Summary */}
-              <div className="dashboard-card rounded-xl p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Profile Summary</h2>
-                {user && (
-                  <div className="space-y-2">
-                    <p className="text-gray-700"><span className="text-gray-600">Name:</span> {businessProfile?.business_name || businessProfile?.name || user.full_name || user.username}</p>
-                    <p className="text-gray-700"><span className="text-gray-600">Email:</span> {businessProfile?.email || user.email}</p>
-                    <p className="text-gray-700"><span className="text-gray-600">Username:</span> {user.username}</p>
-                    {businessProfile?.industry && (
-                      <p className="text-gray-700"><span className="text-gray-600">Industry:</span> {businessProfile.industry}</p>
-                    )}
-                    <p className="text-gray-700"><span className="text-gray-600">User Type:</span> {user.user_type ? user.user_type.charAt(0).toUpperCase() + user.user_type.slice(1) : 'Business'}</p>
-                    {businessProfile?.location ? (
-                      <p className="text-gray-700"><span className="text-gray-600">Location:</span> {businessProfile.location}</p>
-                    ) : (businessProfile?.city || businessProfile?.state || businessProfile?.country) ? (
-                      <p className="text-gray-700">
-                        <span className="text-gray-600">Location:</span>{' '}
-                        {[businessProfile?.city, businessProfile?.state, businessProfile?.country].filter(Boolean).join(', ') || 'Not set'}
-                      </p>
-                    ) : null}
-                    <div className="pt-2 border-t border-gray-200">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-gray-600 text-sm">Profile Completion</p>
-                        <span className="text-[#20C997] font-semibold text-sm">{calculateProfileCompletion()}%</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-[#20C997] h-2 rounded-full transition-all"
-                            style={{ width: `${calculateProfileCompletion()}%` }}
-                            title={`Profile is ${calculateProfileCompletion()}% complete`}
-                          ></div>
-                        </div>
-                      </div>
-                      {calculateProfileCompletion() < 100 && (
-                        <p className="text-gray-500 text-xs mt-2">
-                          Complete your profile to attract more talent
-                        </p>
-                      )}
-                      <div className="mt-4">
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('profile')}
-                          className="px-4 py-2 bg-[#20C997] hover:bg-[#1DB886] text-white text-sm font-medium rounded-lg transition-colors"
-                        >
-                          Edit Profile
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
           </>
         )}

@@ -4263,12 +4263,9 @@ export default function BusinessDashboard() {
                           </div>
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={async (e) => {
+                              onClick={(e) => {
                                 e.stopPropagation()
-                                // Load messaging for this talent
-                                await loadMessaging()
-                                setMsgSelectedTalentId(String(r.talent_id))
-                                await loadConversation(String(r.talent_id))
+                                router.push(`/dashboard/business/messages?talent_id=${r.talent_id}&connection_id=${r.id}`)
                               }}
                               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg font-semibold transition-colors"
                             >

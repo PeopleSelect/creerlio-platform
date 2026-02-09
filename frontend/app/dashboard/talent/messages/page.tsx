@@ -19,6 +19,7 @@ function TalentMessagesPageInner() {
   const router = useRouter()
   const params = useSearchParams()
   const initialBusinessId = params.get('business_id') || params.get('businessId')
+  const initialConnectionId = params.get('connection_id') || params.get('connectionId')
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -28,7 +29,7 @@ function TalentMessagesPageInner() {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [items, setItems] = useState<Array<{ id: string; sender_type: string; body: string; created_at: string }>>([])
   const [body, setBody] = useState('')
-  const [connectionId, setConnectionId] = useState<string | null>(null)
+  const [connectionId, setConnectionId] = useState<string | null>(initialConnectionId)
   const [videoChatLoading, setVideoChatLoading] = useState(false)
 
   // Load business details when businessId is available
@@ -37,34 +38,43 @@ function TalentMessagesPageInner() {
 
     async function loadBusinessDetails() {
       try {
-        // Get business profile details
+        // Get business profile details - try multiple field names
         const { data: businessRes } = await supabase
           .from('business_profiles')
-          .select('company_name, industry')
+          .select('name, business_name, company_name, industry')
           .eq('id', businessId)
           .maybeSingle()
 
         if (businessRes && !('error' in businessRes)) {
-          setBusinessName(businessRes.company_name || 'Business')
+          const name = businessRes.business_name || businessRes.name || businessRes.company_name || 'Business'
+          setBusinessName(name)
           if (businessRes.industry) {
             setBusinessIndustry(businessRes.industry)
           }
         }
 
-        // Get the connection ID for this business
-        const talentId = await resolveTalentId()
-        if (talentId) {
-          const { data: connRes } = await supabase
-            .from('talent_connection_requests')
-            .select('id')
-            .eq('talent_id', talentId)
-            .eq('business_id', businessId)
-            .eq('status', 'accepted')
-            .limit(1)
-            .maybeSingle()
+        // Get the connection ID for this business (if not already provided)
+        if (!connectionId) {
+          const talentId = await resolveTalentId()
+          if (talentId) {
+            const { data: connRes } = await supabase
+              .from('talent_connection_requests')
+              .select('id, business_name')
+              .eq('talent_id', talentId)
+              .eq('business_id', businessId)
+              .eq('status', 'accepted')
+              .limit(1)
+              .maybeSingle()
 
-          if (connRes && !('error' in connRes) && connRes.id) {
-            setConnectionId(String(connRes.id))
+            if (connRes && !('error' in connRes)) {
+              if (connRes.id) {
+                setConnectionId(String(connRes.id))
+              }
+              // Fallback: get business name from connection request if not already set
+              if (!businessName && connRes.business_name) {
+                setBusinessName(connRes.business_name)
+              }
+            }
           }
         }
       } catch (err) {
@@ -73,7 +83,7 @@ function TalentMessagesPageInner() {
     }
 
     loadBusinessDetails()
-  }, [businessId])
+  }, [businessId, connectionId, businessName])
 
   async function resolveTalentId(): Promise<string | null> {
     const { data } = await supabase.auth.getSession()
@@ -236,14 +246,20 @@ function TalentMessagesPageInner() {
   }
 
   useEffect(() => {
-    // Update businessId if it changes in URL params
+    // Update businessId and connectionId if they change in URL params
     const urlBusinessId = params.get('business_id') || params.get('businessId')
+    const urlConnectionId = params.get('connection_id') || params.get('connectionId')
+
     if (urlBusinessId) {
       if (urlBusinessId !== businessId) {
         setBusinessId(urlBusinessId)
       }
       // Load conversation when businessId is available
       gateAndLoadConversation(urlBusinessId).catch(() => {})
+    }
+
+    if (urlConnectionId && urlConnectionId !== connectionId) {
+      setConnectionId(urlConnectionId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params])

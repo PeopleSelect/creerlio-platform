@@ -3011,17 +3011,6 @@ export default function BusinessDashboard() {
                   </button>
                   <button
                     onClick={() => {
-                      setActiveTab('service_connections')
-                      setConnectionsMenuOpen(false)
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
-                      activeTab === 'service_connections' ? 'text-[#20C997]' : 'text-gray-700'
-                    }`}
-                  >
-                    Business Connections
-                  </button>
-                  <button
-                    onClick={() => {
                       setActiveTab('previous_connections')
                       setConnectionsMenuOpen(false)
                     }}

@@ -3966,67 +3966,6 @@ export default function BusinessDashboard() {
             )}
 
             <div className="grid md:grid-cols-2 gap-6">
-              <div className="border border-gray-200 rounded-lg p-4">
-                <h3 className="text-gray-900 font-semibold mb-3">Print / export consent requests</h3>
-                <p className="text-gray-500 text-xs mb-3">
-                  Talent cannot print/export your content via in-app controls unless you approve here. Screenshots can't be fully prevented on the web, but we record consent decisions.
-                </p>
-                {consentError ? (
-                  <div className="mb-3 border border-red-300 bg-red-50 text-red-700 rounded-lg p-3 text-sm">
-                    {consentError}
-                  </div>
-                ) : null}
-                {consentLoading ? (
-                  <p className="text-gray-600">Loading consent requests…</p>
-                ) : (
-                  <>
-                    {consentReqs.filter((r) => r.status === 'pending').length === 0 ? (
-                      <p className="text-gray-600">No pending consent requests.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {consentReqs
-                          .filter((r) => r.status === 'pending')
-                          .map((r) => (
-                            <div key={r.id} className="border border-gray-200 rounded-lg p-3">
-                              <p className="text-gray-900 text-sm font-medium">
-                              {r.talent_name && r.talent_name.trim() ? (
-                                r.talent_name
-                              ) : (
-                                <span className="text-yellow-600 italic animate-pulse">Loading name...</span>
-                              )}
-                            </p>
-                              <p className="text-gray-500 text-xs mt-1">Requested {new Date(r.requested_at).toLocaleString()}</p>
-                              {r.request_reason ? (
-                                <p className="text-gray-700 text-sm mt-2 whitespace-pre-wrap">{r.request_reason}</p>
-                              ) : (
-                                <p className="text-gray-500 text-sm mt-2">No reason provided.</p>
-                              )}
-                              <div className="mt-3 flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  disabled={consentBusyId === r.id}
-                                  onClick={() => respondConsent(r, 'approved')}
-                                  className="px-3 py-1.5 rounded-lg bg-green-50 border border-green-200 text-green-700 hover:bg-green-100 disabled:opacity-60"
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={consentBusyId === r.id}
-                                  onClick={() => respondConsent(r, 'denied')}
-                                  className="px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 disabled:opacity-60"
-                                >
-                                  Deny
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-
               {/* Reconnection Requests from Previous Connections */}
               {reconnectRequests.length > 0 && (
                 <div className="border-2 border-amber-400 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4 md:col-span-2">

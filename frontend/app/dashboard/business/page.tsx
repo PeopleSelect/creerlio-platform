@@ -50,7 +50,7 @@ export default function BusinessDashboard() {
   const [businessProfile, setBusinessProfile] = useState<any>(null)
   const [hasBuiltProfile, setHasBuiltProfile] = useState<boolean>(false)
   const [applications, setApplications] = useState<any[]>([])
-  const [activeTab, setActiveTab] = useState<TabType>('overview')
+  const [activeTab, setActiveTab] = useState<TabType>('connections')
   const [connectionsMenuOpen, setConnectionsMenuOpen] = useState(false)
   const [vacanciesMenuOpen, setVacanciesMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
@@ -2907,7 +2907,52 @@ export default function BusinessDashboard() {
         {/* Tabs */}
         <div className="mb-8 border-b border-gray-200">
           <div className="flex items-center gap-2">
-            {(['overview', 'portfolio', 'locations', 'team', 'calendar', 'business_map'] as TabType[]).map((tab) => (
+            {/* Connections - First/Default Tab */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setActiveTab('connections')
+                  setConnectionsMenuOpen((open) => !open)
+                }}
+                className={`px-6 py-3 text-sm font-medium transition-all relative ${
+                  activeTab === 'connections' || activeTab === 'service_connections' || activeTab === 'previous_connections'
+                    ? 'text-[#20C997]'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Connections
+                {(activeTab === 'connections' || activeTab === 'service_connections' || activeTab === 'previous_connections') && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>
+                )}
+              </button>
+              {connectionsMenuOpen && (
+                <div className="absolute z-20 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-lg">
+                  <button
+                    onClick={() => {
+                      setActiveTab('connections')
+                      setConnectionsMenuOpen(false)
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                      activeTab === 'connections' ? 'text-[#20C997]' : 'text-gray-700'
+                    }`}
+                  >
+                    Talent Connections
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('previous_connections')
+                      setConnectionsMenuOpen(false)
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                      activeTab === 'previous_connections' ? 'text-[#20C997]' : 'text-gray-700'
+                    }`}
+                  >
+                    Previous Connections
+                  </button>
+                </div>
+              )}
+            </div>
+            {(['portfolio', 'locations', 'team', 'calendar', 'business_map'] as TabType[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -2979,50 +3024,6 @@ export default function BusinessDashboard() {
                 </div>
               )}
             </div>
-            <div className="relative">
-              <button
-                onClick={() => {
-                  setActiveTab('connections')
-                  setConnectionsMenuOpen((open) => !open)
-                }}
-                className={`px-6 py-3 text-sm font-medium transition-all relative ${
-                  activeTab === 'connections' || activeTab === 'service_connections' || activeTab === 'previous_connections'
-                    ? 'text-[#20C997]'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Connections
-                {(activeTab === 'connections' || activeTab === 'service_connections' || activeTab === 'previous_connections') && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>
-                )}
-              </button>
-              {connectionsMenuOpen && (
-                <div className="absolute z-20 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-lg">
-                  <button
-                    onClick={() => {
-                      setActiveTab('connections')
-                      setConnectionsMenuOpen(false)
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
-                      activeTab === 'connections' ? 'text-[#20C997]' : 'text-gray-700'
-                    }`}
-                  >
-                    Talent Connections
-                  </button>
-                  <button
-                    onClick={() => {
-                      setActiveTab('previous_connections')
-                      setConnectionsMenuOpen(false)
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
-                      activeTab === 'previous_connections' ? 'text-[#20C997]' : 'text-gray-700'
-                    }`}
-                  >
-                    Previous Connections
-                  </button>
-                </div>
-              )}
-            </div>
             <Link
               href="/dashboard/business/bank"
               className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
@@ -3033,141 +3034,6 @@ export default function BusinessDashboard() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'overview' && (
-          <>
-            {businesses.length === 0 && locations.length === 0 && (
-              <div className="dashboard-card rounded-xl p-6 mb-8 border border-amber-200 bg-amber-50">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Business Setup</h2>
-                <p className="text-gray-600 mb-4">
-                  Create a new business or request access to an existing one before posting jobs.
-                </p>
-                <div className="flex gap-2 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => setOnboardingMode('new')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium border ${
-                      onboardingMode === 'new'
-                        ? 'bg-[#20C997] text-white border-[#20C997]'
-                        : 'bg-white text-gray-700 border-gray-300'
-                    }`}
-                  >
-                    New Business
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setOnboardingMode('existing')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium border ${
-                      onboardingMode === 'existing'
-                        ? 'bg-[#2563EB] text-white border-[#2563EB]'
-                        : 'bg-white text-gray-700 border-gray-300'
-                    }`}
-                  >
-                    Existing Business
-                  </button>
-                </div>
-
-                {onboardingMode === 'new' ? (
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <input
-                      type="text"
-                      placeholder="Business name"
-                      value={onboardingBusinessName}
-                      onChange={(e) => setOnboardingBusinessName(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded text-gray-900"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Industry (optional)"
-                      value={onboardingIndustry}
-                      onChange={(e) => setOnboardingIndustry(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded text-gray-900"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Location name"
-                      value={onboardingLocationName}
-                      onChange={(e) => setOnboardingLocationName(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded text-gray-900"
-                    />
-                    <LocationDropdownsString
-                      city={onboardingCity}
-                      state={onboardingState}
-                      country={onboardingCountry}
-                      onCityChange={(city) => handleOnboardingLocation({ city })}
-                      onStateChange={(state) => handleOnboardingLocation({ state })}
-                      onCountryChange={(country) => handleOnboardingLocation({ country })}
-                    />
-                    {onboardingError && <p className="text-sm text-red-600 md:col-span-2">{onboardingError}</p>}
-                    <button
-                      type="button"
-                      onClick={createBusinessWithLocation}
-                      disabled={onboardingBusy}
-                      className="px-4 py-2 rounded-lg bg-[#20C997] text-white hover:bg-[#1DB886] transition-colors md:col-span-2 disabled:opacity-60"
-                    >
-                      {onboardingBusy ? 'Creating…' : 'Create Business + First Location'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <input
-                      type="text"
-                      placeholder="Search existing business"
-                      value={onboardingSearch}
-                      onChange={(e) => setOnboardingSearch(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded text-gray-900 md:col-span-2"
-                    />
-                    <div className="md:col-span-2 space-y-2">
-                      {onboardingResults.map((biz) => (
-                        <button
-                          key={biz.id}
-                          type="button"
-                          onClick={() => setOnboardingSelectedBusiness(biz)}
-                          className={`w-full text-left px-3 py-2 rounded border ${
-                            onboardingSelectedBusiness?.id === biz.id
-                              ? 'border-blue-400 bg-blue-50'
-                              : 'border-gray-200'
-                          }`}
-                        >
-                          <div className="text-sm font-medium text-gray-900">{biz.name}</div>
-                          <div className="text-xs text-gray-500">{biz.industry || 'Industry not set'}</div>
-                        </button>
-                      ))}
-                      {onboardingSearch.trim() && onboardingResults.length === 0 && (
-                        <p className="text-sm text-gray-500">No businesses found.</p>
-                      )}
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="New location name"
-                      value={onboardingLocationName}
-                      onChange={(e) => setOnboardingLocationName(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded text-gray-900"
-                    />
-                    <LocationDropdownsString
-                      city={onboardingCity}
-                      state={onboardingState}
-                      country={onboardingCountry}
-                      onCityChange={(city) => handleOnboardingLocation({ city })}
-                      onStateChange={(state) => handleOnboardingLocation({ state })}
-                      onCountryChange={(country) => handleOnboardingLocation({ country })}
-                    />
-                    {onboardingError && <p className="text-sm text-red-600 md:col-span-2">{onboardingError}</p>}
-                    <button
-                      type="button"
-                      onClick={requestAccessOrCreateLocation}
-                      disabled={onboardingBusy}
-                      className="px-4 py-2 rounded-lg bg-[#2563EB] text-white hover:bg-blue-600 transition-colors md:col-span-2 disabled:opacity-60"
-                    >
-                      {onboardingBusy ? 'Submitting…' : 'Request Access / Create Location'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-          </>
-        )}
-
         {activeTab === 'profile' && (
           <div className="dashboard-card rounded-xl p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Profiles</h2>

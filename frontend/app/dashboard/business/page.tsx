@@ -3941,7 +3941,6 @@ export default function BusinessDashboard() {
                   Manage connection requests from talent. Messaging unlocks only after acceptance.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
               <button
                 onClick={() => loadConnections()}
                 className="px-4 py-2 bg-[#20C997] text-white rounded-lg hover:bg-[#1DB886] transition-colors disabled:opacity-60"
@@ -3949,14 +3948,6 @@ export default function BusinessDashboard() {
               >
                 Refresh connections
               </button>
-                <button
-                  onClick={() => loadConsentRequests()}
-                  className="px-4 py-2 bg-gray-100 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-60"
-                  disabled={consentLoading}
-                >
-                  Refresh consent
-                </button>
-              </div>
             </div>
 
             {connError && (

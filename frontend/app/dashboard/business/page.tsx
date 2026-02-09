@@ -1819,6 +1819,7 @@ export default function BusinessDashboard() {
       ].map((r) => r.talent_id).filter(Boolean)))
       console.log('[Business Connections] Fetching talent names for IDs:', talentIds)
       let talentNameMap: Record<string, string> = {}
+      let talentTitleMap: Record<string, string> = {}
       
       if (talentIds.length > 0) {
         // Get access token for API calls
@@ -1840,7 +1841,12 @@ export default function BusinessDashboard() {
           
           if (!res.error && res.data) {
             userId = res.data.user_id || null
-            
+
+            // Store the title/role if available
+            if (res.data.title && String(res.data.title).trim()) {
+              talentTitleMap[talentIdStr] = String(res.data.title).trim()
+            }
+
             // Try name from talent_profiles (but portfolio metadata is more reliable)
             if (res.data.name && String(res.data.name).trim()) {
               const name = String(res.data.name).trim()
@@ -2019,7 +2025,8 @@ export default function BusinessDashboard() {
       const acceptedWithNames = acceptedReqs.map((r) => {
         const talentIdStr = String(r.talent_id)
         const talentName = talentNameMap[talentIdStr]
-        
+        const talentTitle = talentTitleMap[talentIdStr]
+
         if (!talentName || !talentName.trim()) {
           console.error('[Business Connections] ✗✗✗ CRITICAL ERROR: Could not find talent name for:', talentIdStr, '- All attempts failed. This should not happen.')
           // As absolute last resort, try to query portfolio metadata directly one more time
@@ -2028,11 +2035,12 @@ export default function BusinessDashboard() {
         } else {
           console.log('[Business Connections] ✓✓✓ Mapping connection with name:', { talentId: talentIdStr, talentName })
         }
-        
+
         // NEVER use "Talent" as fallback - always show actual name
-        return { 
-          ...r, 
-          talent_name: (talentName && talentName.trim()) || null // null will show "Loading name..." in UI
+        return {
+          ...r,
+          talent_name: (talentName && talentName.trim()) || null, // null will show "Loading name..." in UI
+          talent_title: (talentTitle && talentTitle.trim()) || null
         }
       })
       
@@ -4246,6 +4254,9 @@ export default function BusinessDashboard() {
                                 <span className="text-yellow-600 italic animate-pulse">Loading name...</span>
                               )}
                             </p>
+                            {r.talent_title && (
+                              <p className="text-gray-500 text-sm">{r.talent_title}</p>
+                            )}
                             <p className="text-gray-600 text-xs mt-1">
                               Accepted {r.responded_at ? new Date(r.responded_at).toLocaleString() : '—'}
                             </p>

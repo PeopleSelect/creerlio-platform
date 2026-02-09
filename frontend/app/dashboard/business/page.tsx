@@ -4233,29 +4233,29 @@ export default function BusinessDashboard() {
                 </div>
               )}
 
-              <div className="border border-gray-800 rounded-lg p-4 md:col-span-2">
-                <h3 className="text-white font-semibold mb-3">Talent Connections</h3>
+              <div className="border border-gray-200 rounded-lg p-4 md:col-span-2">
+                <h3 className="text-gray-900 font-semibold mb-3">Talent Connections</h3>
                 {connLoading ? (
-                  <p className="text-gray-400">Loading connections…</p>
+                  <p className="text-gray-500">Loading connections…</p>
                 ) : connAccepted.length === 0 ? (
-                  <p className="text-gray-400">No accepted connections yet.</p>
+                  <p className="text-gray-500">No accepted connections yet.</p>
                 ) : (
                   <div className="space-y-3">
                     {connAccepted.map((r) => (
                       <div
                         key={r.id}
-                        className="border border-gray-800 rounded-lg p-3 hover:border-blue-500/50 hover:bg-slate-800/50 transition-all"
+                        className="border border-gray-200 rounded-lg p-3 hover:border-blue-500/50 hover:bg-gray-50 transition-all"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
-                            <p className="text-gray-200 text-sm font-medium">
+                            <p className="text-gray-900 text-sm font-medium">
                               {r.talent_name && r.talent_name.trim() ? (
                                 r.talent_name
                               ) : (
-                                <span className="text-yellow-400 italic animate-pulse">Loading name...</span>
+                                <span className="text-yellow-600 italic animate-pulse">Loading name...</span>
                               )}
                             </p>
-                            <p className="text-gray-500 text-xs mt-1">
+                            <p className="text-gray-600 text-xs mt-1">
                               Accepted {r.responded_at ? new Date(r.responded_at).toLocaleString() : '—'}
                             </p>
                           </div>

@@ -38,52 +38,65 @@ function TalentMessagesPageInner() {
 
     async function loadBusinessDetails() {
       try {
-        // Get business profile details - try multiple field names
-        const { data: businessRes } = await supabase
-          .from('business_profiles')
-          .select('name, business_name, company_name, industry')
-          .eq('id', businessId)
+        const talentId = await resolveTalentId()
+        if (!talentId) return
+
+        // First, get business details from the connection request (talent has access to this)
+        const { data: connRes } = await supabase
+          .from('talent_connection_requests')
+          .select('id, business_name')
+          .eq('talent_id', talentId)
+          .eq('business_id', businessId)
+          .eq('status', 'accepted')
+          .limit(1)
           .maybeSingle()
 
-        if (businessRes && !('error' in businessRes)) {
-          const name = businessRes.business_name || businessRes.name || businessRes.company_name || 'Business'
-          setBusinessName(name)
-          if (businessRes.industry) {
-            setBusinessIndustry(businessRes.industry)
+        if (connRes && !('error' in connRes)) {
+          // Set connection ID if not already provided
+          if (connRes.id && !connectionId) {
+            setConnectionId(String(connRes.id))
+          }
+          // Set business name from connection request
+          if (connRes.business_name) {
+            setBusinessName(connRes.business_name)
           }
         }
 
-        // Get the connection ID for this business (if not already provided)
-        if (!connectionId) {
-          const talentId = await resolveTalentId()
-          if (talentId) {
-            const { data: connRes } = await supabase
-              .from('talent_connection_requests')
-              .select('id, business_name')
-              .eq('talent_id', talentId)
-              .eq('business_id', businessId)
-              .eq('status', 'accepted')
-              .limit(1)
-              .maybeSingle()
+        // Try to get additional details from business_profiles (may fail due to RLS)
+        try {
+          const { data: businessRes } = await supabase
+            .from('business_profiles')
+            .select('name, business_name, company_name, industry')
+            .eq('id', businessId)
+            .maybeSingle()
 
-            if (connRes && !('error' in connRes)) {
-              if (connRes.id) {
-                setConnectionId(String(connRes.id))
-              }
-              // Fallback: get business name from connection request if not already set
-              if (!businessName && connRes.business_name) {
-                setBusinessName(connRes.business_name)
-              }
+          if (businessRes && !('error' in businessRes)) {
+            // Only update name if we don't have one yet
+            if (!connRes?.business_name) {
+              const name = businessRes.business_name || businessRes.name || businessRes.company_name
+              if (name) setBusinessName(name)
+            }
+            if (businessRes.industry) {
+              setBusinessIndustry(businessRes.industry)
             }
           }
+        } catch {
+          // Ignore - business_profiles may not be accessible due to RLS
+        }
+
+        // Ensure we have at least a default name
+        if (!connRes?.business_name) {
+          setBusinessName('Business')
         }
       } catch (err) {
         console.error('[Messages] Error loading business details:', err)
+        // Set default name on error
+        setBusinessName('Business')
       }
     }
 
     loadBusinessDetails()
-  }, [businessId, connectionId, businessName])
+  }, [businessId, connectionId])
 
   async function resolveTalentId(): Promise<string | null> {
     const { data } = await supabase.auth.getSession()

@@ -147,6 +147,7 @@ function TalentCalendarContent() {
     const scheduleMeeting = searchParams?.get('schedule_meeting')
     const businessId = searchParams?.get('business_id')
     const connectionId = searchParams?.get('connection_id')
+    const returnTo = searchParams?.get('return_to')
     if (scheduleMeeting === 'true' && businessId && connectionId) {
       setScheduleBusinessId(businessId)
       setScheduleConnectionId(connectionId)
@@ -389,10 +390,10 @@ function TalentCalendarContent() {
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
           <Link
-            href="/dashboard/talent"
+            href={searchParams?.get('return_to') === 'career_connections' ? '/dashboard/talent?tab=connections' : '/dashboard/talent'}
             className="text-blue-600 hover:text-blue-700 text-sm font-medium"
           >
-            ← Back to Dashboard
+            {searchParams?.get('return_to') === 'career_connections' ? '← Back to Career Connections' : '← Back to Dashboard'}
           </Link>
         </div>
 

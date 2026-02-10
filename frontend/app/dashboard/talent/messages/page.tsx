@@ -388,14 +388,14 @@ function TalentMessagesPageInner() {
                   {videoChatLoading ? 'Starting...' : 'Video Chat'}
                 </button>
                 <button
-                  onClick={() => router.push(`/dashboard/talent/calendar?schedule_meeting=true&business_id=${businessId}&connection_id=${connectionId}`)}
+                  onClick={() => router.push(`/dashboard/talent/calendar?schedule_meeting=true&business_id=${businessId}&connection_id=${connectionId}&return_to=career_connections`)}
                   disabled={!connectionId}
                   className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg font-semibold transition-colors disabled:opacity-60"
                 >
                   Meeting
                 </button>
                 <Link
-                  href={`/dashboard/business/view?id=${businessId}&from_connection=${connectionId}`}
+                  href={`/dashboard/business/view?id=${businessId}&from_connection=${connectionId}&return_to=career_connections`}
                   className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg font-semibold transition-colors"
                 >
                   View Business

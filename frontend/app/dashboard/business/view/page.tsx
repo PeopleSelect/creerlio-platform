@@ -392,6 +392,7 @@ function BusinessProfileViewPageInner() {
   const backToMapHref = fromParam === 'talent-map' ? '/talent-map' : null
   const adminUserId = searchParams.get('admin_user_id')
   const isAdminPreview = fromParam === 'admin' && !!adminUserId
+  const returnTo = searchParams.get('return_to')
   const [projListExpanded, setProjListExpanded] = useState(false)
   const [attachExpanded, setAttachExpanded] = useState(false)
   const [jobs, setJobs] = useState<any[]>([])
@@ -2293,6 +2294,10 @@ function BusinessProfileViewPageInner() {
                 {isAdminPreview ? (
                   <Link href={`/admin/users/${adminUserId}`} className="text-slate-300 hover:text-blue-400">
                     ← Back to User Details
+                  </Link>
+                ) : returnTo === 'career_connections' ? (
+                  <Link href="/dashboard/talent?tab=connections" className="text-slate-300 hover:text-blue-400">
+                    ← Back to Career Connections
                   </Link>
                 ) : (
                   <>

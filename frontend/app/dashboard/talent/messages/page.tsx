@@ -362,10 +362,10 @@ function TalentMessagesPageInner() {
             <span className="text-white text-2xl font-bold">Creerlio</span>
           </Link>
           <button
-            onClick={() => router.push('/dashboard/talent')}
+            onClick={() => router.push('/dashboard/talent?tab=connections')}
             className="px-4 py-2 text-white hover:text-[#20C997] transition-colors"
           >
-            Back to Dashboard
+            Back to Career Connections
           </button>
         </div>
       </header>

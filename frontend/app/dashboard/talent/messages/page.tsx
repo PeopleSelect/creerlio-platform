@@ -41,51 +41,51 @@ function TalentMessagesPageInner() {
         const talentId = await resolveTalentId()
         if (!talentId) return
 
-        // First, get business details from the connection request (talent has access to this)
-        const { data: connRes } = await supabase
-          .from('talent_connection_requests')
-          .select('id, business_name')
-          .eq('talent_id', talentId)
-          .eq('business_id', businessId)
-          .eq('status', 'accepted')
-          .limit(1)
-          .maybeSingle()
+        let foundName: string | null = null
+        let foundIndustry: string | null = null
 
-        if (connRes && !('error' in connRes)) {
-          // Set connection ID if not already provided
-          if (connRes.id && !connectionId) {
-            setConnectionId(String(connRes.id))
-          }
-          // Set business name from connection request
-          if (connRes.business_name) {
-            setBusinessName(connRes.business_name)
+        // Try to get business name from business_profiles using multiple field selectors
+        // (same approach as talent dashboard loadConnections)
+        const nameSelectors = ['id, business_name, industry', 'id, name, industry', 'id, company_name, industry', 'id, display_name, industry']
+        for (const sel of nameSelectors) {
+          const res = await supabase.from('business_profiles').select(sel).eq('id', businessId).maybeSingle()
+          if (!res.error && res.data) {
+            const bp = res.data as any
+            const name = bp.business_name || bp.name || bp.company_name || bp.display_name
+            if (name) {
+              foundName = name
+              if (bp.industry) foundIndustry = bp.industry
+              break
+            }
           }
         }
 
-        // Try to get additional details from business_profiles (may fail due to RLS)
-        try {
-          const { data: businessRes } = await supabase
-            .from('business_profiles')
-            .select('name, business_name, company_name, industry')
-            .eq('id', businessId)
+        // Set business name and industry
+        if (foundName) {
+          setBusinessName(foundName)
+        }
+        if (foundIndustry) {
+          setBusinessIndustry(foundIndustry)
+        }
+
+        // Get the connection ID for this business (if not already provided)
+        if (!connectionId) {
+          const { data: connRes } = await supabase
+            .from('talent_connection_requests')
+            .select('id')
+            .eq('talent_id', talentId)
+            .eq('business_id', businessId)
+            .eq('status', 'accepted')
+            .limit(1)
             .maybeSingle()
 
-          if (businessRes && !('error' in businessRes)) {
-            // Only update name if we don't have one yet
-            if (!connRes?.business_name) {
-              const name = businessRes.business_name || businessRes.name || businessRes.company_name
-              if (name) setBusinessName(name)
-            }
-            if (businessRes.industry) {
-              setBusinessIndustry(businessRes.industry)
-            }
+          if (connRes && !('error' in connRes) && connRes.id) {
+            setConnectionId(String(connRes.id))
           }
-        } catch {
-          // Ignore - business_profiles may not be accessible due to RLS
         }
 
         // Ensure we have at least a default name
-        if (!connRes?.business_name) {
+        if (!foundName) {
           setBusinessName('Business')
         }
       } catch (err) {

@@ -51,7 +51,7 @@ interface User {
 }
 
 type TabType = 'overview' | 'profile' | 'portfolio' | 'applications' | 'connections'
-type ConnectionMode = 'career' | 'business'
+type ConnectionMode = 'career' | 'business' | 'consent'
 
 type TalentIntentStatus = 'open_to_conversations' | 'passive_exploring' | 'not_available'
 type IntentWorkType = 'full_time' | 'part_time' | 'contract' | 'advisory' | ''
@@ -3876,6 +3876,17 @@ export function TalentDashboardShell({
                 >
                   Career Connections
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setConnectionMode('consent')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+                    connectionMode === 'consent'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                  }`}
+                >
+                  Print / Export Consent
+                </button>
               </div>
             )}
 
@@ -3941,12 +3952,12 @@ export function TalentDashboardShell({
               </div>
             )}
 
-            <div className="grid md:grid-cols-2 gap-6">
-              {!isBusinessRoute && (
-                <div className="border border-gray-200 rounded-lg p-4">
+            {/* Print / Export Consent Tab Content */}
+            {!isBusinessRoute && connectionMode === 'consent' && (
+              <div className="border border-gray-200 rounded-lg p-4">
                 <h3 className="text-gray-900 font-semibold mb-3">Print / export consent requests</h3>
                 <p className="text-gray-500 text-xs mb-3">
-                  Businesses cannot print/export your content via in-app controls unless you approve here. Screenshots can’t be fully prevented on the web, but we record consent decisions.
+                  Businesses cannot print/export your content via in-app controls unless you approve here. Screenshots can't be fully prevented on the web, but we record consent decisions.
                 </p>
                 {consentError ? (
                   <div className="mb-3 border border-red-300 bg-red-50 text-red-700 rounded-lg p-3 text-sm">
@@ -3996,9 +4007,12 @@ export function TalentDashboardShell({
                     )}
                   </>
                 )}
-                </div>
-              )}
+              </div>
+            )}
 
+            {/* Connections Tab Content */}
+            {connectionMode !== 'consent' && (
+            <div className="grid md:grid-cols-2 gap-6">
               <div className="border border-gray-200 rounded-lg p-4">
                 <h3 className="text-gray-900 font-semibold mb-3">
                   {connectionMode === 'career' ? 'Career Connection Requests' : 'Business Connection Requests'}
@@ -4201,11 +4215,14 @@ export function TalentDashboardShell({
               </div>
 
             </div>
+            )}
+
             </div>
             )}
 
 
             {/* Declined Requests */}
+            {connectionMode !== 'consent' && (
             <div className="mt-6 border border-gray-200 rounded-lg p-4 md:col-span-2">
               <h3 className="text-gray-900 font-semibold mb-3">
                 {connectionMode === 'career' ? 'Declined Career Requests' : 'Declined Business Requests'}
@@ -4285,9 +4302,10 @@ export function TalentDashboardShell({
                 </div>
               )}
             </div>
+            )}
 
             {/* Previous Connections - Businesses where either party withdrew */}
-            {(connectionMode === 'career' ? careerWithdrawn : businessWithdrawn).length > 0 && (
+            {connectionMode !== 'consent' && (connectionMode === 'career' ? careerWithdrawn : businessWithdrawn).length > 0 && (
               <div className="mt-6 border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4 md:col-span-2">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-2 h-2 bg-amber-500 rounded-full"></div>

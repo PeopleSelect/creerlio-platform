@@ -403,6 +403,7 @@ function BusinessProfileViewPageInner() {
   const [connectionRequestId, setConnectionRequestId] = useState<string | null>(null) // Connection request ID from URL
   const [connectionRequest, setConnectionRequest] = useState<any | null>(null) // Connection request data
   const [processingConnection, setProcessingConnection] = useState(false) // Loading state for connection actions
+  const [hasExistingConnection, setHasExistingConnection] = useState(false) // Whether talent already has a connection/request with this business
   // Visibility settings loaded from metadata
   const [sectionVisibility, setSectionVisibility] = useState<Record<string, boolean>>({
     basic: true,
@@ -570,6 +571,27 @@ function BusinessProfileViewPageInner() {
           setUserId(queryUserId)
           setIsOwner(userIsOwner)
           console.log('[View Profile] Ownership check:', { uid, queryUserId, userIsOwner })
+        }
+
+        // Check if talent already has a connection/request with this business
+        if (uid && targetBusinessId && !userIsOwner) {
+          const talentRes = await supabase
+            .from('talent_profiles')
+            .select('id')
+            .eq('user_id', uid)
+            .maybeSingle()
+          if (talentRes.data?.id) {
+            const connRes = await supabase
+              .from('talent_connection_requests')
+              .select('id, status')
+              .eq('talent_id', String(talentRes.data.id))
+              .eq('business_id', targetBusinessId)
+              .not('status', 'in', '("discontinued","deleted")')
+              .limit(1)
+            if (!cancelled && connRes.data && connRes.data.length > 0) {
+              setHasExistingConnection(true)
+            }
+          }
         }
 
         // First check if business_profiles exists (this is the source of truth)
@@ -2335,7 +2357,7 @@ function BusinessProfileViewPageInner() {
                   Back to Home
                 </Link>
               </>
-            ) : !isOwner ? (
+            ) : !isOwner && !hasExistingConnection ? (
               <Link
                 href={talentConnectHref}
                 className="px-4 py-2 rounded-lg bg-white text-slate-900 font-semibold hover:bg-slate-100 transition-colors"

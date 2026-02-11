@@ -51,7 +51,7 @@ interface User {
 }
 
 type TabType = 'overview' | 'profile' | 'portfolio' | 'applications' | 'connections'
-type ConnectionMode = 'career' | 'business' | 'consent'
+type ConnectionMode = 'career' | 'business' | 'consent' | 'requests'
 
 type TalentIntentStatus = 'open_to_conversations' | 'passive_exploring' | 'not_available'
 type IntentWorkType = 'full_time' | 'part_time' | 'contract' | 'advisory' | ''
@@ -3868,24 +3868,50 @@ export function TalentDashboardShell({
                 <button
                   type="button"
                   onClick={() => setConnectionMode('career')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+                  className={`relative px-4 py-2 rounded-lg text-sm font-medium border ${
                     connectionMode === 'career'
                       ? 'bg-blue-600 text-white border-blue-600'
                       : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
                   }`}
                 >
                   Career Connections
+                  {careerAccepted.length > 0 && (
+                    <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full">
+                      {careerAccepted.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConnectionMode('requests')}
+                  className={`relative px-4 py-2 rounded-lg text-sm font-medium border ${
+                    connectionMode === 'requests'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                  }`}
+                >
+                  Connection Requests
+                  {careerRequests.length > 0 && (
+                    <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full">
+                      {careerRequests.length}
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
                   onClick={() => setConnectionMode('consent')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+                  className={`relative px-4 py-2 rounded-lg text-sm font-medium border ${
                     connectionMode === 'consent'
                       ? 'bg-blue-600 text-white border-blue-600'
                       : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
                   }`}
                 >
                   Print / Export Consent
+                  {consentReqs.filter((r) => r.status === 'pending').length > 0 && (
+                    <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full">
+                      {consentReqs.filter((r) => r.status === 'pending').length}
+                    </span>
+                  )}
                 </button>
               </div>
             )}
@@ -4010,25 +4036,20 @@ export function TalentDashboardShell({
               </div>
             )}
 
-            {/* Connections Tab Content */}
-            {connectionMode !== 'consent' && (
-            <div className="grid md:grid-cols-2 gap-6">
+            {/* Connection Requests Tab Content */}
+            {connectionMode === 'requests' && (
               <div className="border border-gray-200 rounded-lg p-4">
-                <h3 className="text-gray-900 font-semibold mb-3">
-                  {connectionMode === 'career' ? 'Career Connection Requests' : 'Business Connection Requests'}
-                </h3>
+                <h3 className="text-gray-900 font-semibold mb-3">Connection Requests</h3>
                 <p className="text-gray-600 text-xs mb-3">
-                  {connectionMode === 'career'
-                    ? 'Incoming and outgoing career connection requests'
-                    : 'Incoming and outgoing business connection requests'}
+                  Incoming and outgoing career connection requests
                 </p>
                 {connLoading ? (
                   <p className="text-gray-600">Loading connection requests…</p>
-                ) : (connectionMode === 'career' ? careerRequests : businessRequests).length === 0 ? (
+                ) : careerRequests.length === 0 ? (
                   <p className="text-gray-600 text-sm">No pending connection requests yet.</p>
                 ) : (
                   <div className="space-y-3">
-                    {(connectionMode === 'career' ? careerRequests : businessRequests).map((r) => (
+                    {careerRequests.map((r) => (
                       (() => {
                         const initiatedByTalent =
                           r?.initiated_by === 'talent' ||
@@ -4057,18 +4078,20 @@ export function TalentDashboardShell({
                   </div>
                 )}
               </div>
+            )}
 
-              <div className="border border-gray-200 rounded-lg p-4 md:col-span-2">
-                <h3 className="text-gray-900 font-semibold mb-3">
-                  {connectionMode === 'career' ? 'Career Connections' : 'Business Connections'}
-                </h3>
+            {/* Career Connections Tab Content */}
+            {connectionMode === 'career' && (
+            <div className="space-y-6">
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="text-gray-900 font-semibold mb-3">Career Connections</h3>
                 {connLoading ? (
                   <p className="text-gray-600">Loading connections…</p>
-                ) : (connectionMode === 'career' ? careerAccepted : businessAccepted).length === 0 ? (
+                ) : careerAccepted.length === 0 ? (
                   <p className="text-gray-600">No accepted connections yet.</p>
                 ) : (
                   <div className="space-y-3">
-                    {(connectionMode === 'career' ? careerAccepted : businessAccepted).map((r) => {
+                    {careerAccepted.map((r) => {
                       const handleDiscontinue = async () => {
                         if (!confirm('Are you sure you want to discontinue this connection? This action cannot be undone.')) {
                           return
@@ -4222,19 +4245,19 @@ export function TalentDashboardShell({
 
 
             {/* Declined Requests */}
-            {connectionMode !== 'consent' && (
+            {connectionMode === 'career' && (
             <div className="mt-6 border border-gray-200 rounded-lg p-4 md:col-span-2">
               <h3 className="text-gray-900 font-semibold mb-3">
-                {connectionMode === 'career' ? 'Declined Career Requests' : 'Declined Business Requests'}
+Declined Career Requests
               </h3>
               <p className="text-gray-600 text-xs mb-3">Declined connection requests (automatically deleted after 30 days)</p>
               {connLoading ? (
                 <p className="text-gray-600">Loading declined requests…</p>
-              ) : (connectionMode === 'career' ? careerDeclined : businessDeclined).length === 0 ? (
+              ) : careerDeclined.length === 0 ? (
                 <p className="text-gray-600 text-sm">No declined connection requests.</p>
               ) : (
                 <div className="space-y-3">
-                  {(connectionMode === 'career' ? careerDeclined : businessDeclined).map((r) => {
+                  {careerDeclined.map((r) => {
                     const respondedAt = r.responded_at ? new Date(r.responded_at) : new Date(r.created_at)
                     const now = new Date()
                     const daysSinceDeclined = Math.floor((now.getTime() - respondedAt.getTime()) / (1000 * 60 * 60 * 24))
@@ -4305,19 +4328,19 @@ export function TalentDashboardShell({
             )}
 
             {/* Previous Connections - Businesses where either party withdrew */}
-            {connectionMode !== 'consent' && (connectionMode === 'career' ? careerWithdrawn : businessWithdrawn).length > 0 && (
+            {connectionMode === 'career' && careerWithdrawn.length > 0 && (
               <div className="mt-6 border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4 md:col-span-2">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
                   <h3 className="text-amber-900 font-semibold">Previous Connections</h3>
-                  <span className="text-amber-600/80 text-xs ml-2">({(connectionMode === 'career' ? careerWithdrawn : businessWithdrawn).length} withdrawn)</span>
+                  <span className="text-amber-600/80 text-xs ml-2">({careerWithdrawn.length} withdrawn)</span>
                 </div>
                 <p className="text-amber-800 text-xs mb-4">
                   These are businesses you were previously connected with. The connection has ended.
                   You can request to reconnect - if accepted, your previous messages and video chat history will be restored.
                 </p>
                 <div className="space-y-3">
-                  {(connectionMode === 'career' ? careerWithdrawn : businessWithdrawn).map((r) => {
+                  {careerWithdrawn.map((r) => {
                     const withdrawnAt = r.responded_at ? new Date(r.responded_at) : new Date(r.created_at)
                     const connectedAt = r.created_at ? new Date(r.created_at) : null
 

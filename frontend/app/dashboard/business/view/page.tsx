@@ -1047,7 +1047,7 @@ function BusinessProfileViewPageInner() {
         // Load connection request
         const { data, error } = await supabase
           .from('talent_connection_requests')
-          .select('id, business_id, talent_id, status, created_at, responded_at')
+          .select('id, business_id, talent_id, status, created_at, responded_at, initiated_by')
           .eq('id', connectionRequestId)
           .eq('talent_id', talentId)
           .maybeSingle()
@@ -2366,8 +2366,16 @@ function BusinessProfileViewPageInner() {
               </Link>
             ) : (
               <>
-                {/* Connection Request Action Buttons */}
-                {connectionRequest && (connectionRequest.status === 'pending' || connectionRequest.status === 'waiting_for_review' || connectionRequest.status === 'rejected' || connectionRequest.status === 'declined') && (
+                {/* Connection Request Action Buttons - only show Accept/Decline/Review when business initiated */}
+                {connectionRequest && connectionRequest.initiated_by === 'talent' && (connectionRequest.status === 'pending' || connectionRequest.status === 'waiting_for_review') && (
+                  <Link
+                    href="/dashboard/talent?tab=connections"
+                    className="px-4 py-2 rounded-lg bg-white text-slate-900 font-semibold hover:bg-slate-100 transition-colors"
+                  >
+                    Back to Connection Requests
+                  </Link>
+                )}
+                {connectionRequest && connectionRequest.initiated_by !== 'talent' && (connectionRequest.status === 'pending' || connectionRequest.status === 'waiting_for_review' || connectionRequest.status === 'rejected' || connectionRequest.status === 'declined') && (
                   <>
                     <button
                       onClick={async () => {

@@ -50,6 +50,11 @@ export default function BusinessDashboard() {
   const [businessProfile, setBusinessProfile] = useState<any>(null)
   const [hasBuiltProfile, setHasBuiltProfile] = useState<boolean>(false)
   const [applications, setApplications] = useState<any[]>([])
+  const [appFilter, setAppFilter] = useState<'all' | 'applied' | 'shortlisted' | 'interview' | 'hired' | 'rejected'>('all')
+  const [updatingAppId, setUpdatingAppId] = useState<number | null>(null)
+  const [expandedAppNotes, setExpandedAppNotes] = useState<number | null>(null)
+  const [appNotesDraft, setAppNotesDraft] = useState('')
+  const [savingAppNotes, setSavingAppNotes] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>('connections')
   const [connectionsMenuOpen, setConnectionsMenuOpen] = useState(false)
   const [vacanciesMenuOpen, setVacanciesMenuOpen] = useState(false)
@@ -1536,7 +1541,7 @@ export default function BusinessDashboard() {
       // Fetch applications for those jobs
       const appRes = await supabase
         .from('applications')
-        .select('id, job_id, talent_profile_id, user_id, status, cover_letter, created_at')
+        .select('id, job_id, talent_profile_id, user_id, status, cover_letter, notes, created_at')
         .in('job_id', jobIds)
         .order('created_at', { ascending: false })
       if (appRes.error || !appRes.data?.length) { setApplications([]); return }
@@ -1578,6 +1583,73 @@ export default function BusinessDashboard() {
     loadApplications().catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
+
+  async function updateApplicationStatus(
+    applicationId: number,
+    newStatus: 'shortlisted' | 'interview' | 'hired' | 'rejected',
+    talentProfileId: string,
+    jobTitle: string
+  ) {
+    setUpdatingAppId(applicationId)
+    try {
+      const { error } = await supabase
+        .from('applications')
+        .update({ status: newStatus })
+        .eq('id', applicationId)
+      if (error) throw error
+
+      // Send notification to talent (non-blocking)
+      try {
+        const statusLabels: Record<string, string> = {
+          shortlisted: 'Shortlisted',
+          interview: 'Interview',
+          hired: 'Hired',
+          rejected: 'Not Selected',
+        }
+        const businessName = businessProfile?.business_name || businessProfile?.name || 'A business'
+        const notifMessages: Record<string, string> = {
+          shortlisted: `Your application for "${jobTitle}" has been shortlisted by ${businessName}.`,
+          interview: `You've been selected for an interview for "${jobTitle}" at ${businessName}.`,
+          hired: `Congratulations! You've been hired for "${jobTitle}" at ${businessName}.`,
+          rejected: `Your application for "${jobTitle}" at ${businessName} was not selected at this time.`,
+        }
+        await supabase.from('talent_notifications').insert({
+          talent_id: talentProfileId,
+          business_id: businessProfile?.id,
+          notification_type: `application_${newStatus}`,
+          title: `Application ${statusLabels[newStatus]}: ${jobTitle}`,
+          message: notifMessages[newStatus],
+          metadata: { application_id: applicationId, job_title: jobTitle, new_status: newStatus },
+        })
+      } catch {
+        // Notification failure is non-blocking
+      }
+
+      await loadApplications({ force: true })
+    } catch (err: any) {
+      alert(err.message || 'Failed to update application status.')
+    } finally {
+      setUpdatingAppId(null)
+    }
+  }
+
+  async function saveApplicationNotes(applicationId: number) {
+    setSavingAppNotes(true)
+    try {
+      const { error } = await supabase
+        .from('applications')
+        .update({ notes: appNotesDraft })
+        .eq('id', applicationId)
+      if (error) throw error
+      setApplications((prev) =>
+        prev.map((app) => (app.id === applicationId ? { ...app, notes: appNotesDraft } : app))
+      )
+    } catch (err: any) {
+      alert(err.message || 'Failed to save notes.')
+    } finally {
+      setSavingAppNotes(false)
+    }
+  }
 
   // Messaging state (Supabase/RLS-backed)
   const [msgLoading, setMsgLoading] = useState(false)
@@ -3975,15 +4047,65 @@ export default function BusinessDashboard() {
           </div>
         )}
 
-        {activeTab === 'applications' && (
+        {activeTab === 'applications' && (() => {
+          const appCounts = {
+            all: applications.length,
+            applied: applications.filter(a => a.status === 'applied').length,
+            shortlisted: applications.filter(a => a.status === 'shortlisted').length,
+            interview: applications.filter(a => a.status === 'interview').length,
+            hired: applications.filter(a => a.status === 'hired').length,
+            rejected: applications.filter(a => a.status === 'rejected').length,
+          }
+          const filteredApplications = appFilter === 'all'
+            ? applications
+            : applications.filter((app) => app.status === appFilter)
+
+          return (
           <div className="dashboard-card rounded-xl p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Job Applications</h2>
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Job Applications</h2>
+                <p className="text-gray-600 text-sm">Track and manage applicants through your hiring pipeline.</p>
+              </div>
+              <button
+                onClick={() => loadApplications({ force: true })}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium disabled:opacity-60"
+                disabled={applicationsLoading}
+              >
+                {applicationsLoading ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
+
+            {/* Status filter tabs */}
+            <div className="flex items-center gap-2 mb-6 flex-wrap">
+              {(['all', 'applied', 'shortlisted', 'interview', 'hired', 'rejected'] as const).map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setAppFilter(filter)}
+                  className={`relative px-4 py-2 rounded-lg text-sm font-medium border ${
+                    appFilter === filter
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                  }`}
+                >
+                  {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                  {appCounts[filter] > 0 && (
+                    <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full">
+                      {appCounts[filter]}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
             {applicationsLoading ? (
-              <p className="text-gray-500">Loading applications…</p>
-            ) : applications.length > 0 ? (
+              <p className="text-gray-500">Loading applications...</p>
+            ) : filteredApplications.length > 0 ? (
               <div className="space-y-4">
-                {applications.map((app) => (
-                  <div key={app.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                {filteredApplications.map((app) => (
+                  <div key={app.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50/50 transition-colors">
+                    {/* Main info row */}
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-gray-900 mb-1">{app.job_title || 'Job'}</h3>
@@ -3994,7 +4116,7 @@ export default function BusinessDashboard() {
                           {app.talent_name}
                         </Link>
                         {app.job_location && (
-                          <p className="text-gray-600 text-sm mb-2">{app.job_location}</p>
+                          <p className="text-gray-600 text-sm">{app.job_location}</p>
                         )}
                         <p className="text-gray-500 text-sm">
                           Applied: {new Date(app.created_at).toLocaleDateString()}
@@ -4004,6 +4126,7 @@ export default function BusinessDashboard() {
                         <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
                           app.status === 'applied' ? 'bg-blue-50 text-blue-600 border-blue-200' :
                           app.status === 'shortlisted' ? 'bg-green-50 text-green-600 border-green-200' :
+                          app.status === 'interview' ? 'bg-yellow-50 text-yellow-600 border-yellow-200' :
                           app.status === 'rejected' ? 'bg-red-50 text-red-600 border-red-200' :
                           app.status === 'hired' ? 'bg-purple-50 text-purple-600 border-purple-200' :
                           'bg-gray-50 text-gray-600 border-gray-200'
@@ -4018,22 +4141,130 @@ export default function BusinessDashboard() {
                         </Link>
                       </div>
                     </div>
+
+                    {/* Action buttons row */}
+                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+                      {/* Progress button */}
+                      {app.status === 'applied' && (
+                        <button
+                          onClick={() => updateApplicationStatus(app.id, 'shortlisted', app.talent_profile_id, app.job_title)}
+                          disabled={updatingAppId === app.id}
+                          className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
+                        >
+                          {updatingAppId === app.id ? 'Updating...' : 'Shortlist'}
+                        </button>
+                      )}
+                      {app.status === 'shortlisted' && (
+                        <button
+                          onClick={() => updateApplicationStatus(app.id, 'interview', app.talent_profile_id, app.job_title)}
+                          disabled={updatingAppId === app.id}
+                          className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
+                        >
+                          {updatingAppId === app.id ? 'Updating...' : 'Interview'}
+                        </button>
+                      )}
+                      {app.status === 'interview' && (
+                        <button
+                          onClick={() => {
+                            if (!window.confirm(`Are you sure you want to hire ${app.talent_name} for "${app.job_title}"?`)) return
+                            updateApplicationStatus(app.id, 'hired', app.talent_profile_id, app.job_title)
+                          }}
+                          disabled={updatingAppId === app.id}
+                          className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
+                        >
+                          {updatingAppId === app.id ? 'Updating...' : 'Hire'}
+                        </button>
+                      )}
+
+                      {/* Reject button */}
+                      {['applied', 'shortlisted', 'interview'].includes(app.status) && (
+                        <button
+                          onClick={() => {
+                            if (!window.confirm(`Reject ${app.talent_name}'s application for "${app.job_title}"? This cannot be undone.`)) return
+                            updateApplicationStatus(app.id, 'rejected', app.talent_profile_id, app.job_title)
+                          }}
+                          disabled={updatingAppId === app.id}
+                          className="px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
+                        >
+                          Reject
+                        </button>
+                      )}
+
+                      {/* Notes toggle */}
+                      <button
+                        onClick={() => {
+                          if (expandedAppNotes === app.id) {
+                            setExpandedAppNotes(null)
+                          } else {
+                            setExpandedAppNotes(app.id)
+                            setAppNotesDraft(app.notes || '')
+                          }
+                        }}
+                        className="ml-auto px-3 py-1.5 bg-gray-100 border border-gray-200 text-gray-600 hover:bg-gray-200 text-xs rounded-lg font-medium transition-colors"
+                      >
+                        {app.notes ? 'Edit Notes' : 'Add Notes'}
+                      </button>
+                    </div>
+
+                    {/* Expandable notes section */}
+                    {expandedAppNotes === app.id && (
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Internal Notes</label>
+                        <textarea
+                          value={appNotesDraft}
+                          onChange={(e) => setAppNotesDraft(e.target.value)}
+                          placeholder="Add internal notes about this applicant..."
+                          rows={3}
+                          className="w-full p-2 border border-gray-300 rounded-lg text-gray-900 text-sm resize-y"
+                        />
+                        <div className="flex items-center gap-2 mt-2">
+                          <button
+                            onClick={() => saveApplicationNotes(app.id)}
+                            disabled={savingAppNotes}
+                            className="px-3 py-1.5 bg-[#20C997] hover:bg-[#1DB886] text-white text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
+                          >
+                            {savingAppNotes ? 'Saving...' : 'Save Notes'}
+                          </button>
+                          <button
+                            onClick={() => setExpandedAppNotes(null)}
+                            className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             ) : (
               <div className="text-center py-12">
-                <p className="text-gray-600 mb-4">No applications yet</p>
-                <Link
-                  href="/dashboard/business/jobs/create"
-                  className="inline-block px-6 py-3 bg-[#20C997] text-white rounded-lg hover:bg-[#1DB886] transition-colors"
-                >
-                  Post Job
-                </Link>
+                {appFilter !== 'all' ? (
+                  <>
+                    <p className="text-gray-600 mb-4">No {appFilter} applications</p>
+                    <button
+                      onClick={() => setAppFilter('all')}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      View all applications
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-gray-600 mb-4">No applications yet</p>
+                    <Link
+                      href="/dashboard/business/jobs/create"
+                      className="inline-block px-6 py-3 bg-[#20C997] text-white rounded-lg hover:bg-[#1DB886] transition-colors"
+                    >
+                      Post Job
+                    </Link>
+                  </>
+                )}
               </div>
             )}
           </div>
-        )}
+          )
+        })()}
 
         {activeTab === 'connections' && (
           <div className="dashboard-card rounded-xl p-6">

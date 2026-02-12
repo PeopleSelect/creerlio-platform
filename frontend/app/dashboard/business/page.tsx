@@ -2910,9 +2910,6 @@ export default function BusinessDashboard() {
 
       {/* Dashboard Content */}
       <div className="max-w-7xl mx-auto px-8 py-8">
-        <div className="mb-8">
-          <p className="text-gray-600">Manage your profile, jobs, and talent connections</p>
-        </div>
 
         {/* Tabs */}
         <div className="mb-8 border-b border-gray-200">

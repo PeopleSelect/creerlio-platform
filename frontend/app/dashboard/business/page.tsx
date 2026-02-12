@@ -602,7 +602,7 @@ export default function BusinessDashboard() {
     setLocBusy(true)
     setLocError(null)
 
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoiY3JlZXJsaW8iLCJhIjoiY21pY3IxZHljMXFwNTJzb2FydzR4b3F1YSJ9.Is8-GyfEdqwKKEo2cGO65g'
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
     if (!token) {
       setLocError('Mapbox token not configured')
       setLocBusy(false)
@@ -1815,6 +1815,7 @@ export default function BusinessDashboard() {
         ...pendingFromBusiness,
         ...pendingReconnect,
         ...acceptedReqs,
+        ...declinedReqs,
         ...withdrawnReqs
       ].map((r) => r.talent_id).filter(Boolean)))
       console.log('[Business Connections] Fetching talent names for IDs:', talentIds)

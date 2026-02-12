@@ -1547,10 +1547,10 @@ export default function BusinessDashboard() {
       if (talentIds.length > 0) {
         const tRes = await supabase
           .from('talent_profiles')
-          .select('id, full_name')
+          .select('id, name')
           .in('id', talentIds)
         if (tRes.data) {
-          talentMap = new Map(tRes.data.map((t: any) => [String(t.id), t.full_name || 'Unknown']))
+          talentMap = new Map(tRes.data.map((t: any) => [String(t.id), t.name || 'Unknown']))
         }
       }
 
@@ -3987,7 +3987,12 @@ export default function BusinessDashboard() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-gray-900 mb-1">{app.job_title || 'Job'}</h3>
-                        <p className="text-gray-700 text-sm mb-1">{app.talent_name}</p>
+                        <Link
+                          href={`/portfolio/view?talent_id=${app.talent_profile_id}`}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium hover:underline"
+                        >
+                          {app.talent_name}
+                        </Link>
                         {app.job_location && (
                           <p className="text-gray-600 text-sm mb-2">{app.job_location}</p>
                         )}
@@ -3995,7 +4000,7 @@ export default function BusinessDashboard() {
                           Applied: {new Date(app.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <div className="ml-4">
+                      <div className="ml-4 flex flex-col items-end gap-2">
                         <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
                           app.status === 'applied' ? 'bg-blue-50 text-blue-600 border-blue-200' :
                           app.status === 'shortlisted' ? 'bg-green-50 text-green-600 border-green-200' :
@@ -4005,6 +4010,12 @@ export default function BusinessDashboard() {
                         }`}>
                           {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
                         </span>
+                        <Link
+                          href={`/portfolio/view?talent_id=${app.talent_profile_id}`}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition-colors"
+                        >
+                          View Portfolio
+                        </Link>
                       </div>
                     </div>
                   </div>

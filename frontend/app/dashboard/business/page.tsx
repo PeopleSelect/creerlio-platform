@@ -168,7 +168,7 @@ export default function BusinessDashboard() {
   const [vacancies, setVacancies] = useState<any[]>([])
   const [vacanciesLoadedOnce, setVacanciesLoadedOnce] = useState(false)
 
-  const [businessConnMode, setBusinessConnMode] = useState<'connections' | 'from_talent' | 'outreach'>('connections')
+  const [businessConnMode, setBusinessConnMode] = useState<'connections' | 'from_talent' | 'outreach' | 'declined'>('connections')
   const [connLoading, setConnLoading] = useState(false)
   const [connError, setConnError] = useState<string | null>(null)
   const [connRequestsFromTalent, setConnRequestsFromTalent] = useState<any[]>([]) // Pending requests initiated by talent
@@ -4015,6 +4015,22 @@ export default function BusinessDashboard() {
                   </span>
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => setBusinessConnMode('declined')}
+                className={`relative px-4 py-2 rounded-lg text-sm font-medium border ${
+                  businessConnMode === 'declined'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                }`}
+              >
+                Declined Connections
+                {connDeclined.length > 0 && (
+                  <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full">
+                    {connDeclined.length}
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* Requests from Talent Tab */}
@@ -4099,6 +4115,59 @@ export default function BusinessDashboard() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Declined Connections Tab */}
+            {businessConnMode === 'declined' && (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="text-gray-900 font-semibold mb-3">Declined Connection Requests</h3>
+                <p className="text-gray-500 text-xs mb-3">
+                  These talents have declined your connection requests. They have 30 days to reconsider should their circumstances change.
+                </p>
+                {connDeclined.length === 0 ? (
+                  <p className="text-gray-500">No declined connections.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {connDeclined.map((r) => {
+                      const respondedAt = r.responded_at ? new Date(r.responded_at) : new Date(r.created_at)
+                      const now = new Date()
+                      const daysSinceDeclined = Math.floor((now.getTime() - respondedAt.getTime()) / (1000 * 60 * 60 * 24))
+                      const daysRemaining = Math.max(0, 30 - daysSinceDeclined)
+
+                      return (
+                        <div
+                          key={r.id}
+                          className="border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-colors"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <p className="text-gray-900 text-sm font-medium">
+                                {r.talent_name && r.talent_name.trim() ? (
+                                  r.talent_name
+                                ) : (
+                                  <span className="text-yellow-600 italic animate-pulse">Loading name...</span>
+                                )}
+                              </p>
+                              <p className="text-gray-500 text-xs mt-1">
+                                Declined {respondedAt.toLocaleString()}
+                              </p>
+                              {daysRemaining > 0 ? (
+                                <p className="text-orange-500 text-xs mt-1">
+                                  {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} remaining to reconsider
+                                </p>
+                              ) : (
+                                <p className="text-red-500 text-xs mt-1">
+                                  Expired - request will be deleted soon
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -4232,55 +4301,6 @@ export default function BusinessDashboard() {
                                 </>
                               ) : (
                                 <span className="text-amber-600 text-sm">Awaiting talent's response</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Declined Connection Requests */}
-              {connDeclined.length > 0 && (
-                <div className="border border-gray-800 rounded-lg p-4 md:col-span-2">
-                  <h3 className="text-white font-semibold mb-3">Declined Connection Requests</h3>
-                  <p className="text-gray-400 text-xs mb-3">
-                    These talents have declined your connection requests. They have 30 days to reconsider should their circumstances change.
-                  </p>
-                  <div className="space-y-3">
-                    {connDeclined.map((r) => {
-                      const respondedAt = r.responded_at ? new Date(r.responded_at) : new Date(r.created_at)
-                      const now = new Date()
-                      const daysSinceDeclined = Math.floor((now.getTime() - respondedAt.getTime()) / (1000 * 60 * 60 * 24))
-                      const daysRemaining = Math.max(0, 30 - daysSinceDeclined)
-                      
-                      return (
-                        <div
-                          key={r.id}
-                          className="border border-gray-800 rounded-lg p-3 hover:border-gray-700 transition-colors"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <p className="text-gray-200 text-sm font-medium">
-                                {r.talent_name && r.talent_name.trim() ? (
-                                  r.talent_name
-                                ) : (
-                                  <span className="text-yellow-400 italic animate-pulse">Loading name...</span>
-                                )}
-                              </p>
-                              <p className="text-gray-400 text-xs mt-1">
-                                Declined {respondedAt.toLocaleString()}
-                              </p>
-                              {daysRemaining > 0 ? (
-                                <p className="text-orange-400 text-xs mt-1">
-                                  {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} remaining to reconsider
-                                </p>
-                              ) : (
-                                <p className="text-red-400 text-xs mt-1">
-                                  Expired - request will be deleted soon
-                                </p>
                               )}
                             </div>
                           </div>

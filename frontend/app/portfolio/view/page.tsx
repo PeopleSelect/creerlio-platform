@@ -2358,7 +2358,7 @@ function PortfolioViewPageInner() {
               <>
                 {/* Connection request actions when viewing from business context - moved to top above banner */}
                 {/* Only show Accept/Decline buttons if it's NOT a business-initiated request (talent-initiated) */}
-                {viewTalentId && requestId && meta && !isBusinessInitiated && (
+                {viewTalentId && requestId && meta && !isBusinessInitiated && connectionStatus !== 'accepted' && (
                   <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6 mb-8">
                     <div className="mb-4">
                       <h3 className="text-xl font-bold text-white mb-2">

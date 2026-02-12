@@ -4048,17 +4048,14 @@ export default function BusinessDashboard() {
         )}
 
         {activeTab === 'applications' && (() => {
-          const appCounts = {
-            all: applications.length,
-            applied: applications.filter(a => a.status === 'applied').length,
-            shortlisted: applications.filter(a => a.status === 'shortlisted').length,
-            interview: applications.filter(a => a.status === 'interview').length,
-            hired: applications.filter(a => a.status === 'hired').length,
-            rejected: applications.filter(a => a.status === 'rejected').length,
+          // Group applications by job
+          const jobGroups = new Map<number, { job_title: string; job_location: string; apps: typeof applications }>()
+          for (const app of applications) {
+            if (!jobGroups.has(app.job_id)) {
+              jobGroups.set(app.job_id, { job_title: app.job_title, job_location: app.job_location, apps: [] })
+            }
+            jobGroups.get(app.job_id)!.apps.push(app)
           }
-          const filteredApplications = appFilter === 'all'
-            ? applications
-            : applications.filter((app) => app.status === appFilter)
 
           return (
           <div className="dashboard-card rounded-xl p-6">
@@ -4076,190 +4073,209 @@ export default function BusinessDashboard() {
               </button>
             </div>
 
-            {/* Status filter tabs */}
-            <div className="flex items-center gap-2 mb-6 flex-wrap">
-              {(['all', 'applied', 'shortlisted', 'interview', 'hired', 'rejected'] as const).map((filter) => (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => setAppFilter(filter)}
-                  className={`relative px-4 py-2 rounded-lg text-sm font-medium border ${
-                    appFilter === filter
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
-                  }`}
-                >
-                  {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                  {appCounts[filter] > 0 && (
-                    <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full">
-                      {appCounts[filter]}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-
             {applicationsLoading ? (
               <p className="text-gray-500">Loading applications...</p>
-            ) : filteredApplications.length > 0 ? (
-              <div className="space-y-4">
-                {filteredApplications.map((app) => (
-                  <div key={app.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50/50 transition-colors">
-                    {/* Main info row */}
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">{app.job_title || 'Job'}</h3>
-                        <Link
-                          href={`/portfolio/view?talent_id=${app.talent_profile_id}`}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium hover:underline"
-                        >
-                          {app.talent_name}
-                        </Link>
-                        {app.job_location && (
-                          <p className="text-gray-600 text-sm">{app.job_location}</p>
-                        )}
-                        <p className="text-gray-500 text-sm">
-                          Applied: {new Date(app.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="ml-4 flex flex-col items-end gap-2">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                          app.status === 'applied' ? 'bg-blue-50 text-blue-600 border-blue-200' :
-                          app.status === 'shortlisted' ? 'bg-green-50 text-green-600 border-green-200' :
-                          app.status === 'interview' ? 'bg-yellow-50 text-yellow-600 border-yellow-200' :
-                          app.status === 'rejected' ? 'bg-red-50 text-red-600 border-red-200' :
-                          app.status === 'hired' ? 'bg-purple-50 text-purple-600 border-purple-200' :
-                          'bg-gray-50 text-gray-600 border-gray-200'
-                        }`}>
-                          {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
-                        </span>
-                        <Link
-                          href={`/portfolio/view?talent_id=${app.talent_profile_id}`}
-                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition-colors"
-                        >
-                          View Portfolio
-                        </Link>
-                      </div>
-                    </div>
+            ) : jobGroups.size > 0 ? (
+              <div className="space-y-6">
+                {[...jobGroups.entries()].map(([jobId, group]) => {
+                  const jobApps = appFilter === 'all' ? group.apps : group.apps.filter(a => a.status === appFilter)
+                  const counts = {
+                    all: group.apps.length,
+                    applied: group.apps.filter(a => a.status === 'applied').length,
+                    shortlisted: group.apps.filter(a => a.status === 'shortlisted').length,
+                    interview: group.apps.filter(a => a.status === 'interview').length,
+                    hired: group.apps.filter(a => a.status === 'hired').length,
+                    rejected: group.apps.filter(a => a.status === 'rejected').length,
+                  }
 
-                    {/* Action buttons row */}
-                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
-                      {/* Progress button */}
-                      {app.status === 'applied' && (
-                        <button
-                          onClick={() => updateApplicationStatus(app.id, 'shortlisted', app.talent_profile_id, app.job_title)}
-                          disabled={updatingAppId === app.id}
-                          className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
-                        >
-                          {updatingAppId === app.id ? 'Updating...' : 'Shortlist'}
-                        </button>
-                      )}
-                      {app.status === 'shortlisted' && (
-                        <button
-                          onClick={() => updateApplicationStatus(app.id, 'interview', app.talent_profile_id, app.job_title)}
-                          disabled={updatingAppId === app.id}
-                          className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
-                        >
-                          {updatingAppId === app.id ? 'Updating...' : 'Interview'}
-                        </button>
-                      )}
-                      {app.status === 'interview' && (
-                        <button
-                          onClick={() => {
-                            if (!window.confirm(`Are you sure you want to hire ${app.talent_name} for "${app.job_title}"?`)) return
-                            updateApplicationStatus(app.id, 'hired', app.talent_profile_id, app.job_title)
-                          }}
-                          disabled={updatingAppId === app.id}
-                          className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
-                        >
-                          {updatingAppId === app.id ? 'Updating...' : 'Hire'}
-                        </button>
-                      )}
-
-                      {/* Reject button */}
-                      {['applied', 'shortlisted', 'interview'].includes(app.status) && (
-                        <button
-                          onClick={() => {
-                            if (!window.confirm(`Reject ${app.talent_name}'s application for "${app.job_title}"? This cannot be undone.`)) return
-                            updateApplicationStatus(app.id, 'rejected', app.talent_profile_id, app.job_title)
-                          }}
-                          disabled={updatingAppId === app.id}
-                          className="px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
-                        >
-                          Reject
-                        </button>
-                      )}
-
-                      {/* Notes toggle */}
-                      <button
-                        onClick={() => {
-                          if (expandedAppNotes === app.id) {
-                            setExpandedAppNotes(null)
-                          } else {
-                            setExpandedAppNotes(app.id)
-                            setAppNotesDraft(app.notes || '')
-                          }
-                        }}
-                        className="ml-auto px-3 py-1.5 bg-gray-100 border border-gray-200 text-gray-600 hover:bg-gray-200 text-xs rounded-lg font-medium transition-colors"
-                      >
-                        {app.notes ? 'Edit Notes' : 'Add Notes'}
-                      </button>
-                    </div>
-
-                    {/* Expandable notes section */}
-                    {expandedAppNotes === app.id && (
-                      <div className="mt-3 pt-3 border-t border-gray-100">
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Internal Notes</label>
-                        <textarea
-                          value={appNotesDraft}
-                          onChange={(e) => setAppNotesDraft(e.target.value)}
-                          placeholder="Add internal notes about this applicant..."
-                          rows={3}
-                          className="w-full p-2 border border-gray-300 rounded-lg text-gray-900 text-sm resize-y"
-                        />
-                        <div className="flex items-center gap-2 mt-2">
-                          <button
-                            onClick={() => saveApplicationNotes(app.id)}
-                            disabled={savingAppNotes}
-                            className="px-3 py-1.5 bg-[#20C997] hover:bg-[#1DB886] text-white text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
-                          >
-                            {savingAppNotes ? 'Saving...' : 'Save Notes'}
-                          </button>
-                          <button
-                            onClick={() => setExpandedAppNotes(null)}
-                            className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg font-medium hover:bg-gray-200 transition-colors"
-                          >
-                            Cancel
-                          </button>
+                  return (
+                  <div key={jobId} className="border border-gray-200 rounded-xl overflow-hidden">
+                    {/* Job header */}
+                    <div className="bg-gray-50 px-5 py-4 border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900">{group.job_title}</h3>
+                          {group.job_location && (
+                            <p className="text-gray-500 text-sm">{group.job_location}</p>
+                          )}
                         </div>
+                        <span className="px-3 py-1 bg-blue-50 text-blue-700 text-sm font-medium rounded-full border border-blue-200">
+                          {group.apps.length} {group.apps.length === 1 ? 'applicant' : 'applicants'}
+                        </span>
+                      </div>
+
+                      {/* Per-job status filter tabs */}
+                      <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                        {(['all', 'applied', 'shortlisted', 'interview', 'hired', 'rejected'] as const).map((filter) => (
+                          <button
+                            key={filter}
+                            type="button"
+                            onClick={() => setAppFilter(filter)}
+                            className={`relative px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                              appFilter === filter
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'
+                            }`}
+                          >
+                            {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                            {counts[filter] > 0 && (
+                              <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-0.5 text-[9px] font-bold text-white bg-blue-500 rounded-full">
+                                {counts[filter]}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Applicant cards for this job */}
+                    {jobApps.length > 0 ? (
+                      <div className="divide-y divide-gray-100">
+                        {jobApps.map((app) => (
+                          <div key={app.id} className="px-5 py-4 hover:bg-gray-50/50 transition-colors">
+                            {/* Applicant info row */}
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <Link
+                                  href={`/portfolio/view?talent_id=${app.talent_profile_id}`}
+                                  className="text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                                >
+                                  {app.talent_name}
+                                </Link>
+                                <p className="text-gray-500 text-sm">
+                                  Applied: {new Date(app.created_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <div className="ml-4 flex items-center gap-2">
+                                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                                  app.status === 'applied' ? 'bg-blue-50 text-blue-600 border-blue-200' :
+                                  app.status === 'shortlisted' ? 'bg-green-50 text-green-600 border-green-200' :
+                                  app.status === 'interview' ? 'bg-yellow-50 text-yellow-600 border-yellow-200' :
+                                  app.status === 'rejected' ? 'bg-red-50 text-red-600 border-red-200' :
+                                  app.status === 'hired' ? 'bg-purple-50 text-purple-600 border-purple-200' :
+                                  'bg-gray-50 text-gray-600 border-gray-200'
+                                }`}>
+                                  {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
+                                </span>
+                                <Link
+                                  href={`/portfolio/view?talent_id=${app.talent_profile_id}`}
+                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition-colors"
+                                >
+                                  View Portfolio
+                                </Link>
+                              </div>
+                            </div>
+
+                            {/* Action buttons */}
+                            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+                              {app.status === 'applied' && (
+                                <button
+                                  onClick={() => updateApplicationStatus(app.id, 'shortlisted', app.talent_profile_id, app.job_title)}
+                                  disabled={updatingAppId === app.id}
+                                  className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
+                                >
+                                  {updatingAppId === app.id ? 'Updating...' : 'Shortlist'}
+                                </button>
+                              )}
+                              {app.status === 'shortlisted' && (
+                                <button
+                                  onClick={() => updateApplicationStatus(app.id, 'interview', app.talent_profile_id, app.job_title)}
+                                  disabled={updatingAppId === app.id}
+                                  className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
+                                >
+                                  {updatingAppId === app.id ? 'Updating...' : 'Interview'}
+                                </button>
+                              )}
+                              {app.status === 'interview' && (
+                                <button
+                                  onClick={() => {
+                                    if (!window.confirm(`Are you sure you want to hire ${app.talent_name} for "${app.job_title}"?`)) return
+                                    updateApplicationStatus(app.id, 'hired', app.talent_profile_id, app.job_title)
+                                  }}
+                                  disabled={updatingAppId === app.id}
+                                  className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
+                                >
+                                  {updatingAppId === app.id ? 'Updating...' : 'Hire'}
+                                </button>
+                              )}
+
+                              {['applied', 'shortlisted', 'interview'].includes(app.status) && (
+                                <button
+                                  onClick={() => {
+                                    if (!window.confirm(`Reject ${app.talent_name}'s application for "${app.job_title}"? This cannot be undone.`)) return
+                                    updateApplicationStatus(app.id, 'rejected', app.talent_profile_id, app.job_title)
+                                  }}
+                                  disabled={updatingAppId === app.id}
+                                  className="px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
+                                >
+                                  Reject
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => {
+                                  if (expandedAppNotes === app.id) {
+                                    setExpandedAppNotes(null)
+                                  } else {
+                                    setExpandedAppNotes(app.id)
+                                    setAppNotesDraft(app.notes || '')
+                                  }
+                                }}
+                                className="ml-auto px-3 py-1.5 bg-gray-100 border border-gray-200 text-gray-600 hover:bg-gray-200 text-xs rounded-lg font-medium transition-colors"
+                              >
+                                {app.notes ? 'Edit Notes' : 'Add Notes'}
+                              </button>
+                            </div>
+
+                            {/* Expandable notes */}
+                            {expandedAppNotes === app.id && (
+                              <div className="mt-3 pt-3 border-t border-gray-100">
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Internal Notes</label>
+                                <textarea
+                                  value={appNotesDraft}
+                                  onChange={(e) => setAppNotesDraft(e.target.value)}
+                                  placeholder="Add internal notes about this applicant..."
+                                  rows={3}
+                                  className="w-full p-2 border border-gray-300 rounded-lg text-gray-900 text-sm resize-y"
+                                />
+                                <div className="flex items-center gap-2 mt-2">
+                                  <button
+                                    onClick={() => saveApplicationNotes(app.id)}
+                                    disabled={savingAppNotes}
+                                    className="px-3 py-1.5 bg-[#20C997] hover:bg-[#1DB886] text-white text-xs rounded-lg font-medium transition-colors disabled:opacity-60"
+                                  >
+                                    {savingAppNotes ? 'Saving...' : 'Save Notes'}
+                                  </button>
+                                  <button
+                                    onClick={() => setExpandedAppNotes(null)}
+                                    className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="px-5 py-4 text-center">
+                        <p className="text-gray-500 text-sm">No {appFilter} applicants for this job</p>
                       </div>
                     )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <div className="text-center py-12">
-                {appFilter !== 'all' ? (
-                  <>
-                    <p className="text-gray-600 mb-4">No {appFilter} applications</p>
-                    <button
-                      onClick={() => setAppFilter('all')}
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                    >
-                      View all applications
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-gray-600 mb-4">No applications yet</p>
-                    <Link
-                      href="/dashboard/business/jobs/create"
-                      className="inline-block px-6 py-3 bg-[#20C997] text-white rounded-lg hover:bg-[#1DB886] transition-colors"
-                    >
-                      Post Job
-                    </Link>
-                  </>
-                )}
+                <p className="text-gray-600 mb-4">No applications yet</p>
+                <Link
+                  href="/dashboard/business/jobs/create"
+                  className="inline-block px-6 py-3 bg-[#20C997] text-white rounded-lg hover:bg-[#1DB886] transition-colors"
+                >
+                  Post Job
+                </Link>
               </div>
             )}
           </div>

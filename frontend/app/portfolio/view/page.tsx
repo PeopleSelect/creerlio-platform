@@ -1935,6 +1935,55 @@ function PortfolioViewPageInner() {
                   >
                     {videoChatLoading ? 'Starting...' : 'Video Chat'}
                   </button>
+                  <button
+                    onClick={async () => {
+                      if (!confirm('Are you sure you want to discontinue this connection? This action cannot be undone.')) {
+                        return
+                      }
+                      try {
+                        const { data: sessionRes } = await supabase.auth.getSession()
+                        const uid = sessionRes.session?.user?.id
+                        if (!uid) {
+                          alert('Please sign in to discontinue connections.')
+                          return
+                        }
+
+                        const businessRes = await supabase
+                          .from('business_profiles')
+                          .select('id')
+                          .eq('user_id', uid)
+                          .single()
+
+                        if (businessRes.error || !businessRes.data) {
+                          alert('Business profile not found.')
+                          return
+                        }
+
+                        const { error } = await supabase
+                          .from('talent_connection_requests')
+                          .update({
+                            status: 'discontinued',
+                            responded_at: new Date().toISOString()
+                          })
+                          .eq('id', connectionRequestId)
+                          .eq('business_id', businessRes.data.id)
+
+                        if (error) {
+                          console.error('Error discontinuing connection:', error)
+                          alert('Failed to discontinue connection. Please try again.')
+                        } else {
+                          alert('Connection discontinued successfully.')
+                          window.location.href = '/dashboard/business?tab=connections'
+                        }
+                      } catch (err) {
+                        console.error('Error discontinuing connection:', err)
+                        alert('An error occurred. Please try again.')
+                      }
+                    }}
+                    className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm rounded-lg font-semibold transition-colors"
+                  >
+                    Discontinue
+                  </button>
                 </div>
               )}
             </>
@@ -2448,58 +2497,6 @@ function PortfolioViewPageInner() {
                           className="px-8 py-3 rounded-xl bg-yellow-600 hover:bg-yellow-500 text-white font-semibold transition-colors shadow-lg"
                         >
                           DELAY
-                        </button>
-                      </div>
-                    ) : connectionStatus === 'accepted' ? (
-                      <div className="flex gap-3 mt-4">
-                        <button
-                          onClick={async () => {
-                            if (!confirm('Are you sure you want to discontinue this connection? This action cannot be undone.')) {
-                              return
-                            }
-                            try {
-                              const { data: sessionRes } = await supabase.auth.getSession()
-                              const uid = sessionRes.session?.user?.id
-                              if (!uid) {
-                                alert('Please sign in to discontinue connections.')
-                                return
-                              }
-                              
-                              const businessRes = await supabase
-                                .from('business_profiles')
-                                .select('id')
-                                .eq('user_id', uid)
-                                .single()
-                              
-                              if (businessRes.error || !businessRes.data) {
-                                alert('Business profile not found.')
-                                return
-                              }
-                              
-                              const { error } = await supabase
-                                .from('talent_connection_requests')
-                                .update({ 
-                                  status: 'discontinued',
-                                  responded_at: new Date().toISOString()
-                                })
-                                .eq('id', requestId)
-                                .eq('business_id', businessRes.data.id)
-                              
-                              if (error) {
-                                console.error('Error discontinuing connection:', error)
-                                alert('Failed to discontinue connection. Please try again.')
-                              } else {
-                                alert('Connection discontinued successfully.')
-                                window.location.href = '/dashboard/business?tab=connections'
-                              }
-                            } catch (err) {
-                              console.error('Error discontinuing connection:', err)
-                              alert('An error occurred. Please try again.')
-                            }
-                          }}
-                          className="px-6 py-3 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-semibold transition-colors"
-                        >
-                          Discontinue Connection
                         </button>
                       </div>
                     ) : null}

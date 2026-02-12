@@ -1496,6 +1496,89 @@ export default function BusinessDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, activeLocationId])
 
+  const [applicationsLoading, setApplicationsLoading] = useState(false)
+  const [applicationsLoadedOnce, setApplicationsLoadedOnce] = useState(false)
+
+  async function loadApplications(opts?: { force?: boolean }) {
+    if (applicationsLoadedOnce && !opts?.force) return
+    setApplicationsLoading(true)
+    try {
+      const { data: sessionRes } = await supabase.auth.getSession()
+      const uid = sessionRes.session?.user?.id ?? null
+      if (!uid) { setApplications([]); return }
+
+      // Get business profile id
+      let bpId: string | null = businessProfile?.id ? String(businessProfile.id) : null
+      if (!bpId) {
+        const bp = await supabase.from('business_profiles').select('id').eq('user_id', uid).maybeSingle()
+        if (!bp.data?.id) { setApplications([]); return }
+        bpId = String(bp.data.id)
+      }
+
+      // Get all job ids for this business (try multiple FK columns defensively)
+      let jobData: any[] | null = null
+      for (const fk of ['business_profile_id', 'business_id', 'company_id'] as const) {
+        const jobRes = await supabase
+          .from('jobs')
+          .select('id, title, location, city, country')
+          .eq(fk, bpId)
+        if (!jobRes.error && jobRes.data && jobRes.data.length > 0) {
+          jobData = jobRes.data
+          break
+        }
+        if (jobRes.error && !isMissingColumnError(jobRes.error)) break
+      }
+      if (!jobData?.length) { setApplications([]); return }
+
+      const jobMap = new Map(jobData.map((j: any) => [j.id, j]))
+      const jobIds = jobData.map((j: any) => j.id)
+
+      // Fetch applications for those jobs
+      const appRes = await supabase
+        .from('applications')
+        .select('id, job_id, talent_profile_id, user_id, status, cover_letter, created_at')
+        .in('job_id', jobIds)
+        .order('created_at', { ascending: false })
+      if (appRes.error || !appRes.data?.length) { setApplications([]); return }
+
+      // Get talent names
+      const talentIds = [...new Set(appRes.data.map((a: any) => a.talent_profile_id).filter(Boolean))]
+      let talentMap = new Map<string, string>()
+      if (talentIds.length > 0) {
+        const tRes = await supabase
+          .from('talent_profiles')
+          .select('id, full_name')
+          .in('id', talentIds)
+        if (tRes.data) {
+          talentMap = new Map(tRes.data.map((t: any) => [String(t.id), t.full_name || 'Unknown']))
+        }
+      }
+
+      // Enrich applications with job and talent info
+      const enriched = appRes.data.map((app: any) => {
+        const job = jobMap.get(app.job_id)
+        const jobLocation = job ? [job.city, job.country].filter(Boolean).join(', ') || job.location : ''
+        return {
+          ...app,
+          job_title: job?.title || 'Unknown Job',
+          job_location: jobLocation,
+          talent_name: talentMap.get(String(app.talent_profile_id)) || 'Unknown Talent',
+        }
+      })
+
+      setApplications(enriched)
+      setApplicationsLoadedOnce(true)
+    } finally {
+      setApplicationsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== 'applications') return
+    loadApplications().catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
+
   // Messaging state (Supabase/RLS-backed)
   const [msgLoading, setMsgLoading] = useState(false)
   const [msgError, setMsgError] = useState<string | null>(null)
@@ -1641,8 +1724,7 @@ export default function BusinessDashboard() {
           }
         }
 
-        // Legacy "applications" are optional; keep empty unless table exists and user has rows.
-        setApplications([])
+        // Applications are loaded lazily when the applications tab is opened.
       } finally {
         if (!cancelled) setIsLoading(false)
       }
@@ -3896,15 +3978,18 @@ export default function BusinessDashboard() {
         {activeTab === 'applications' && (
           <div className="dashboard-card rounded-xl p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Job Applications</h2>
-            {applications.length > 0 ? (
+            {applicationsLoading ? (
+              <p className="text-gray-500">Loading applications…</p>
+            ) : applications.length > 0 ? (
               <div className="space-y-4">
                 {applications.map((app) => (
                   <div key={app.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-gray-900 mb-1">{app.job_title || 'Job'}</h3>
+                        <p className="text-gray-700 text-sm mb-1">{app.talent_name}</p>
                         {app.job_location && (
-                          <p className="text-gray-600 text-sm mb-2">📍 {app.job_location}</p>
+                          <p className="text-gray-600 text-sm mb-2">{app.job_location}</p>
                         )}
                         <p className="text-gray-500 text-sm">
                           Applied: {new Date(app.created_at).toLocaleDateString()}

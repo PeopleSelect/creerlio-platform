@@ -168,6 +168,7 @@ export default function BusinessDashboard() {
   const [vacancies, setVacancies] = useState<any[]>([])
   const [vacanciesLoadedOnce, setVacanciesLoadedOnce] = useState(false)
 
+  const [businessConnMode, setBusinessConnMode] = useState<'connections' | 'from_talent' | 'outreach'>('connections')
   const [connLoading, setConnLoading] = useState(false)
   const [connError, setConnError] = useState<string | null>(null)
   const [connRequestsFromTalent, setConnRequestsFromTalent] = useState<any[]>([]) // Pending requests initiated by talent
@@ -3965,6 +3966,146 @@ export default function BusinessDashboard() {
               </div>
             )}
 
+            <div className="flex items-center gap-2 mb-6">
+              <button
+                type="button"
+                onClick={() => setBusinessConnMode('connections')}
+                className={`relative px-4 py-2 rounded-lg text-sm font-medium border ${
+                  businessConnMode === 'connections'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                }`}
+              >
+                Talent Connections
+                {connAccepted.length > 0 && (
+                  <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full">
+                    {connAccepted.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setBusinessConnMode('from_talent')}
+                className={`relative px-4 py-2 rounded-lg text-sm font-medium border ${
+                  businessConnMode === 'from_talent'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                }`}
+              >
+                Requests from Talent
+                {connRequestsFromTalent.length > 0 && (
+                  <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full">
+                    {connRequestsFromTalent.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setBusinessConnMode('outreach')}
+                className={`relative px-4 py-2 rounded-lg text-sm font-medium border ${
+                  businessConnMode === 'outreach'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                }`}
+              >
+                Your Outreach Requests
+                {connRequestsFromBusiness.length > 0 && (
+                  <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full">
+                    {connRequestsFromBusiness.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Requests from Talent Tab */}
+            {businessConnMode === 'from_talent' && (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <h3 className="text-gray-900 font-semibold">Connection Requests from Talent</h3>
+                </div>
+                <p className="text-gray-500 text-xs mb-3">
+                  Talents who reached out to connect with you. View their full shared portfolio.
+                </p>
+                {connLoading ? (
+                  <p className="text-gray-600">Loading connections…</p>
+                ) : connRequestsFromTalent.length === 0 ? (
+                  <p className="text-gray-600">No requests from talents yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {connRequestsFromTalent.map((r) => (
+                      <Link
+                        key={r.id}
+                        href={`/portfolio/view?talent_id=${r.talent_id}&request_id=${r.id}`}
+                        className="block border border-green-200 bg-green-50/30 rounded-lg p-3 hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-gray-900 text-sm font-medium">
+                              {r.talent_name || 'Talent'}
+                            </p>
+                            <p className="text-gray-500 text-xs mt-1">
+                              Requested {new Date(r.created_at).toLocaleString()}
+                            </p>
+                            {r.selected_sections && Array.isArray(r.selected_sections) && r.selected_sections.length > 0 && (
+                              <p className="text-green-600 text-xs mt-1">
+                                Sharing: {r.selected_sections.slice(0, 3).join(', ')}{r.selected_sections.length > 3 ? '...' : ''}
+                              </p>
+                            )}
+                          </div>
+                          <span className="text-green-600 text-sm font-medium">View Full Portfolio →</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Your Outreach Requests Tab */}
+            {businessConnMode === 'outreach' && (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <h3 className="text-gray-900 font-semibold">Your Outreach Requests</h3>
+                </div>
+                <p className="text-gray-500 text-xs mb-3">
+                  Talents you reached out to via search. You can only view their public profile summary until they accept.
+                </p>
+                {connLoading ? (
+                  <p className="text-gray-600">Loading connections…</p>
+                ) : connRequestsFromBusiness.length === 0 ? (
+                  <p className="text-gray-600">No outreach requests pending.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {connRequestsFromBusiness.map((r) => (
+                      <div
+                        key={r.id}
+                        className="border border-blue-200 bg-blue-50/30 rounded-lg p-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-gray-900 text-sm font-medium">
+                              {r.talent_name || 'Talent'}
+                            </p>
+                            <p className="text-gray-500 text-xs mt-1">
+                              Requested {new Date(r.created_at).toLocaleString()}
+                            </p>
+                            <p className="text-blue-600 text-xs mt-1">
+                              Awaiting talent's response
+                            </p>
+                          </div>
+                          <span className="text-blue-500 text-xs px-2 py-1 bg-blue-100 rounded">Pending</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Talent Connections Tab */}
+            {businessConnMode === 'connections' && (
             <div className="grid md:grid-cols-2 gap-6">
               {/* Reconnection Requests from Previous Connections */}
               {reconnectRequests.length > 0 && (
@@ -4017,89 +4158,6 @@ export default function BusinessDashboard() {
                   </div>
                 </div>
               )}
-
-              {/* Connection Requests FROM Talent - Full portfolio access */}
-              <div className="border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <h3 className="text-gray-900 font-semibold">Connection Requests from Talent</h3>
-                </div>
-                <p className="text-gray-500 text-xs mb-3">
-                  Talents who reached out to connect with you. View their full shared portfolio.
-                </p>
-                {connLoading ? (
-                  <p className="text-gray-600">Loading connections…</p>
-                ) : connRequestsFromTalent.length === 0 ? (
-                  <p className="text-gray-600">No requests from talents yet.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {connRequestsFromTalent.map((r) => (
-                      <Link
-                        key={r.id}
-                        href={`/portfolio/view?talent_id=${r.talent_id}&request_id=${r.id}`}
-                        className="block border border-green-200 bg-green-50/30 rounded-lg p-3 hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-gray-900 text-sm font-medium">
-                              {r.talent_name || 'Talent'}
-                            </p>
-                            <p className="text-gray-500 text-xs mt-1">
-                              Requested {new Date(r.created_at).toLocaleString()}
-                            </p>
-                            {r.selected_sections && Array.isArray(r.selected_sections) && r.selected_sections.length > 0 && (
-                              <p className="text-green-600 text-xs mt-1">
-                                Sharing: {r.selected_sections.slice(0, 3).join(', ')}{r.selected_sections.length > 3 ? '...' : ''}
-                              </p>
-                            )}
-                          </div>
-                          <span className="text-green-600 text-sm font-medium">View Full Portfolio →</span>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Connection Requests FROM Business - Only profile summary access */}
-              <div className="border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <h3 className="text-gray-900 font-semibold">Your Outreach Requests</h3>
-                </div>
-                <p className="text-gray-500 text-xs mb-3">
-                  Talents you reached out to via search. You can only view their public profile summary until they accept.
-                </p>
-                {connLoading ? (
-                  <p className="text-gray-600">Loading connections…</p>
-                ) : connRequestsFromBusiness.length === 0 ? (
-                  <p className="text-gray-600">No outreach requests pending.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {connRequestsFromBusiness.map((r) => (
-                      <div
-                        key={r.id}
-                        className="border border-blue-200 bg-blue-50/30 rounded-lg p-3"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-gray-900 text-sm font-medium">
-                              {r.talent_name || 'Talent'}
-                            </p>
-                            <p className="text-gray-500 text-xs mt-1">
-                              Requested {new Date(r.created_at).toLocaleString()}
-                            </p>
-                            <p className="text-blue-600 text-xs mt-1">
-                              Awaiting talent's response
-                            </p>
-                          </div>
-                          <span className="text-blue-500 text-xs px-2 py-1 bg-blue-100 rounded">Pending</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
               {/* Reconnection Requests - Show based on who initiated */}
               {connReconnectRequests.length > 0 && (
@@ -4393,6 +4451,7 @@ export default function BusinessDashboard() {
               </div>
 
             </div>
+            )}
 
             {/* Messaging UI - shown when a talent is selected */}
             {msgSelectedTalentId && !isServiceConnections && (

@@ -1,7 +1,14 @@
 'use client'
 
-import { TalentDashboardShell } from '../page'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function BusinessConnectionsPage() {
-  return <TalentDashboardShell />
+  const router = useRouter()
+
+  useEffect(() => {
+    router.replace('/dashboard/talent?tab=connections&mode=business')
+  }, [router])
+
+  return null
 }

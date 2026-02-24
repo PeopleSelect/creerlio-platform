@@ -155,7 +155,7 @@ export default function TemplateView({ templateId, portfolioData, initialTemplat
       },
       section_order: portfolioData.sectionOrder || ['intro', 'social', 'skills', 'experience', 'education', 'referees', 'projects', 'attachments', 'family_community'],
       include_avatar: true,
-      include_banner: true,
+      include_banner: false,
       include_intro_video: true,
     }
   }
@@ -164,7 +164,6 @@ export default function TemplateView({ templateId, portfolioData, initialTemplat
   const [templateState, setTemplateState] = useState<TemplateState>(getInitialState())
   const [saving, setSaving] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-  const [bannerUrl, setBannerUrl] = useState<string | null>(null)
   const [introVideoUrl, setIntroVideoUrl] = useState<string | null>(null)
   const [attachmentUrls, setAttachmentUrls] = useState<Record<number, string>>({})
   const [attachmentItemUrls, setAttachmentItemUrls] = useState<Record<number, string>>({})
@@ -282,13 +281,6 @@ export default function TemplateView({ templateId, portfolioData, initialTemplat
         .from('talent-bank')
         .createSignedUrl(portfolioData.avatar_path, 3600)
       if (data) setAvatarUrl(data.signedUrl)
-    }
-
-    if (portfolioData.banner_path) {
-      const { data } = await supabase.storage
-        .from('talent-bank')
-        .createSignedUrl(portfolioData.banner_path, 3600)
-      if (data) setBannerUrl(data.signedUrl)
     }
 
     if (portfolioData.introVideoId) {
@@ -710,7 +702,7 @@ export default function TemplateView({ templateId, portfolioData, initialTemplat
             }))
           }}
           avatarUrl={avatarUrl}
-          bannerUrl={bannerUrl}
+          bannerUrl={null}
           introVideoUrl={introVideoUrl}
           attachmentUrls={attachmentUrls}
           attachmentItemUrls={attachmentItemUrls}

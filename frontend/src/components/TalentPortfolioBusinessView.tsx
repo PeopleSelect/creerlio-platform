@@ -28,7 +28,6 @@ export default function TalentPortfolioBusinessView({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-  const [bannerUrl, setBannerUrl] = useState<string | null>(null)
   const [introVideoUrl, setIntroVideoUrl] = useState<string | null>(null)
 
   useEffect(() => {
@@ -69,13 +68,6 @@ export default function TalentPortfolioBusinessView({
             .from('talent-bank')
             .createSignedUrl(payload.media.avatar_path, 3600)
           if (data) setAvatarUrl(data.signedUrl)
-        }
-
-        if (payload.media.banner_path) {
-          const { data } = await supabase.storage
-            .from('talent-bank')
-            .createSignedUrl(payload.media.banner_path, 3600)
-          if (data) setBannerUrl(data.signedUrl)
         }
 
         if (payload.media.intro_video_id) {

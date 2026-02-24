@@ -201,8 +201,12 @@ function PortfolioViewPageInner() {
 
   async function handleConnectBusiness() {
     if (!viewerId || !connectBusinessId) return
-                  {/* Banner image removed from portfolio view */}
-        .maybeSingle()
+    const existingReq = await supabase
+      .from('talent_connection_requests')
+      .select('id')
+      .eq('talent_id', talentId)
+      .eq('business_id', connectBusinessId)
+      .maybeSingle()
 
       if (existingReq.data?.id) {
         const upd = await supabase

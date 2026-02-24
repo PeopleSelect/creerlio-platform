@@ -201,6 +201,13 @@ function PortfolioViewPageInner() {
 
   async function handleConnectBusiness() {
     if (!viewerId || !connectBusinessId) return
+    setConnectBusy(true)
+    try {
+      const talentProfile = await ensureTalentProfile(viewerId)
+      const talentId = String(talentProfile?.id || '')
+      if (!talentId) {
+        throw new Error('Talent profile not found.')
+      }
     const existingReq = await supabase
       .from('talent_connection_requests')
       .select('id')
@@ -2487,6 +2494,7 @@ function PortfolioViewPageInner() {
                     ) : null}
                   </div>
                 )}
+                <section className="rounded-2xl border border-white/10 bg-slate-950/40 p-8">
                 {/* Hero banner removed from portfolio view */}
                 <div className="flex flex-col md:flex-row md:items-end gap-5">
                   <div className="-mt-16 md:-mt-20 shrink-0">
@@ -2516,8 +2524,7 @@ function PortfolioViewPageInner() {
                     </div>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
 
             <div className="grid lg:grid-cols-12 gap-6 items-stretch">
               {/* Main */}
@@ -3462,11 +3469,16 @@ function PortfolioViewPageInner() {
       {/* Video Chat Modal */}
       {videoChatSession && (
         <VideoChat
-          session={videoChatSession}
-          onClose={() => {
+          sessionId={videoChatSession.id}
+          roomId={videoChatSession.room_id}
+          roomToken={videoChatSession.room_token}
+          onEnd={() => {
             setVideoChatSession(null)
             setVideoChatError(null)
           }}
+          recordingEnabled={videoChatSession.recording_enabled || false}
+          talentName={videoChatSession.talentName || 'Talent'}
+          businessName={videoChatSession.businessName || 'Business'}
         />
       )}
       

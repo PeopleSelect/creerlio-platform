@@ -3140,13 +3140,9 @@ export default function TalentDashboard() {
               )}
             </div>
           </div>
-        )
+        )}
 
         {activeTab === 'applications' && (
-          <div>
-            {/* Applications content goes here */}
-          </div>
-        )}
           <div className="dashboard-card rounded-xl p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Job Applications</h2>
             {applications.length > 0 ? (
@@ -4045,9 +4041,6 @@ export default function TalentDashboard() {
             </div>
             )}
 
-            </div>
-            )}
-
 
             {/* Declined Requests */}
             {connectionMode === 'career' && (
@@ -4396,9 +4389,9 @@ Declined Career Requests
                 </div>
               </div>
             )}
-
           </div>
         )}
+      </div>
 
         {/* Messages tab removed - messaging is now integrated into Connections tab */}
         {false && activeTab === 'messages' && (

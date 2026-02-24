@@ -78,19 +78,24 @@ export default function TemplateLayoutRenderer({
   expandedTextareas = {},
   onToggleTextarea,
 }: TemplateLayoutRendererProps) {
+  const bannerDisabledState: TemplateState = {
+    ...templateState,
+    include_banner: false,
+  }
+  const noop = () => {}
   const commonProps = {
     portfolioData,
-    templateState,
+    templateState: bannerDisabledState,
     editMode,
     onToggleSection,
     onToggleItem,
     onToggleAvatar,
-    onToggleBanner,
+    onToggleBanner: noop,
     onToggleIntroVideo,
     onUpdateBio,
     onUpdateFamilyCommunityDescription,
     avatarUrl,
-    bannerUrl,
+    bannerUrl: null,
     introVideoUrl,
     attachmentUrls,
     attachmentItemUrls,

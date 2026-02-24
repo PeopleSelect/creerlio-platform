@@ -37,8 +37,80 @@ async function resolveTalentBankUrl(path?: string | null, seconds = 60 * 30) {
   return null
 }
 
+interface User {
+  id: string
+  email: string
+  username: string
+  full_name: string | null
+  user_type: string
+  is_active: boolean
+}
+
+type TabType = 'overview' | 'profile' | 'portfolio' | 'applications' | 'connections'
+type ConnectionMode = 'career' | 'business' | 'consent' | 'requests'
+
+type TalentIntentStatus = 'open_to_conversations' | 'passive_exploring' | 'not_available'
+type IntentWorkType = 'full_time' | 'part_time' | 'contract' | 'advisory' | ''
+type IntentLocationMode = 'on_site' | 'hybrid' | 'remote' | ''
+type IntentAvailability = 'immediate' | '1_3_months' | '3_6_months' | 'future' | ''
+type IntentSalaryBand = 'entry' | 'mid' | 'senior' | 'executive' | 'flexible' | ''
+
+const defaultTalentIntent = {
+  intent_status: 'not_available' as TalentIntentStatus,
+  visibility: false,
+  preferred_work_type: '' as IntentWorkType,
+  location_mode: '' as IntentLocationMode,
+  radius_km: 10,
+  base_location: '',
+  role_themes: '',
+  industry_preferences: '',
+  salary_band: '' as IntentSalaryBand,
+  availability_timeframe: '' as IntentAvailability,
+}
+
 
 export default function TalentDashboard() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const isBusinessRoute = pathname === '/dashboard/talent/business-connections'
+  const [user, setUser] = useState<User | null>(null)
+  const [userFirstName, setUserFirstName] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [talentProfile, setTalentProfile] = useState<any>(null)
+  const [applications, setApplications] = useState<any[]>([])
+  const [withdrawingAppId, setWithdrawingAppId] = useState<string | number | null>(null)
+  const [activeTab, setActiveTab] = useState<TabType>('overview')
+  const [connectionMode, setConnectionMode] = useState<ConnectionMode>('career')
+  const [userType, setUserType] = useState<string>('talent')
+
+  const [connLoading, setConnLoading] = useState(false)
+  const [connError, setConnError] = useState<string | null>(null)
+  const [connRequests, setConnRequests] = useState<any[]>([])
+  const [connAccepted, setConnAccepted] = useState<any[]>([])
+  const [connDeclined, setConnDeclined] = useState<any[]>([])
+  const [connWithdrawn, setConnWithdrawn] = useState<any[]>([])
+  const [selectedRequest, setSelectedRequest] = useState<any | null>(null)
+  const [isCancelling, setIsCancelling] = useState(false)
+  const [requestingReconnect, setRequestingReconnect] = useState<string | null>(null)
+  const [reconnectModal, setReconnectModal] = useState<{ open: boolean; connection: any | null; message: string }>({
+    open: false,
+    connection: null,
+    message: '',
+  })
+  const [connectionSummaryModal, setConnectionSummaryModal] = useState<{ open: boolean; connection: any | null }>({
+    open: false,
+    connection: null,
+  })
+
+  const [consentLoading, setConsentLoading] = useState(false)
+  const [consentError, setConsentError] = useState<string | null>(null)
+  const [consentReqs, setConsentReqs] = useState<any[]>([])
+  const [consentBusyId, setConsentBusyId] = useState<string | null>(null)
+  const didAutoLoadConsentRef = useRef(false)
+
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const didAutoLoadNotificationsRef = useRef(false)
 
   // Saved Templates state
   const [savedTemplates, setSavedTemplates] = useState<any[]>([])
@@ -138,6 +210,8 @@ export default function TalentDashboard() {
   const [calendarCollapsed, setCalendarCollapsed] = useState(false)
   
   // Talent Map state
+  const [talentMapMapResizeTrigger, setTalentMapMapResizeTrigger] = useState(0)
+  const [talentMapMapFitBounds, setTalentMapMapFitBounds] = useState<any>(null)
   const [talentMapLoading, setTalentMapLoading] = useState(true)
   const [talentMapActiveStyle, setTalentMapActiveStyle] = useState<'dark' | 'light' | 'satellite' | 'streets'>('streets')
   const [talentMapFiltersCollapsed, setTalentMapFiltersCollapsed] = useState(false)

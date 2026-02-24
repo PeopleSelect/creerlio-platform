@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -37,153 +37,59 @@ async function resolveTalentBankUrl(path?: string | null, seconds = 60 * 30) {
   return null
 }
 
+
 export default function TalentDashboard() {
-  return <TalentDashboardShell />
-}
-
-interface User {
-  id: string
-  email: string
-  username: string
-  full_name: string | null
-  user_type: string
-  is_active: boolean
-}
-
-type TabType = 'overview' | 'profile' | 'portfolio' | 'applications' | 'connections'
-type ConnectionMode = 'career' | 'business' | 'consent' | 'requests'
-
-type TalentIntentStatus = 'open_to_conversations' | 'passive_exploring' | 'not_available'
-type IntentWorkType = 'full_time' | 'part_time' | 'contract' | 'advisory' | ''
-type IntentLocationMode = 'on_site' | 'hybrid' | 'remote' | ''
-type IntentAvailability = 'immediate' | '1_3_months' | '3_6_months' | 'future' | ''
-type IntentSalaryBand = 'entry' | 'mid' | 'senior' | 'executive' | 'flexible' | ''
-
-const defaultTalentIntent = {
-  intent_status: 'not_available' as TalentIntentStatus,
-  visibility: false,
-  preferred_work_type: '' as IntentWorkType,
-  location_mode: '' as IntentLocationMode,
-  radius_km: 10,
-  base_location: '',
-  role_themes: '',
-  industry_preferences: '',
-  salary_band: '' as IntentSalaryBand,
-  availability_timeframe: '' as IntentAvailability,
-}
-
-const SECTION_CHOICES = [
-  { key: 'intro', label: 'Introduction' },
-  { key: 'bio', label: 'Bio' },
-  { key: 'skills', label: 'Skills' },
-  { key: 'experience', label: 'Experience' },
-  { key: 'education', label: 'Education' },
-  { key: 'projects', label: 'Projects' },
-  { key: 'attachments', label: 'Attachments' },
-  { key: 'location_preferences', label: 'Location & commute preferences' },
-] as const
-
-export function TalentDashboardShell({
-  forcedTab,
-  forcedConnectionMode,
-}: {
-  forcedTab?: TabType
-  forcedConnectionMode?: ConnectionMode
-}) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const isBusinessRoute = pathname === '/dashboard/talent/business-connections'
-  const [user, setUser] = useState<User | null>(null)
-  const [userFirstName, setUserFirstName] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [talentProfile, setTalentProfile] = useState<any>(null)
-  const [applications, setApplications] = useState<any[]>([])
-  const [withdrawingAppId, setWithdrawingAppId] = useState<string | number | null>(null)
-  const [activeTab, setActiveTab] = useState<TabType>(forcedTab ?? 'overview')
-  const [connectionMode, setConnectionMode] = useState<ConnectionMode>(forcedConnectionMode ?? 'career')
-  const [userType, setUserType] = useState<string>('talent')
-
-  const [connLoading, setConnLoading] = useState(false)
-  const [connError, setConnError] = useState<string | null>(null)
-  const [connRequests, setConnRequests] = useState<any[]>([])
-  const [connAccepted, setConnAccepted] = useState<any[]>([])
-  const [connDeclined, setConnDeclined] = useState<any[]>([])
-  const [connWithdrawn, setConnWithdrawn] = useState<any[]>([]) // Previous connections - either party withdrew
-  const [selectedRequest, setSelectedRequest] = useState<any | null>(null)
-  const [isCancelling, setIsCancelling] = useState(false)
-  const [requestingReconnect, setRequestingReconnect] = useState<string | null>(null) // Track which business is being sent a reconnect request
-  const [reconnectModal, setReconnectModal] = useState<{ open: boolean; connection: any | null; message: string }>({
-    open: false,
-    connection: null,
-    message: ''
-  }) // Modal for sending reconnection request with custom message
-  const [connectionSummaryModal, setConnectionSummaryModal] = useState<{ open: boolean; connection: any | null }>({
-    open: false,
-    connection: null
-  }) // Modal for viewing connection summary
-
-  // Export/Print consent requests (Business → Talent)
-  const [consentLoading, setConsentLoading] = useState(false)
-  const [consentError, setConsentError] = useState<string | null>(null)
-  const [consentReqs, setConsentReqs] = useState<any[]>([])
-  const [consentBusyId, setConsentBusyId] = useState<string | null>(null)
-  const didAutoLoadConsentRef = useRef(false)
-
-  // Opportunity notifications from businesses (for withdrawn connections)
-  const [notifications, setNotifications] = useState<any[]>([])
-  const [notificationsLoading, setNotificationsLoading] = useState(false)
-  const didAutoLoadNotificationsRef = useRef(false)
 
   // Saved Templates state
   const [savedTemplates, setSavedTemplates] = useState<any[]>([])
   const [savedTemplatesLoading, setSavedTemplatesLoading] = useState(false)
 
-  useEffect(() => {
-    if (pathname === '/dashboard/talent') {
-      router.replace('/dashboard/talent-v2')
-    }
-  }, [pathname, router])
+  // useEffect(() => {
+  //   if (pathname === '/dashboard/talent') {
+  //     router.replace('/dashboard/talent-v2')
+  //   }
+  // }, [pathname, router])
 
-  useEffect(() => {
-    // Set active role context for mixed-profile accounts
-    try {
-      localStorage.setItem('creerlio_active_role', 'talent')
-      // Some pages still rely on this legacy key; force Talent context when entering Talent Dashboard
-      localStorage.setItem('user_type', 'talent')
-    } catch {}
-    try {
-      setUserType('talent')
-    } catch {}
-    // Allow deep-linking to specific tab
-    try {
-      if (forcedTab) {
-        setActiveTab(forcedTab)
-      } else {
-        const params = new URLSearchParams(window.location.search)
-        const tab = params.get('tab')
-        if (tab === 'connections' || tab === 'overview' || tab === 'applications') {
-          setActiveTab(tab as TabType)
-        }
-      }
-    } catch {}
-  }, [forcedTab])
+  // useEffect(() => {
+  //   // Set active role context for mixed-profile accounts
+  //   try {
+  //     localStorage.setItem('creerlio_active_role', 'talent')
+  //     // Some pages still rely on this legacy key; force Talent context when entering Talent Dashboard
+  //     localStorage.setItem('user_type', 'talent')
+  //   } catch {}
+  //   try {
+  //     setUserType('talent')
+  //   } catch {}
+  //   // Allow deep-linking to specific tab
+  //   try {
+  //     if (forcedTab) {
+  //       setActiveTab(forcedTab)
+  //     } else {
+  //       const params = new URLSearchParams(window.location.search)
+  //       const tab = params.get('tab')
+  //       if (tab === 'connections' || tab === 'overview' || tab === 'applications') {
+  //         setActiveTab(tab as TabType)
+  //       }
+  //     }
+  //   } catch {}
+  // }, [forcedTab])
 
-  useEffect(() => {
-    if (activeTab === 'portfolio') {
-      setActiveTab('overview')
-    }
-  }, [activeTab])
+  // useEffect(() => {
+  //   if (activeTab === 'portfolio') {
+  //     setActiveTab('overview')
+  //   }
+  // }, [activeTab])
 
-  useEffect(() => {
-    if (forcedConnectionMode) {
-      setConnectionMode(forcedConnectionMode)
-      return
-    }
-    if (isBusinessRoute) {
-      setConnectionMode('business')
-      setActiveTab('connections')
-    }
-  }, [forcedConnectionMode, isBusinessRoute])
+  // useEffect(() => {
+  //   if (forcedConnectionMode) {
+  //     setConnectionMode(forcedConnectionMode)
+  //     return
+  //   }
+  //   if (isBusinessRoute) {
+  //     setConnectionMode('business')
+  //     setActiveTab('connections')
+  //   }
+  // }, [forcedConnectionMode, isBusinessRoute])
 
   // Messaging state (Supabase/RLS-backed)
   const [msgLoading, setMsgLoading] = useState(false)
@@ -299,112 +205,7 @@ export function TalentDashboardShell({
     }, 300)
     return () => clearTimeout(timer)
   }, [talentMapRouteQuery])
-  const [talentMapToggles, setTalentMapToggles] = useState({
-    businesses: true,
-    context: false,
-    schools: false,
-    commute: false,
-    transport: false,
-    shopping: false,
-    property: false,
-  })
-  const [talentMapMapResizeTrigger, setTalentMapMapResizeTrigger] = useState(0)
-  const [talentMapMapFitBounds, setTalentMapMapFitBounds] = useState<[[number, number], [number, number]] | null>(null)
-  const talentMapLocAbortRef = useRef<AbortController | null>(null)
-
-  // Calculate zoom level from radius in km
-  // At zoom ~14, about 1km visible; each zoom level halves visible area
-  const getZoomFromRadius = useCallback((radiusKm: number): number => {
-    // Formula: zoom = 14 - log2(radius)
-    // This gives: 1km→14, 2km→13, 5km→~11.7, 10km→~10.7, 20km→~9.7, 50km→~8.4
-    const zoom = 14 - Math.log2(radiusKm)
-    // Clamp between reasonable bounds
-    return Math.max(7, Math.min(16, zoom))
-  }, [])
-
-  // Re-zoom when radius changes and there's a selected location
-  useEffect(() => {
-    if (talentMapSearchCenter && talentMapSearchCenter.lat && talentMapSearchCenter.lng) {
-      const newZoom = getZoomFromRadius(talentMapRadiusKm)
-      setTalentMapFlyTo({ lng: talentMapSearchCenter.lng, lat: talentMapSearchCenter.lat, zoom: newZoom })
-    }
-  }, [talentMapRadiusKm, talentMapSearchCenter, getZoomFromRadius])
-
-  // Debounce location query
-  const [talentMapLocDebouncedValue, setTalentMapLocDebouncedValue] = useState('')
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setTalentMapLocDebouncedValue(talentMapLocQuery)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [talentMapLocQuery])
-
-  // Fetch location suggestions for Talent Map
-  useEffect(() => {
-    const fetchTalentMapLocSuggestions = async (q: string) => {
-      const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
-      const qq = q.trim()
-      if (!qq || qq.length < 1) {
-        setTalentMapLocSuggestions([])
-        setTalentMapLocActiveIdx(0)
-        return
-      }
-      if (!token) return
-      talentMapLocAbortRef.current?.abort()
-      const ac = new AbortController()
-      talentMapLocAbortRef.current = ac
-      try {
-        let feats: any[] = []
-        if (token) {
-          const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(qq)}.json`)
-          u.searchParams.set('access_token', token)
-          u.searchParams.set('limit', '6')
-          u.searchParams.set('types', 'place,locality,neighborhood,postcode,region')
-          u.searchParams.set('country', 'AU')
-          const res = await fetch(u.toString(), { signal: ac.signal })
-          const json: any = await res.json().catch(() => null)
-          feats = Array.isArray(json?.features) ? json.features : []
-        } else {
-          const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}`, { signal: ac.signal })
-          const json: any = await res.json().catch(() => null)
-          feats = Array.isArray(json?.features) ? json.features : []
-        }
-
-        if (!feats.length) {
-          const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}`, { signal: ac.signal })
-          const json: any = await res.json().catch(() => null)
-          feats = Array.isArray(json?.features) ? json.features : []
-        }
-        const next = feats
-          .map((f: any) => {
-            const id = String(f?.id || '')
-            const label = String(f?.place_name || '').trim()
-            const center = f?.center
-            const lng = Array.isArray(center) ? center[0] : null
-            const lat = Array.isArray(center) ? center[1] : null
-            if (!id || !label || typeof lng !== 'number' || typeof lat !== 'number') return null
-            return { id, label, lng, lat }
-          })
-          .filter(Boolean)
-          .slice(0, 6) as any
-        setTalentMapLocSuggestions(next)
-        setTalentMapLocActiveIdx(0)
-        if (next.length > 0) {
-          setTalentMapLocOpen(true)
-        }
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.error('Error fetching location suggestions:', err)
-        }
-      }
-    }
-
-    if (talentMapLocDebouncedValue.trim().length > 0) {
-      fetchTalentMapLocSuggestions(talentMapLocDebouncedValue)
-    } else {
-      setTalentMapLocSuggestions([])
-    }
-  }, [talentMapLocDebouncedValue])
+  const [talentMapToggles, setTalentMapToggles] = useState({})
 
   // Initialize Talent Map - load user location on mount
   useEffect(() => {
@@ -655,7 +456,6 @@ export function TalentDashboardShell({
         }
       }
     }
-
     if (talentMapRouteSuggestionsOpen && talentMapRouteQueryDebounced.trim().length >= 2) {
       fetchTalentMapRouteSuggestions(talentMapRouteQueryDebounced)
     } else {
@@ -872,7 +672,6 @@ export function TalentDashboardShell({
                 const business = job?.business_profile_id ? businessMap.get(String(job.business_profile_id)) : null
                 
                 return {
-                  ...app,
                   jobs: job ? {
                     ...job,
                     business_profiles: business || null
@@ -2693,23 +2492,25 @@ export function TalentDashboardShell({
                           
                           // Try multiple ways to get the business name - check all possible locations
                           let bizName = 'Unknown Business'
+
                           if (business?.properties?.name) {
                             const trimmed = String(business.properties.name).trim()
                             if (trimmed) bizName = trimmed
-                          } else if (business?.name) {
-                            const trimmed = String(business.name).trim()
-                            if (trimmed) bizName = trimmed
-                          } else if (business?.properties?.business_name) {
+                          }
+                          // If you want to check for business_name, company_name, etc., add them to properties in BusinessFeature
+                          else if (business?.properties?.business_name) {
                             const trimmed = String(business.properties.business_name).trim()
                             if (trimmed) bizName = trimmed
-                          } else if (business?.business_name) {
-                            const trimmed = String(business.business_name).trim()
+                          }
+                          // fallback to slug if no name
+                          else if (business?.properties?.slug) {
+                            const trimmed = String(business.properties.slug).trim()
                             if (trimmed) bizName = trimmed
                           }
-                          const industries = business?.properties?.industries || business?.industries
+                          const industries = business?.properties?.industries
                           const industry = Array.isArray(industries) && industries.length > 0 ? industries[0] : null
-                          const intentStatus = business?.properties?.intentStatus || business?.intent_status
-                          const intentVisible = business?.properties?.intentVisible || business?.intent_visibility
+                          const intentStatus = business?.properties?.intentStatus
+                          const intentVisible = business?.properties?.intentVisible
                           
                           // Format: "Business Name • Industry" (like map marker)
                           const displayText = industry 
@@ -3334,14 +3135,18 @@ export function TalentDashboardShell({
                       <p className="text-gray-700"><span className="text-gray-600">Title:</span> {talentProfile.title}</p>
                     )}
                   </div>
-                  {/* Actions moved to top nav and View Portfolio page */}
+                  {/* Banner removed from portfolio view */}
                 </div>
               )}
             </div>
           </div>
-        )}
+        )
 
         {activeTab === 'applications' && (
+          <div>
+            {/* Applications content goes here */}
+          </div>
+        )}
           <div className="dashboard-card rounded-xl p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Job Applications</h2>
             {applications.length > 0 ? (

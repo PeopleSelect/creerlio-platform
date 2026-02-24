@@ -114,7 +114,6 @@ function PortfolioViewPageInner() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [meta, setMeta] = useState<PortfolioMeta | null>(null)
-  const [bannerUrl, setBannerUrl] = useState<string | null>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [viewerId, setViewerId] = useState<string | null>(null)
@@ -202,21 +201,7 @@ function PortfolioViewPageInner() {
 
   async function handleConnectBusiness() {
     if (!viewerId || !connectBusinessId) return
-    setConnectError(null)
-    if (!connectSections.length) {
-      setConnectError('Please enable at least one section to share.')
-      return
-    }
-    setConnectBusy(true)
-    try {
-      const talentProfile = await ensureTalentProfile(viewerId)
-      const talentId = String(talentProfile.id)
-
-      const existingReq = await supabase
-        .from('talent_connection_requests')
-        .select('id')
-        .eq('talent_id', talentId)
-        .eq('business_id', connectBusinessId)
+                  {/* Banner image removed from portfolio view */}
         .maybeSingle()
 
       if (existingReq.data?.id) {
@@ -755,21 +740,17 @@ function PortfolioViewPageInner() {
         // Use targetUserId for banner/avatar/video paths (not uid, which might be the business user)
         const targetUserForFiles = targetUserId || uid
         
-        // Only load banner/avatar if we have valid portfolio data
+        // Only load avatar if we have valid portfolio data
         if (saved && portfolioData) {
           // When viewing from business context, prefer public URLs (bucket should be public)
           const usePublic = !!viewTalentId
-          const [b, a] = await Promise.all([
-            signedUrl(String(saved.banner_path ?? ''), 60 * 30, usePublic),
-            signedUrl(String(saved.avatar_path ?? ''), 60 * 30, usePublic),
-          ])
+          const a = await signedUrl(String(saved.avatar_path ?? ''), 60 * 30, usePublic)
           if (!cancelled) {
-            setBannerUrl(b)
             setAvatarUrl(a)
           }
         } else {
           // No portfolio data yet - connection check will retry, then set meta to null if still no data
-          console.log('[View Portfolio] Skipping banner/avatar load - no portfolio data yet')
+          console.log('[View Portfolio] Skipping avatar load - no portfolio data yet')
         }
 
         // Intro video (picked in Portfolio editor)
@@ -2502,22 +2483,7 @@ function PortfolioViewPageInner() {
                     ) : null}
                   </div>
                 )}
-                {/* Hero */}
-                <section className="overflow-hidden rounded-3xl border border-white/10 bg-slate-950/40">
-              <div className="h-44 md:h-64 bg-slate-900 relative">
-                {(isPublicView ? '/talent-portfolio.jpg' : bannerUrl) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={isPublicView ? '/talent-portfolio.jpg' : bannerUrl || ''}
-                    alt="Banner"
-                    className="w-full h-full object-cover opacity-80"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,0.35),transparent_45%),radial-gradient(circle_at_80%_30%,rgba(16,185,129,0.25),transparent_45%)]" />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/10 to-transparent" />
-              </div>
-              <div className="p-6 md:p-8">
+                {/* Hero banner removed from portfolio view */}
                 <div className="flex flex-col md:flex-row md:items-end gap-5">
                   <div className="-mt-16 md:-mt-20 shrink-0">
                     <div className="w-28 h-28 md:w-32 md:h-32 rounded-3xl overflow-hidden border border-white/10 bg-white/5 shadow-xl">

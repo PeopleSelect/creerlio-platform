@@ -1667,7 +1667,7 @@ function PortfolioViewPageInner() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white">
+    <div className="min-h-screen bg-white text-slate-900">
       {preview ? (
         <div
           className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6"

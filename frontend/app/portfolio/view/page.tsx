@@ -1666,6 +1666,8 @@ function PortfolioViewPageInner() {
     return <ThumbIcon label={label} />
   }
 
+  const showIntroInHeader = true
+
   return (
     <div className="min-h-screen bg-white text-slate-900">
       {preview ? (
@@ -2495,40 +2497,78 @@ function PortfolioViewPageInner() {
                   </div>
                 )}
                 <section className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-                  {/* Hero banner image with personalized name, title, and avatar */}
-                  <div
-                    className="relative"
-                    style={{
-                      backgroundImage: "url('/portfolio-header.jpg')",
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
-                    }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-slate-900/80 via-slate-900/50 to-transparent" />
-                    <div className="relative px-8 py-10 md:py-12 flex flex-col md:flex-row md:items-center gap-6">
-                      <div className="shrink-0">
-                        <div className="w-24 h-24 md:w-28 md:h-28 rounded-3xl overflow-hidden border-2 border-white/40 bg-white/10 shadow-xl">
-                          {avatarUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover object-top" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center font-bold text-3xl text-white">
-                              {name.slice(0, 1).toUpperCase()}
-                            </div>
-                          )}
+                  {/* Header split: left profile, right banner/video */}
+                  <div className="flex flex-col lg:flex-row">
+                    <div className="lg:w-[45%] px-8 py-10 md:py-12">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+                        <div className="shrink-0">
+                          <div className="w-24 h-24 md:w-28 md:h-28 rounded-3xl overflow-hidden border border-slate-200 bg-slate-100 shadow-xl">
+                            {avatarUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover object-top" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center font-bold text-3xl text-slate-700">
+                                {name.slice(0, 1).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 truncate">{name}</h1>
+                          <p className="text-slate-600 mt-1 text-lg">{title}</p>
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500 mt-4">
+                            {location ? <span>📍 {location}</span> : null}
+                            {yearsExperience ? (
+                              <span className="px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600">
+                                {yearsExperience}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <h1 className="text-3xl md:text-4xl font-bold text-white truncate">{name}</h1>
-                        <p className="text-white/80 mt-1 text-lg">{title}</p>
-                        <div className="flex flex-wrap items-center gap-3 text-sm text-white/70 mt-4">
-                          {location ? <span>📍 {location}</span> : null}
-                          {yearsExperience ? (
-                            <span className="px-3 py-1 rounded-full bg-white/15 border border-white/30 text-white/90">
-                              {yearsExperience}
-                            </span>
-                          ) : null}
-                        </div>
+                    </div>
+                    <div className="lg:w-[55%] bg-gradient-to-r from-slate-600 via-slate-400 to-slate-200 px-6 py-8 lg:py-10">
+                      <div className="h-full flex items-center">
+                        {introVideoUrl ? (
+                          <div className="w-full">
+                            {isExternalUrl(introVideoUrl) && !isDirectVideoUrl(introVideoUrl) ? (
+                              getEmbedUrl(introVideoUrl) ? (
+                                <iframe
+                                  src={getEmbedUrl(introVideoUrl) || undefined}
+                                  className="w-full aspect-video rounded-2xl border border-white/40 bg-black"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                  title={introVideoTitle || 'Introduction Video'}
+                                />
+                              ) : (
+                                <div className="rounded-2xl border border-white/40 bg-white/30 p-4 text-sm text-slate-800">
+                                  <a
+                                    href={introVideoUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-slate-900 underline"
+                                  >
+                                    Open intro video
+                                  </a>
+                                </div>
+                              )
+                            ) : (
+                              <video
+                                src={introVideoUrl}
+                                controls
+                                playsInline
+                                className="w-full max-h-[260px] md:max-h-[300px] rounded-2xl border border-white/40 bg-black object-contain"
+                              />
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-full rounded-2xl border border-white/40 bg-white/30 p-6 text-slate-800">
+                            <div className="font-semibold mb-1">Upload intro video</div>
+                            <div className="text-sm text-slate-700">
+                              Add your intro video to display it here in the header.
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2564,7 +2604,7 @@ function PortfolioViewPageInner() {
                 )}
 
                 {/* Intro video (below About, above Experience) */}
-                {isSectionVisible('intro') && (
+                {isSectionVisible('intro') && !showIntroInHeader && (
                   <section className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
                     <h2 className="text-xl font-semibold mb-4">{introVideoTitle || 'Introduction Video'}</h2>
                     {introVideoUrl ? (

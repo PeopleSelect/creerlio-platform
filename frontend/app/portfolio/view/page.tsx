@@ -2514,7 +2514,7 @@ function PortfolioViewPageInner() {
                           </div>
                         </div>
                         <div className="min-w-0">
-                          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 truncate">{name}</h1>
+                        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 break-words">{name}</h1>
                           <p className="text-slate-600 mt-1 text-lg">{title}</p>
                           <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500 mt-4">
                             {location ? <span>📍 {location}</span> : null}

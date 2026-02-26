@@ -2557,7 +2557,7 @@ function PortfolioViewPageInner() {
                                 src={introVideoUrl}
                                 controls
                                 playsInline
-                                className="w-full max-w-[70%] mx-auto max-h-[130px] md:max-h-[150px] rounded-2xl border border-white/40 bg-black object-contain"
+                                className="w-full max-w-[90%] mx-auto max-h-[175px] md:max-h-[200px] rounded-2xl border border-white/40 bg-black object-contain"
                               />
                             )}
                           </div>

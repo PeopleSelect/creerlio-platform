@@ -2496,30 +2496,30 @@ function PortfolioViewPageInner() {
                     ) : null}
                   </div>
                 )}
-                <section className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                <section className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-600 via-slate-400 to-slate-200 overflow-hidden">
                   {/* Header split: left profile, right banner/video */}
                   <div className="flex flex-col lg:flex-row">
                     <div className="lg:w-[45%] px-8 py-10 md:py-12">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-6">
                         <div className="shrink-0">
-                          <div className="w-24 h-24 md:w-28 md:h-28 rounded-3xl overflow-hidden border border-slate-200 bg-slate-100 shadow-xl">
+                          <div className="w-24 h-24 md:w-28 md:h-28 rounded-3xl overflow-hidden border border-white/40 bg-white/10 shadow-xl">
                             {avatarUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover object-top" />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center font-bold text-3xl text-slate-700">
+                              <div className="w-full h-full flex items-center justify-center font-bold text-3xl text-white">
                                 {name.slice(0, 1).toUpperCase()}
                               </div>
                             )}
                           </div>
                         </div>
                         <div className="min-w-0">
-                        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 break-words">{name}</h1>
-                          <p className="text-slate-600 mt-1 text-lg">{title}</p>
-                          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500 mt-4">
+                          <h1 className="text-3xl md:text-4xl font-bold text-white break-words">{name}</h1>
+                          <p className="text-white/85 mt-1 text-lg">{title}</p>
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-white/70 mt-4">
                             {location ? <span>📍 {location}</span> : null}
                             {yearsExperience ? (
-                              <span className="px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600">
+                              <span className="px-3 py-1 rounded-full bg-white/15 border border-white/30 text-white/90">
                                 {yearsExperience}
                               </span>
                             ) : null}
@@ -2527,7 +2527,7 @@ function PortfolioViewPageInner() {
                         </div>
                       </div>
                     </div>
-                    <div className="lg:w-[55%] bg-gradient-to-r from-slate-600 via-slate-400 to-slate-200 px-6 py-8 lg:py-10">
+                    <div className="lg:w-[55%] px-6 py-8 lg:py-10">
                       <div className="h-full flex items-center">
                         {introVideoUrl ? (
                           <div className="w-full">

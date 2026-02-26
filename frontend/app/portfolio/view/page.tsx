@@ -2494,37 +2494,45 @@ function PortfolioViewPageInner() {
                     ) : null}
                   </div>
                 )}
-                <section className="rounded-2xl border border-emerald-100 bg-emerald-50 p-8">
-                {/* Hero banner removed from portfolio view */}
-                <div className="flex flex-col md:flex-row md:items-end gap-5">
-                  <div className="-mt-16 md:-mt-20 shrink-0">
-                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-3xl overflow-hidden border border-white/10 bg-white/5 shadow-xl">
-                      {avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover object-top" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center font-bold text-3xl">
-                          {name.slice(0, 1).toUpperCase()}
+                <section className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                  {/* Hero banner image with personalized name, title, and avatar */}
+                  <div
+                    className="relative"
+                    style={{
+                      backgroundImage: "url('/portfolio-header.jpg')",
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-slate-900/80 via-slate-900/50 to-transparent" />
+                    <div className="relative px-8 py-10 md:py-12 flex flex-col md:flex-row md:items-center gap-6">
+                      <div className="shrink-0">
+                        <div className="w-24 h-24 md:w-28 md:h-28 rounded-3xl overflow-hidden border-2 border-white/40 bg-white/10 shadow-xl">
+                          {avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover object-top" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center font-bold text-3xl text-white">
+                              {name.slice(0, 1).toUpperCase()}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <h1 className="text-3xl md:text-4xl font-bold truncate">{name}</h1>
-                        <p className="text-slate-300 mt-1">{title}</p>
-                        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300 mt-3">
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h1 className="text-3xl md:text-4xl font-bold text-white truncate">{name}</h1>
+                        <p className="text-white/80 mt-1 text-lg">{title}</p>
+                        <div className="flex flex-wrap items-center gap-3 text-sm text-white/70 mt-4">
                           {location ? <span>📍 {location}</span> : null}
                           {yearsExperience ? (
-                            <span className="px-3 py-1 rounded-xl bg-white/5 border border-white/10">{yearsExperience}</span>
+                            <span className="px-3 py-1 rounded-full bg-white/15 border border-white/30 text-white/90">
+                              {yearsExperience}
+                            </span>
                           ) : null}
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </section>
+                </section>
 
             <div className="grid lg:grid-cols-12 gap-6 items-stretch">
               {/* Main */}

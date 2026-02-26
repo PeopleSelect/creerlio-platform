@@ -2494,7 +2494,7 @@ function PortfolioViewPageInner() {
                     ) : null}
                   </div>
                 )}
-                <section className="rounded-2xl border border-white/10 bg-slate-950/40 p-8">
+                <section className="rounded-2xl border border-emerald-100 bg-emerald-50 p-8">
                 {/* Hero banner removed from portfolio view */}
                 <div className="flex flex-col md:flex-row md:items-end gap-5">
                   <div className="-mt-16 md:-mt-20 shrink-0">

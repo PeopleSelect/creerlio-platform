@@ -1429,17 +1429,17 @@ function PortfolioViewPageInner() {
 
     const colorClass = (platform: string) => {
       const p = String(platform || '').toLowerCase()
-      if (p.includes('linkedin')) return 'bg-sky-500/15 border-sky-400/30 text-sky-200 hover:bg-sky-500/25'
-      if (p.includes('youtube')) return 'bg-red-500/15 border-red-400/30 text-red-200 hover:bg-red-500/25'
-      if (p.includes('instagram')) return 'bg-pink-500/15 border-pink-400/30 text-pink-200 hover:bg-pink-500/25'
-      if (p.includes('github')) return 'bg-slate-200/10 border-slate-200/20 text-slate-100 hover:bg-slate-200/15'
-      if (p === 'x' || p.includes('twitter') || p.includes('x.com')) return 'bg-neutral-200/10 border-neutral-200/20 text-neutral-100 hover:bg-neutral-200/15'
-      if (p.includes('facebook')) return 'bg-blue-500/15 border-blue-400/30 text-blue-200 hover:bg-blue-500/25'
-      if (p.includes('tiktok')) return 'bg-fuchsia-500/12 border-fuchsia-400/25 text-fuchsia-200 hover:bg-fuchsia-500/18'
-      if (p.includes('behance')) return 'bg-indigo-500/15 border-indigo-400/30 text-indigo-200 hover:bg-indigo-500/25'
-      if (p.includes('dribbble')) return 'bg-rose-500/15 border-rose-400/30 text-rose-200 hover:bg-rose-500/25'
-      if (p.includes('website') || p.includes('portfolio')) return 'bg-emerald-500/12 border-emerald-400/25 text-emerald-200 hover:bg-emerald-500/18'
-      return 'bg-white/5 border-white/10 text-slate-200 hover:bg-white/10'
+      if (p.includes('linkedin')) return 'bg-sky-500/40 border-sky-400/60 text-sky-50 hover:bg-sky-500/50'
+      if (p.includes('youtube')) return 'bg-red-500/40 border-red-400/60 text-red-50 hover:bg-red-500/50'
+      if (p.includes('instagram')) return 'bg-pink-500/40 border-pink-400/60 text-pink-50 hover:bg-pink-500/50'
+      if (p.includes('github')) return 'bg-slate-300/30 border-slate-300/50 text-slate-50 hover:bg-slate-300/40'
+      if (p === 'x' || p.includes('twitter') || p.includes('x.com')) return 'bg-neutral-300/30 border-neutral-300/50 text-neutral-50 hover:bg-neutral-300/40'
+      if (p.includes('facebook')) return 'bg-blue-500/40 border-blue-400/60 text-blue-50 hover:bg-blue-500/50'
+      if (p.includes('tiktok')) return 'bg-fuchsia-500/35 border-fuchsia-400/55 text-fuchsia-50 hover:bg-fuchsia-500/45'
+      if (p.includes('behance')) return 'bg-indigo-500/40 border-indigo-400/60 text-indigo-50 hover:bg-indigo-500/50'
+      if (p.includes('dribbble')) return 'bg-rose-500/40 border-rose-400/60 text-rose-50 hover:bg-rose-500/50'
+      if (p.includes('website') || p.includes('portfolio')) return 'bg-emerald-500/35 border-emerald-400/55 text-emerald-50 hover:bg-emerald-500/45'
+      return 'bg-white/10 border-white/20 text-slate-50 hover:bg-white/15'
     }
 
     return (
@@ -3097,7 +3097,6 @@ function PortfolioViewPageInner() {
                     {/* Social icons under Connect with Me */}
                     {isSectionVisible('social') && socialLinks.length ? (
                       <div className="mt-6">
-                        <div className="text-slate-400 text-xs mb-2">Social</div>
                         <SocialIconBar links={socialLinks} />
                       </div>
                     ) : null}

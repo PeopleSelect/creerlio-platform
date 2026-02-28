@@ -2008,7 +2008,7 @@ function PortfolioViewPageInner() {
               <div className="relative group">
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-lg bg-slate-900/70 hover:bg-slate-800 border border-white/10 font-semibold"
+                  className="px-4 py-2 rounded-lg bg-slate-900/70 hover:bg-slate-800 border border-white/10 font-semibold text-white"
                 >
                   How to Build Portfolio
                 </button>
@@ -2025,7 +2025,7 @@ function PortfolioViewPageInner() {
               </div>
               <Link
                 href="/portfolio"
-                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 font-semibold"
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 font-semibold text-white"
               >
                 Edit Portfolio
               </Link>

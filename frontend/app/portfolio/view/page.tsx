@@ -3101,19 +3101,20 @@ function PortfolioViewPageInner() {
                         <SocialIconBar links={socialLinks} />
                       </div>
                     ) : null}
+                  </div>
+                ) : null}
 
-                    {isSectionVisible('skills') && skills.length ? (
-                      <div className="mt-6">
-                        <div className="text-slate-400 text-xs mb-2">Top skills</div>
-                        <div className="flex flex-wrap gap-2">
-                          {skills.slice(0, 6).map((s, idx) => (
-                            <span key={`${s}-${idx}`} className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-200 text-xs">
-                              {s}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
+                {/* Top Skills - separate section */}
+                {isSectionVisible('skills') && skills.length ? (
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6">
+                    <div className="text-black font-semibold mb-4">Top skills</div>
+                    <div className="flex flex-wrap gap-2">
+                      {skills.slice(0, 6).map((s, idx) => (
+                        <span key={`${s}-${idx}`} className="px-2.5 py-1 rounded-full bg-gray-100 border border-gray-200 text-black text-xs">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
 

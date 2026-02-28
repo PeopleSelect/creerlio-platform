@@ -3061,14 +3061,8 @@ function PortfolioViewPageInner() {
               <aside className="lg:col-span-4 flex flex-col gap-6">
                 {showConnectWithMe ? (
                   <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
-                    <div className="text-slate-200 font-semibold mb-4">Connect With Me</div>
+                    <div className="text-slate-200 font-semibold mb-4">My Social Media</div>
                     <div className="space-y-4 text-sm">
-                      {isSectionVisible('basic') && authEmail ? (
-                        <div>
-                          <div className="text-slate-400 text-xs">Email</div>
-                          <div className="text-slate-200 break-all">{authEmail}</div>
-                        </div>
-                      ) : null}
                       {isSectionVisible('basic') && (meta as any)?.phone ? (
                         <div>
                           <div className="text-slate-400 text-xs">Phone</div>

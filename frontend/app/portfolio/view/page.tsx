@@ -985,6 +985,77 @@ function PortfolioViewPageInner() {
     }
   }, [viewTalentId, requestId])
 
+  // Prevent downloads without talent permission
+  useEffect(() => {
+    // Prevent right-click context menu
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault()
+      return false
+    }
+
+    // Prevent keyboard shortcuts for saving/downloading
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Block Ctrl+S, Ctrl+Shift+S, Ctrl+U, F12 (DevTools)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S' || e.key === 'u' || e.key === 'U')) {
+        e.preventDefault()
+        return false
+      }
+      if (e.key === 'F12') {
+        e.preventDefault()
+        return false
+      }
+    }
+
+    // Prevent drag-and-drop on images and videos
+    const handleDragStart = (e: DragEvent) => {
+      const target = e.target as HTMLElement
+      if (target.tagName === 'IMG' || target.tagName === 'VIDEO' || target.closest('video') || target.closest('img')) {
+        e.preventDefault()
+        return false
+      }
+    }
+
+    // Prevent image dragging
+    const handleSelectStart = (e: Event) => {
+      const target = e.target as HTMLElement
+      if (target.tagName === 'IMG' || target.tagName === 'VIDEO') {
+        e.preventDefault()
+        return false
+      }
+    }
+
+    document.addEventListener('contextmenu', handleContextMenu)
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('dragstart', handleDragStart)
+    document.addEventListener('selectstart', handleSelectStart)
+
+    // Add CSS to prevent text selection and image dragging
+    const style = document.createElement('style')
+    style.textContent = `
+      img, video {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-user-drag: none;
+        -khtml-user-drag: none;
+        -moz-user-drag: none;
+        -o-user-drag: none;
+        user-drag: none;
+        pointer-events: auto;
+      }
+    `
+    document.head.appendChild(style)
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu)
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('dragstart', handleDragStart)
+      document.removeEventListener('selectstart', handleSelectStart)
+      document.head.removeChild(style)
+    }
+  }, [])
+
   function normalizeDisplayText(s: string) {
     // Prevent large vertical gaps from extra blank lines (often created during edits/deletes/imports).
     return String(s || '')
@@ -1622,6 +1693,9 @@ function PortfolioViewPageInner() {
             src={url}
             alt="Attachment image"
             className="w-full h-full object-cover"
+            onContextMenu={(e) => e.preventDefault()}
+            onDragStart={(e) => e.preventDefault()}
+            draggable={false}
             onError={() => {
               // If a thumbnail URL is stale, attempt a refresh once.
               if (path) ensureSignedUrl(path).catch(() => {})
@@ -1691,9 +1765,23 @@ function PortfolioViewPageInner() {
             <div className="p-4 bg-black flex items-center justify-center">
               {preview.kind === 'image' ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={preview.url} alt="Preview" className="max-h-[75vh] w-auto object-contain" />
+                <img 
+                  src={preview.url} 
+                  alt="Preview" 
+                  className="max-h-[75vh] w-auto object-contain"
+                  onContextMenu={(e) => e.preventDefault()}
+                  onDragStart={(e) => e.preventDefault()}
+                  draggable={false}
+                />
               ) : preview.kind === 'video' ? (
-                <video src={preview.url} controls className="max-h-[75vh] w-auto object-contain" />
+                <video 
+                  src={preview.url} 
+                  controls 
+                  controlsList="nodownload"
+                  className="max-h-[75vh] w-auto object-contain"
+                  onContextMenu={(e) => e.preventDefault()}
+                  onDragStart={(e) => e.preventDefault()}
+                />
               ) : (
                 <iframe title="Document preview" src={preview.url} className="w-full h-[75vh] bg-white rounded-lg" />
               )}
@@ -1749,6 +1837,9 @@ function PortfolioViewPageInner() {
                           src={url}
                           alt={String(item?.title || 'Family and Community Image')}
                           className="w-full h-full object-cover"
+                          onContextMenu={(e) => e.preventDefault()}
+                          onDragStart={(e) => e.preventDefault()}
+                          draggable={false}
                         />
                       </button>
                     )
@@ -2505,7 +2596,14 @@ function PortfolioViewPageInner() {
                           <div className="w-24 h-24 md:w-28 md:h-28 rounded-3xl overflow-hidden border border-white/40 bg-white/10 shadow-xl">
                             {avatarUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover object-top" />
+                              <img 
+                                src={avatarUrl} 
+                                alt="Avatar" 
+                                className="w-full h-full object-cover object-top"
+                                onContextMenu={(e) => e.preventDefault()}
+                                onDragStart={(e) => e.preventDefault()}
+                                draggable={false}
+                              />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center font-bold text-3xl text-white">
                                 {name.slice(0, 1).toUpperCase()}
@@ -2556,8 +2654,12 @@ function PortfolioViewPageInner() {
                               <video
                                 src={introVideoUrl}
                                 controls
+                                controlsList="nodownload"
                                 playsInline
+                                onContextMenu={(e) => e.preventDefault()}
+                                onDragStart={(e) => e.preventDefault()}
                                 className="w-full max-w-[90%] mx-auto max-h-[175px] md:max-h-[200px] rounded-2xl border border-white/40 bg-black object-contain"
+                                style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                               />
                             )}
                           </div>

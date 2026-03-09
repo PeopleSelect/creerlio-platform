@@ -52,7 +52,6 @@ export default function TalentPage() {
             <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-gray-900">
               Creerlio
             </Link>
-
             <nav className="hidden lg:flex items-center gap-x-8 text-sm text-gray-600">
               <Link href="/talent" className="hover:text-blue-600 transition-colors">Talent</Link>
               <Link href="/business" className="hover:text-blue-600 transition-colors">Business</Link>
@@ -75,7 +74,6 @@ export default function TalentPage() {
                 </button>
               )}
             </nav>
-
             <div className="flex gap-3">
               <Link
                 href="/login/talent?mode=signup&redirect=/dashboard/talent"
@@ -99,30 +97,7 @@ export default function TalentPage() {
           </div>
         </div>
       </header>
-
-      {/* Hero Section */}
-      <section className="w-full">
-        <div className="relative w-full h-[600px] lg:h-[700px]">
-          <Image
-            src="/9fc3c9a7-4d35-4451-b0b4-30fb5580c695.png"
-            alt="Person holding iPad showing Creerlio Talent Portfolio"
-            fill
-            className="object-cover object-top w-full h-full"
-            priority
-            onError={(e) => {
-              const target = e.target as HTMLImageElement
-              target.style.display = 'none'
-              const fallback = target.nextElementSibling as HTMLElement
-              if (fallback) fallback.style.display = 'block'
-            }}
-          />
-          <div className="hidden absolute inset-0 bg-gradient-to-br from-gray-50 to-white">
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="text-gray-400">Hero Image Placeholder</div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Removed Hero Section (banner) */}
 
       {/* Feature Cards */}
       <section className="max-w-7xl mx-auto px-8 py-16">

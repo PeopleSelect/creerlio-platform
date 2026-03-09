@@ -128,6 +128,20 @@ function BusinessLoginPageInner() {
             }
           })
         }
+
+        // Referral conversion (best-effort)
+        try {
+          const sid = sessionStorage.getItem('creerlio_session_id')
+          const { data: s } = await supabase.auth.getSession()
+          const accessToken = s.session?.access_token
+          if (sid && accessToken) {
+            fetch('/api/referrals/convert', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+              body: JSON.stringify({ visitor_session_id: sid }),
+            }).catch(() => {})
+          }
+        } catch {}
         
         router.replace(redirectTo)
         return
@@ -171,6 +185,20 @@ function BusinessLoginPageInner() {
           // Don't block signup if profile creation fails - they can fill it in later
         }
       }
+
+      // Referral conversion (best-effort)
+      try {
+        const sid = sessionStorage.getItem('creerlio_session_id')
+        const { data: s } = await supabase.auth.getSession()
+        const accessToken = s.session?.access_token
+        if (sid && accessToken) {
+          fetch('/api/referrals/convert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+            body: JSON.stringify({ visitor_session_id: sid }),
+          }).catch(() => {})
+        }
+      } catch {}
 
       router.replace(redirectTo)
     } finally {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { SnapshotResult } from './AnonymousCandidateCard'
 
@@ -19,11 +19,11 @@ export default function RequestAccessModal({ snapshot, onClose }: RequestAccessM
   const [done, setDone] = useState(false)
 
   // Pre-fill from Supabase session if logged in
-  useState(() => {
+  useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email) setEmail(session.user.email)
     })
-  })
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

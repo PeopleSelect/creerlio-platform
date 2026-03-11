@@ -4663,7 +4663,7 @@ Declined Career Requests
       )}
 
       {/* Reconnection Request Modal */}
-      {reconnectModal.open && reconnectModal.connection && (
+      {reconnectModal?.open && reconnectModal.connection && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
@@ -4758,7 +4758,7 @@ Declined Career Requests
       )}
 
       {/* Connection Summary Modal */}
-      {connectionSummaryModal.open && connectionSummaryModal.connection && (
+      {connectionSummaryModal?.open && connectionSummaryModal.connection && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
             <div className="flex items-center justify-between mb-4">

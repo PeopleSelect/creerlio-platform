@@ -1,71 +1,7 @@
-// --- PLACEHOLDER DEFINITIONS FOR MISSING VARIABLES ---
-// Remove or replace these with real implementations as needed
-const router = { replace: () => {}, push: () => {} };
-const activeTab = 'overview';
-const setTalentMapMapResizeTrigger = () => {};
-const setTalentMapMapFitBounds = () => {};
-const connRequests = [];
-const connAccepted = [];
-const connDeclined = [];
-const connWithdrawn = [];
-const connectionMode = 'career';
-const defaultTalentIntent = {};
-const setIsLoading = () => {};
-const setUser = () => {};
-const setUserType = () => {};
-const setUserFirstName = () => {};
-const setTalentProfile = () => {};
-const setApplications = () => {};
-const setPortfolioAvatarUrl = () => {};
-const setConnLoading = () => {};
-const setConnError = () => {};
-const setConnRequests = () => {};
-const setConnAccepted = () => {};
-const setConnDeclined = () => {};
-const setConnWithdrawn = () => {};
-const setCalendarItems = () => {};
-const setIsCancelling = () => {};
-const setSelectedRequest = () => {};
-const setBizSearchLoading = () => {};
-const setBizSearchError = () => {};
-const setBizResults = () => {};
-const setSelectedBusiness = () => {};
-const setBizConnectionsLoading = () => {};
-const setBizConnectionsError = () => {};
-const setBizConnections = () => {};
-const setMsgSelectedBusinessId = () => {};
-const setMsgConversationId = () => {};
-const setMsgItems = () => {};
-const setMsgLoading = () => {};
-const setMsgError = () => {};
-const setMsgBusinesses = () => {};
-const setConsentLoading = () => {};
-const setConsentError = () => {};
-const setConsentReqs = () => {};
-const setConsentBusyId = () => {};
-const setNotificationsLoading = () => {};
-const setNotifications = () => {};
-const setSavedTemplatesLoading = () => {};
-const setSavedTemplates = () => {};
-const didAutoLoadConsentRef = { current: false };
-const didAutoLoadNotificationsRef = { current: false };
-const isBusinessRoute = false;
-const user = { id: 'placeholder', email: 'placeholder@example.com' };
-const talentProfile = { id: 'placeholder', name: 'Talent', email: 'talent@example.com' };
-const isLoading = false;
-const msgBody = '';
-const msgSelectedBusinessId = null;
-const msgConversationId = null;
-const loadBusinessConnections = async () => {};
-const loadConversation = async () => {};
-const loadConsentRequests = async () => {};
-const loadNotifications = async () => {};
-const loadSavedTemplates = async () => {};
-const loadConnections = async () => {};
-
 'use client'
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import VideoChat from '@/components/VideoChat'
@@ -102,7 +38,84 @@ async function resolveTalentBankUrl(path?: string | null, seconds = 60 * 30) {
 }
 
 
+type TabType = 'overview' | 'profile' | 'portfolio' | 'applications' | 'connections'
+type TalentIntentStatus = 'available' | 'not_available' | 'open_to_offers' | 'casual_only'
+type IntentWorkType = 'full_time' | 'part_time' | 'contract' | 'advisory' | ''
+type IntentLocationMode = 'on_site' | 'hybrid' | 'remote' | ''
+type IntentAvailability = 'immediate' | '1_3_months' | '3_6_months' | 'future' | ''
+type IntentSalaryBand = 'entry' | 'mid' | 'senior' | 'executive' | 'flexible' | ''
+
+function getZoomFromRadius(radiusKm: number): number {
+  if (radiusKm <= 1) return 14
+  if (radiusKm <= 3) return 13
+  if (radiusKm <= 5) return 12
+  if (radiusKm <= 10) return 11
+  if (radiusKm <= 20) return 10
+  if (radiusKm <= 50) return 9
+  return 8
+}
+
+const defaultTalentIntent = {
+  intent_status: 'not_available' as TalentIntentStatus,
+  visibility: false,
+  preferred_work_type: '',
+  location_mode: '',
+  radius_km: 10,
+  base_location: '',
+  role_themes: '',
+  industry_preferences: '',
+  salary_band: '',
+  availability_timeframe: '',
+}
+
 export default function TalentDashboard() {
+  const router = useRouter()
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<TabType>('overview')
+
+  // Auth / profile state
+  const [user, setUser] = useState<any>(null)
+  const [talentProfile, setTalentProfile] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [userType, setUserType] = useState<string>('talent')
+  const [userFirstName, setUserFirstName] = useState<string | null>(null)
+
+  // Connection state
+  const [connectionMode, setConnectionMode] = useState<'career' | 'requests' | 'consent'>('career')
+  // On the talent dashboard, isBusinessRoute is always false (business users are redirected)
+  const isBusinessRoute = false
+  const [connRequests, setConnRequests] = useState<any[]>([])
+  const [connAccepted, setConnAccepted] = useState<any[]>([])
+  const [connDeclined, setConnDeclined] = useState<any[]>([])
+  const [connWithdrawn, setConnWithdrawn] = useState<any[]>([])
+  const [connLoading, setConnLoading] = useState(false)
+  const [connError, setConnError] = useState<string | null>(null)
+  const [isCancelling, setIsCancelling] = useState(false)
+  const [selectedRequest, setSelectedRequest] = useState<any>(null)
+  const [withdrawingAppId, setWithdrawingAppId] = useState<string | null>(null)
+  const [reconnectModal, setReconnectModal] = useState<{ open: boolean; connection: any; message: string } | null>(null)
+  const [requestingReconnect, setRequestingReconnect] = useState<string | null>(null)
+  const [connectionSummaryModal, setConnectionSummaryModal] = useState<{ open: boolean; connection: any } | null>(null)
+
+  // Notifications state
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const didAutoLoadConsentRef = useRef(false)
+  const didAutoLoadNotificationsRef = useRef(false)
+
+  // Consent requests state
+  const [consentLoading, setConsentLoading] = useState(false)
+  const [consentError, setConsentError] = useState<string | null>(null)
+  const [consentReqs, setConsentReqs] = useState<any[]>([])
+  const [consentBusyId, setConsentBusyId] = useState<string | null>(null)
+
+  // Applications state
+  const [applications, setApplications] = useState<any[]>([])
+
+  // Map state
+  const [talentMapMapResizeTrigger, setTalentMapMapResizeTrigger] = useState(0)
+  const [talentMapMapFitBounds, setTalentMapMapFitBounds] = useState<[[number, number], [number, number]] | null>(null)
 
   // Saved Templates state
   const [savedTemplates, setSavedTemplates] = useState<any[]>([])
@@ -269,7 +282,9 @@ export default function TalentDashboard() {
     }, 300)
     return () => clearTimeout(timer)
   }, [talentMapRouteQuery])
-  const [talentMapToggles, setTalentMapToggles] = useState({})
+  const [talentMapToggles, setTalentMapToggles] = useState({
+    businesses: true, context: false, schools: false, commute: false, transport: false, shopping: false, property: false,
+  })
 
   // Initialize Talent Map - load user location on mount
   useEffect(() => {
@@ -2569,8 +2584,8 @@ export default function TalentDashboard() {
                             if (trimmed) bizName = trimmed
                           }
                           // If you want to check for business_name, company_name, etc., add them to properties in BusinessFeature
-                          else if (business?.properties?.business_name) {
-                            const trimmed = String(business.properties.business_name).trim()
+                          else if ((business?.properties as any)?.business_name) {
+                            const trimmed = String((business.properties as any).business_name).trim()
                             if (trimmed) bizName = trimmed
                           }
                           // fallback to slug if no name
@@ -3211,13 +3226,9 @@ export default function TalentDashboard() {
               )}
             </div>
           </div>
-        )
+        )}
 
         {activeTab === 'applications' && (
-          <div>
-            {/* Applications content goes here */}
-          </div>
-        )}
           <div className="dashboard-card rounded-xl p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Job Applications</h2>
             {applications.length > 0 ? (
@@ -4472,7 +4483,7 @@ Declined Career Requests
         )}
 
         {/* Messages tab removed - messaging is now integrated into Connections tab */}
-        {false && activeTab === 'messages' && (
+        {false && (activeTab as string) === 'messages' && (
           <div className="dashboard-card rounded-xl p-6">
             <div className="flex items-start justify-between gap-4 mb-6">
               <div>

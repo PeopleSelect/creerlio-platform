@@ -2272,13 +2272,7 @@ export default function TalentDashboard() {
               {/* Profile completion meter */}
               <div className="lg:col-span-1">
                 <ProfileCompletionMeter
-                  profile={{
-                    name: talentProfile?.name,
-                    bio: talentProfile?.bio,
-                    title: talentProfile?.title,
-                    avatar_url: talentProfile?.avatar_url,
-                    skills: talentProfile?.skills,
-                  }}
+                  profile={(talentProfile as any) ?? {}}
                 />
               </div>
 

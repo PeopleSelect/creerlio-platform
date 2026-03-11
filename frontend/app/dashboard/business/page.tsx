@@ -3194,6 +3194,18 @@ export default function BusinessDashboard() {
             >
               Business Bank ↗
             </Link>
+            <Link
+              href="/dashboard/business/candidates"
+              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
+            >
+              Discover Candidates ↗
+            </Link>
+            <Link
+              href="/dashboard/business/create-talent-profile"
+              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
+            >
+              Create Talent Profile ↗
+            </Link>
           </div>
         </div>
 

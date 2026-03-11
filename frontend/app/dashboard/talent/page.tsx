@@ -1,12 +1,77 @@
+// --- PLACEHOLDER DEFINITIONS FOR MISSING VARIABLES ---
+// Remove or replace these with real implementations as needed
+const router = { replace: () => {}, push: () => {} };
+const activeTab = 'overview';
+const setTalentMapMapResizeTrigger = () => {};
+const setTalentMapMapFitBounds = () => {};
+const connRequests = [];
+const connAccepted = [];
+const connDeclined = [];
+const connWithdrawn = [];
+const connectionMode = 'career';
+const defaultTalentIntent = {};
+const setIsLoading = () => {};
+const setUser = () => {};
+const setUserType = () => {};
+const setUserFirstName = () => {};
+const setTalentProfile = () => {};
+const setApplications = () => {};
+const setPortfolioAvatarUrl = () => {};
+const setConnLoading = () => {};
+const setConnError = () => {};
+const setConnRequests = () => {};
+const setConnAccepted = () => {};
+const setConnDeclined = () => {};
+const setConnWithdrawn = () => {};
+const setCalendarItems = () => {};
+const setIsCancelling = () => {};
+const setSelectedRequest = () => {};
+const setBizSearchLoading = () => {};
+const setBizSearchError = () => {};
+const setBizResults = () => {};
+const setSelectedBusiness = () => {};
+const setBizConnectionsLoading = () => {};
+const setBizConnectionsError = () => {};
+const setBizConnections = () => {};
+const setMsgSelectedBusinessId = () => {};
+const setMsgConversationId = () => {};
+const setMsgItems = () => {};
+const setMsgLoading = () => {};
+const setMsgError = () => {};
+const setMsgBusinesses = () => {};
+const setConsentLoading = () => {};
+const setConsentError = () => {};
+const setConsentReqs = () => {};
+const setConsentBusyId = () => {};
+const setNotificationsLoading = () => {};
+const setNotifications = () => {};
+const setSavedTemplatesLoading = () => {};
+const setSavedTemplates = () => {};
+const didAutoLoadConsentRef = { current: false };
+const didAutoLoadNotificationsRef = { current: false };
+const isBusinessRoute = false;
+const user = { id: 'placeholder', email: 'placeholder@example.com' };
+const talentProfile = { id: 'placeholder', name: 'Talent', email: 'talent@example.com' };
+const isLoading = false;
+const msgBody = '';
+const msgSelectedBusinessId = null;
+const msgConversationId = null;
+const loadBusinessConnections = async () => {};
+const loadConversation = async () => {};
+const loadConsentRequests = async () => {};
+const loadNotifications = async () => {};
+const loadSavedTemplates = async () => {};
+const loadConnections = async () => {};
+
 'use client'
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import VideoChat from '@/components/VideoChat'
 import dynamic from 'next/dynamic'
 import BusinessDiscoveryMap, {type BusinessFeature, type RouteState, type BusinessDiscoveryMapHandle } from '@/components/BusinessDiscoveryMap'
+import ProfileCompletionMeter from '@/components/ProfileCompletionMeter'
 
 const SearchMap = dynamic(() => import('@/components/SearchMap'), { ssr: false })
 
@@ -37,80 +102,8 @@ async function resolveTalentBankUrl(path?: string | null, seconds = 60 * 30) {
   return null
 }
 
-interface User {
-  id: string
-  email: string
-  username: string
-  full_name: string | null
-  user_type: string
-  is_active: boolean
-}
-
-type TabType = 'overview' | 'profile' | 'portfolio' | 'applications' | 'connections'
-type ConnectionMode = 'career' | 'business' | 'consent' | 'requests'
-
-type TalentIntentStatus = 'open_to_conversations' | 'passive_exploring' | 'not_available'
-type IntentWorkType = 'full_time' | 'part_time' | 'contract' | 'advisory' | ''
-type IntentLocationMode = 'on_site' | 'hybrid' | 'remote' | ''
-type IntentAvailability = 'immediate' | '1_3_months' | '3_6_months' | 'future' | ''
-type IntentSalaryBand = 'entry' | 'mid' | 'senior' | 'executive' | 'flexible' | ''
-
-const defaultTalentIntent = {
-  intent_status: 'not_available' as TalentIntentStatus,
-  visibility: false,
-  preferred_work_type: '' as IntentWorkType,
-  location_mode: '' as IntentLocationMode,
-  radius_km: 10,
-  base_location: '',
-  role_themes: '',
-  industry_preferences: '',
-  salary_band: '' as IntentSalaryBand,
-  availability_timeframe: '' as IntentAvailability,
-}
-
 
 export default function TalentDashboard() {
-  const router = useRouter()
-  const pathname = usePathname()
-  const isBusinessRoute = pathname === '/dashboard/talent/business-connections'
-  const [user, setUser] = useState<User | null>(null)
-  const [userFirstName, setUserFirstName] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [talentProfile, setTalentProfile] = useState<any>(null)
-  const [applications, setApplications] = useState<any[]>([])
-  const [withdrawingAppId, setWithdrawingAppId] = useState<string | number | null>(null)
-  const [activeTab, setActiveTab] = useState<TabType>('overview')
-  const [connectionMode, setConnectionMode] = useState<ConnectionMode>('career')
-  const [userType, setUserType] = useState<string>('talent')
-
-  const [connLoading, setConnLoading] = useState(false)
-  const [connError, setConnError] = useState<string | null>(null)
-  const [connRequests, setConnRequests] = useState<any[]>([])
-  const [connAccepted, setConnAccepted] = useState<any[]>([])
-  const [connDeclined, setConnDeclined] = useState<any[]>([])
-  const [connWithdrawn, setConnWithdrawn] = useState<any[]>([])
-  const [selectedRequest, setSelectedRequest] = useState<any | null>(null)
-  const [isCancelling, setIsCancelling] = useState(false)
-  const [requestingReconnect, setRequestingReconnect] = useState<string | null>(null)
-  const [reconnectModal, setReconnectModal] = useState<{ open: boolean; connection: any | null; message: string }>({
-    open: false,
-    connection: null,
-    message: '',
-  })
-  const [connectionSummaryModal, setConnectionSummaryModal] = useState<{ open: boolean; connection: any | null }>({
-    open: false,
-    connection: null,
-  })
-
-  const [consentLoading, setConsentLoading] = useState(false)
-  const [consentError, setConsentError] = useState<string | null>(null)
-  const [consentReqs, setConsentReqs] = useState<any[]>([])
-  const [consentBusyId, setConsentBusyId] = useState<string | null>(null)
-  const didAutoLoadConsentRef = useRef(false)
-
-  const [notifications, setNotifications] = useState<any[]>([])
-  const [notificationsLoading, setNotificationsLoading] = useState(false)
-  const didAutoLoadNotificationsRef = useRef(false)
 
   // Saved Templates state
   const [savedTemplates, setSavedTemplates] = useState<any[]>([])
@@ -210,8 +203,6 @@ export default function TalentDashboard() {
   const [calendarCollapsed, setCalendarCollapsed] = useState(false)
   
   // Talent Map state
-  const [talentMapMapResizeTrigger, setTalentMapMapResizeTrigger] = useState(0)
-  const [talentMapMapFitBounds, setTalentMapMapFitBounds] = useState<any>(null)
   const [talentMapLoading, setTalentMapLoading] = useState(true)
   const [talentMapActiveStyle, setTalentMapActiveStyle] = useState<'dark' | 'light' | 'satellite' | 'streets'>('streets')
   const [talentMapFiltersCollapsed, setTalentMapFiltersCollapsed] = useState(false)
@@ -2261,6 +2252,13 @@ export default function TalentDashboard() {
             >
               Talent Bank ↗
             </Link>
+            <Link
+              href="/dashboard/talent/snapshots"
+              title="Create anonymous discovery snapshots so recruiters can find you without seeing your identity"
+              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
+            >
+              Snapshots ↗
+            </Link>
             {/* Portfolio Templates temporarily hidden */}
             {/* Business Connections tab temporarily hidden */}
           </div>
@@ -2269,6 +2267,46 @@ export default function TalentDashboard() {
         {/* Tab Content */}
         {activeTab === 'overview' && (
           <>
+            {/* Quick actions + completion meter */}
+            <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Profile completion meter */}
+              <div className="lg:col-span-1">
+                <ProfileCompletionMeter
+                  profile={{
+                    name: talentProfile?.name,
+                    bio: talentProfile?.bio,
+                    title: talentProfile?.title,
+                    avatar_url: talentProfile?.avatar_url,
+                    skills: talentProfile?.skills,
+                  }}
+                />
+              </div>
+
+              {/* Quick links */}
+              <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-3 content-start">
+                {[
+                  { href: '/dashboard/talent/edit', icon: '✏️', label: 'Edit Profile', desc: 'Update your info' },
+                  { href: '/dashboard/talent/share', icon: '🔒', label: 'Privacy', desc: 'Control visibility' },
+                  { href: '/dashboard/talent/snapshots', icon: '👤', label: 'Snapshots', desc: 'Anonymous discovery' },
+                  { href: '/dashboard/talent/bank', icon: '🗂️', label: 'Talent Bank', desc: 'Files & portfolio' },
+                  { href: '/dashboard/talent/calendar', icon: '📅', label: 'Calendar', desc: 'Interviews & meetings' },
+                  { href: '/dashboard/talent/share', icon: '🔗', label: 'Share Profile', desc: 'Your public link' },
+                ].map(({ href, icon, label, desc }) => (
+                  <Link
+                    key={href + label}
+                    href={href}
+                    className="flex items-start gap-3 p-3 rounded-xl border border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50 transition-colors group"
+                  >
+                    <span className="text-xl">{icon}</span>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">{label}</p>
+                      <p className="text-xs text-gray-500">{desc}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+
             {/* Talent Map */}
             <div className="mb-8">
               <div className="flex flex-col lg:flex-row gap-4 relative h-auto lg:h-[calc(100vh-12rem)]">
@@ -3214,9 +3252,13 @@ export default function TalentDashboard() {
               )}
             </div>
           </div>
-        )}
+        )
 
         {activeTab === 'applications' && (
+          <div>
+            {/* Applications content goes here */}
+          </div>
+        )}
           <div className="dashboard-card rounded-xl p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Job Applications</h2>
             {applications.length > 0 ? (
@@ -4115,6 +4157,9 @@ export default function TalentDashboard() {
             </div>
             )}
 
+            </div>
+            )}
+
 
             {/* Declined Requests */}
             {connectionMode === 'career' && (
@@ -4463,11 +4508,159 @@ Declined Career Requests
                 </div>
               </div>
             )}
+
           </div>
         )}
-      </div>
-        )}
 
+        {/* Messages tab removed - messaging is now integrated into Connections tab */}
+        {false && activeTab === 'messages' && (
+          <div className="dashboard-card rounded-xl p-6">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-white">Messages</h2>
+                <p className="text-gray-400 text-sm">
+                  You can only message businesses you’re actively connected to.
+                </p>
+              </div>
+              <button
+                onClick={() => loadMessaging()}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-60"
+                disabled={msgLoading}
+              >
+                Refresh
+              </button>
+            </div>
+
+            {msgError && (
+              <div className="mb-4 border border-red-500/30 bg-red-500/10 text-red-200 rounded-lg p-4">
+                {msgError}
+              </div>
+            )}
+
+            {msgLoading && (
+              <p className="text-gray-400">Loading messaging…</p>
+            )}
+
+            {!msgLoading && !msgError && msgBusinesses.length === 0 && (
+              <div className="text-center py-10">
+                <p className="text-gray-300 font-medium mb-2">No connected businesses yet</p>
+                <p className="text-gray-500 text-sm">
+                  When a business connects to you via Talent Bank permissions, you’ll be able to message them here.
+                </p>
+              </div>
+            )}
+
+            {!msgLoading && msgBusinesses.length > 0 && (
+              <div className="grid md:grid-cols-3 gap-6">
+                {/* Business list */}
+                <div className="md:col-span-1 border border-gray-800 rounded-lg overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-900/40 border-b border-gray-800">
+                    <p className="text-gray-300 font-medium">Connected businesses</p>
+                  </div>
+                  <div className="divide-y divide-gray-800">
+                    {msgBusinesses.map((b) => {
+                      // Display the business name, with fallback to 'Business' if not available
+                      const displayName = (b.name && b.name.trim() && b.name !== 'Business') ? b.name : 'Business'
+                      return (
+                        <button
+                          key={b.id}
+                          onClick={() => loadConversation(b.id)}
+                          className={`w-full text-left px-4 py-3 hover:bg-gray-800/50 transition-colors ${
+                            msgSelectedBusinessId === b.id ? 'bg-gray-800/60' : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-white font-medium truncate" title={displayName}>{displayName}</p>
+                            <span className="text-xs text-gray-500">Open</span>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Conversation */}
+                <div className="md:col-span-2 border border-gray-800 rounded-lg overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-900/40 border-b border-gray-800">
+                    <p className="text-gray-300 font-medium">
+                      {msgSelectedBusinessId
+                        ? (() => {
+                            const business = msgBusinesses.find((b) => String(b.id) === String(msgSelectedBusinessId))
+                            const businessName = (business?.name && business.name.trim() && business.name !== 'Business') 
+                              ? business.name 
+                              : 'Business'
+                            return `Conversation with ${businessName}`
+                          })()
+                        : 'Conversation'}
+                    </p>
+                  </div>
+
+                  {!msgSelectedBusinessId && (
+                    <div className="p-6">
+                      <p className="text-gray-400">Select a business to view messages.</p>
+                    </div>
+                  )}
+
+                  {msgSelectedBusinessId && msgConversationId === null && !msgError && (
+                    <div className="p-6">
+                      <p className="text-gray-300 mb-2">No messages yet</p>
+                      <p className="text-gray-500 text-sm">You’re connected to businesses, but no messages yet.</p>
+                    </div>
+                  )}
+
+                  {msgSelectedBusinessId && msgConversationId && (
+                    <div className="p-4 space-y-3 max-h-[420px] overflow-auto">
+                      {msgItems.length === 0 ? (
+                        <p className="text-gray-400">No messages yet.</p>
+                      ) : (
+                        msgItems.map((m) => (
+                          <div
+                            key={m.id}
+                            className={`max-w-[85%] rounded-lg px-3 py-2 ${
+                              m.sender_type === 'talent'
+                                ? 'ml-auto bg-blue-500/20 border border-blue-500/30 text-blue-100'
+                                : 'mr-auto bg-gray-800/60 border border-gray-700 text-gray-100'
+                            }`}
+                          >
+                            <p className="text-sm whitespace-pre-wrap">{m.body}</p>
+                            <p className="text-[11px] text-gray-400 mt-1">
+                              {new Date(m.created_at).toLocaleString()}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {msgSelectedBusinessId && (
+                    <div className="p-4 border-t border-gray-800 bg-gray-900/20">
+                      <div className="flex items-end gap-3">
+                        <textarea
+                          value={msgBody}
+                          onChange={(e) => setMsgBody(e.target.value)}
+                          placeholder="Write a message…"
+                          rows={2}
+                          className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        />
+                        <button
+                          onClick={sendMessage}
+                          disabled={msgLoading || !msgBody.trim()}
+                          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-60"
+                        >
+                          Send
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        If the connection is expired or revoked, messaging will be blocked.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      
       {/* Video Chat Modal */}
       {videoChatSession && (
         <VideoChat

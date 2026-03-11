@@ -71,7 +71,6 @@ import { supabase } from '@/lib/supabase'
 import VideoChat from '@/components/VideoChat'
 import dynamic from 'next/dynamic'
 import BusinessDiscoveryMap, {type BusinessFeature, type RouteState, type BusinessDiscoveryMapHandle } from '@/components/BusinessDiscoveryMap'
-import ProfileCompletionMeter from '@/components/ProfileCompletionMeter'
 
 const SearchMap = dynamic(() => import('@/components/SearchMap'), { ssr: false })
 
@@ -2267,40 +2266,6 @@ export default function TalentDashboard() {
         {/* Tab Content */}
         {activeTab === 'overview' && (
           <>
-            {/* Quick actions + completion meter */}
-            <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Profile completion meter */}
-              <div className="lg:col-span-1">
-                <ProfileCompletionMeter
-                  profile={(talentProfile as any) ?? {}}
-                />
-              </div>
-
-              {/* Quick links */}
-              <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-3 content-start">
-                {[
-                  { href: '/dashboard/talent/edit', icon: '✏️', label: 'Edit Profile', desc: 'Update your info' },
-                  { href: '/dashboard/talent/share', icon: '🔒', label: 'Privacy', desc: 'Control visibility' },
-                  { href: '/dashboard/talent/snapshots', icon: '👤', label: 'Snapshots', desc: 'Anonymous discovery' },
-                  { href: '/dashboard/talent/bank', icon: '🗂️', label: 'Talent Bank', desc: 'Files & portfolio' },
-                  { href: '/dashboard/talent/calendar', icon: '📅', label: 'Calendar', desc: 'Interviews & meetings' },
-                  { href: '/dashboard/talent/share', icon: '🔗', label: 'Share Profile', desc: 'Your public link' },
-                ].map(({ href, icon, label, desc }) => (
-                  <Link
-                    key={href + label}
-                    href={href}
-                    className="flex items-start gap-3 p-3 rounded-xl border border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50 transition-colors group"
-                  >
-                    <span className="text-xl">{icon}</span>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">{label}</p>
-                      <p className="text-xs text-gray-500">{desc}</p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-
             {/* Talent Map */}
             <div className="mb-8">
               <div className="flex flex-col lg:flex-row gap-4 relative h-auto lg:h-[calc(100vh-12rem)]">

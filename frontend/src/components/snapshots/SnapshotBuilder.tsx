@@ -1,7 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+
+type LocSuggestion = { id: string; label: string }
+
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs)
+    return () => clearTimeout(t)
+  }, [value, delayMs])
+  return debounced
+}
 
 const INDUSTRY_OPTIONS = [
   'Technology', 'Finance', 'Healthcare', 'Marketing', 'Sales',
@@ -49,7 +60,40 @@ export default function SnapshotBuilder({ initial, onSaved, onCancel }: Snapshot
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Location autocomplete
+  const [locQuery, setLocQuery] = useState(initial?.location || '')
+  const [locSuggestions, setLocSuggestions] = useState<LocSuggestion[]>([])
+  const [locOpen, setLocOpen] = useState(false)
+  const [locBusy, setLocBusy] = useState(false)
+  const locDebounced = useDebouncedValue(locQuery, 300)
+  const locAbort = useRef<AbortController | null>(null)
+
   const isEdit = !!initial?.id
+
+  useEffect(() => {
+    if (locAbort.current) locAbort.current.abort()
+    if (!locDebounced.trim()) { setLocSuggestions([]); setLocOpen(false); return }
+    const ac = new AbortController()
+    locAbort.current = ac
+    setLocBusy(true)
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
+    if (!token) { setLocBusy(false); return }
+    ;(async () => {
+      try {
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locDebounced)}.json?access_token=${token}&limit=6&types=place,locality,neighborhood,postcode,region`
+        const res = await fetch(url, { signal: ac.signal })
+        if (ac.signal.aborted) return
+        const json: any = await res.json()
+        const feats = Array.isArray(json?.features) ? json.features : []
+        setLocSuggestions(feats.map((f: any) => ({ id: String(f?.id || ''), label: String(f?.place_name || '').trim() })))
+        setLocOpen(true)
+      } catch {
+        // ignore aborts/network errors
+      } finally {
+        if (!ac.signal.aborted) setLocBusy(false)
+      }
+    })()
+  }, [locDebounced])
 
   const set = (field: keyof Snapshot, value: any) =>
     setForm((f) => ({ ...f, [field]: value }))
@@ -178,17 +222,45 @@ export default function SnapshotBuilder({ initial, onSaved, onCancel }: Snapshot
         </div>
 
         {/* Location */}
-        <div>
+        <div className="relative">
           <label className="block text-sm font-medium text-slate-300 mb-1">
             Location <span className="text-slate-500 text-xs">(city / region)</span>
           </label>
           <input
             type="text"
-            value={form.location}
-            onChange={(e) => set('location', e.target.value)}
+            value={locQuery}
+            onChange={(e) => {
+              setLocQuery(e.target.value)
+              set('location', e.target.value)
+            }}
+            onBlur={() => setTimeout(() => setLocOpen(false), 150)}
+            onFocus={() => { if (locSuggestions.length > 0) setLocOpen(true) }}
             placeholder="Dublin, Ireland"
+            autoComplete="off"
             className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500 transition-colors"
           />
+          {locBusy && (
+            <div className="absolute right-3 top-[2.1rem] w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          )}
+          {locOpen && locSuggestions.length > 0 && (
+            <div className="absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-xl shadow-xl overflow-hidden">
+              {locSuggestions.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setLocQuery(s.label)
+                    set('location', s.label)
+                    setLocOpen(false)
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

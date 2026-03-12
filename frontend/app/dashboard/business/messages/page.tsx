@@ -37,41 +37,24 @@ function BusinessMessagesPageInner() {
   const [connectionId, setConnectionId] = useState<string | null>(null)
   const [videoChatLoading, setVideoChatLoading] = useState(false)
   
-  // Load talent name and details when talentId is available
+  // Load talent name and details when talentId is available (use service-role API to bypass RLS)
   useEffect(() => {
     if (!talentId) return
 
     async function loadTalentDetails() {
       try {
-        // Try to get name and title from talent_profiles
-        const { data: talentRes } = await supabase
-          .from('talent_profiles')
-          .select('name, title')
-          .eq('id', talentId)
-          .maybeSingle()
+        const { data: sessionRes } = await supabase.auth.getSession()
+        const token = sessionRes.session?.access_token
+        if (!token) return
 
-        if (talentRes && !('error' in talentRes)) {
-          const name = talentRes.name || talentRes.title || 'Talent'
-          setTalentName(name)
-          if (talentRes.title) {
-            setTalentTitle(talentRes.title)
-          }
-        }
-
-        // Get the connection ID for this talent
-        const businessId = await resolveBusinessId()
-        if (businessId) {
-          const { data: connRes } = await supabase
-            .from('talent_connection_requests')
-            .select('id')
-            .eq('talent_id', talentId)
-            .eq('business_id', businessId)
-            .eq('status', 'accepted')
-            .limit(1)
-            .maybeSingle()
-
-          if (connRes && !('error' in connRes) && connRes.id) {
-            setConnectionId(String(connRes.id))
+        const res = await fetch(`/api/talent/names?talent_id=${encodeURIComponent(talentId!)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.ok) {
+          const { profile } = await res.json()
+          if (profile) {
+            setTalentName(profile.name || profile.title || 'Talent')
+            if (profile.title) setTalentTitle(profile.title)
           }
         }
       } catch (err) {
@@ -163,56 +146,23 @@ function BusinessMessagesPageInner() {
         return
       }
 
-      // Permission gate: must have an accepted connection request
-      const gateRes = await supabase
-        .from('talent_connection_requests')
-        .select('id, status, responded_at')
-        .eq('talent_id', selectedTalentId)
-        .eq('business_id', businessId)
-        .eq('status', 'accepted')
-        .order('responded_at', { ascending: false })
-        .limit(1)
+      const { data: sessionRes } = await supabase.auth.getSession()
+      const token = sessionRes.session?.access_token
+      if (!token) { setError('Please sign in to use Messages.'); return }
 
-      const gate = (gateRes.data || [])[0]
-      if (!gate || gate.status !== 'accepted') {
-        setConversationId(null)
-        setItems([])
-        setError('Connection not accepted. Please accept the connection request first.')
+      const res = await fetch(
+        `/api/messages?talent_id=${encodeURIComponent(selectedTalentId)}&business_id=${encodeURIComponent(businessId)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      const json = await res.json()
+
+      if (!res.ok) {
+        setError(json.error || 'Could not load conversation.')
         return
       }
 
-      const convRes = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('talent_id', selectedTalentId)
-        .eq('business_id', businessId)
-        .maybeSingle()
-
-      if (convRes.error) {
-        setError('Could not load conversation (missing tables or permissions).')
-        return
-      }
-
-      const cid = (convRes.data as any)?.id || null
-      setConversationId(cid)
-
-      if (!cid) {
-        setItems([])
-        return
-      }
-
-      const msgRes = await supabase
-        .from('messages')
-        .select('id, sender_type, body, created_at')
-        .eq('conversation_id', cid)
-        .order('created_at', { ascending: true })
-
-      if (msgRes.error) {
-        setError('Could not load messages (permissions or schema issue).')
-        return
-      }
-
-      setItems((msgRes.data || []) as any)
+      setConversationId(json.conversation_id || null)
+      setItems((json.messages || []) as any)
       refreshConsentStatus(selectedTalentId).catch(() => {})
     } finally {
       setLoading(false)
@@ -226,49 +176,21 @@ function BusinessMessagesPageInner() {
     setError(null)
     try {
       const businessId = await resolveBusinessId()
-      if (!businessId) {
-        setError('Please sign in to use Messages.')
-        return
-      }
-
-      // Permission gate before write: check for accepted connection
-      const gateRes = await supabase
-        .from('talent_connection_requests')
-        .select('id, status')
-        .eq('talent_id', talentId)
-        .eq('business_id', businessId)
-        .eq('status', 'accepted')
-        .limit(1)
-
-      if ((gateRes.data || []).length === 0) {
-        setError('Connection not accepted. Please accept the connection request first.')
-        return
-      }
-
-      let cid = conversationId
-      if (!cid) {
-        cid = await ensureConversation(talentId, businessId)
-        setConversationId(cid)
-      }
-
-      if (!cid) {
-        setError('Could not start conversation.')
-        return
-      }
+      if (!businessId) { setError('Please sign in to use Messages.'); return }
 
       const { data: sessionRes } = await supabase.auth.getSession()
-      const uid = sessionRes.session?.user?.id ?? null
-      if (!uid) {
-        setError('Please sign in to use Messages.')
-        return
-      }
+      const token = sessionRes.session?.access_token
+      if (!token) { setError('Please sign in to use Messages.'); return }
 
-      const insertRes = await supabase
-        .from('messages')
-        .insert({ conversation_id: cid, sender_type: 'business', sender_user_id: uid, body: msg })
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ talent_id: talentId, business_id: businessId, sender_type: 'business', body: msg }),
+      })
+      const json = await res.json()
 
-      if (insertRes.error) {
-        setError('Could not send message (permissions or schema issue).')
+      if (!res.ok) {
+        setError(json.error || 'Could not send message.')
         return
       }
 

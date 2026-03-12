@@ -51,79 +51,26 @@ export default function AdminTalentPage() {
     checkAdmin()
   }, [router])
 
-  async function loadTalent(userId: string) {
+  async function loadTalent(_userId: string) {
     try {
-      // Use Supabase directly with service role key (admin access)
-      // Note: This requires the frontend to have service role key (not recommended for production)
-      // For production, use RLS policies or a backend API
-      
-      // Get all talent profiles
-      let query = supabase
-        .from('talent_profiles')
-        .select('*')
-      
-      // Apply search filter if provided
-      if (searchQuery) {
-        const searchLower = searchQuery.toLowerCase()
-        const { data: allData, error } = await supabase
-          .from('talent_profiles')
-          .select('*')
-        
-        if (error) throw error
-        
-        // Filter in JavaScript since Supabase doesn't support OR easily
-        // Handle various possible column names
-        const filtered = (allData || []).filter((item: any) => {
-          const name = item.name || item.talent_name || item.full_name || item.display_name || ''
-          const email = item.email || ''
-          return name.toLowerCase().includes(searchLower) || email.toLowerCase().includes(searchLower)
-        })
-        
-        // Sort by created_at descending
-        filtered.sort((a: any, b: any) => {
-          const dateA = new Date(a.created_at || 0).getTime()
-          const dateB = new Date(b.created_at || 0).getTime()
-          return dateB - dateA
-        })
-        
-        // Apply pagination
-        const total = filtered.length
-        const paginated = filtered.slice(page * 50, (page + 1) * 50)
-        
-        setTalentList(paginated)
-        setTotalCount(total)
-        return
-      }
-      
-      // No search - get all results first (RLS might limit, so we get all and paginate in JS)
-      const { data: allData, error, count } = await supabase
-        .from('talent_profiles')
-        .select('*', { count: 'exact' })
-      
-      if (error) {
-        console.error('Supabase error:', error)
-        // Check if it's an RLS error
-        if (error.code === '42501' || error.message?.includes('policy') || error.message?.includes('RLS')) {
-          throw new Error('Permission denied. Admin RLS policies may not be set up. Please run admin_rls_policies.sql in Supabase SQL Editor.')
-        }
-        throw error
-      }
-      
-      // Sort and paginate in JavaScript
-      const sorted = (allData || []).sort((a: any, b: any) => {
-        const dateA = new Date(a.created_at || 0).getTime()
-        const dateB = new Date(b.created_at || 0).getTime()
-        return dateB - dateA
+      const { data: sessionRes } = await supabase.auth.getSession()
+      const token = sessionRes.session?.access_token
+      if (!token) throw new Error('Not authenticated')
+
+      const params = new URLSearchParams({ page: String(page) })
+      if (searchQuery) params.set('search', searchQuery)
+
+      const res = await fetch(`/api/admin/talent?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
       })
-      
-      const paginated = sorted.slice(page * 50, (page + 1) * 50)
-      
-      setTalentList(paginated)
-      setTotalCount(count || sorted.length)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to load talent')
+
+      setTalentList(json.talent || [])
+      setTotalCount(json.total || 0)
     } catch (error: any) {
       console.error('Error loading talent:', error)
-      const errorMsg = error?.message || 'Failed to load talent registrations'
-      alert(errorMsg)
+      alert(error?.message || 'Failed to load talent registrations')
     }
   }
 
@@ -135,16 +82,19 @@ export default function AdminTalentPage() {
 
   async function toggleActive(talentId: string, currentStatus: boolean) {
     if (!user) return
-    
     try {
-      const { error } = await supabase
-        .from('talent_profiles')
-        .update({ is_active: !currentStatus })
-        .eq('id', talentId)
+      const { data: sessionRes } = await supabase.auth.getSession()
+      const token = sessionRes.session?.access_token
+      if (!token) throw new Error('Not authenticated')
 
-      if (error) throw error
+      const res = await fetch('/api/admin/talent', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ talent_id: talentId, is_active: !currentStatus }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to update')
 
-      // Reload list
       loadTalent(user.id)
     } catch (error: any) {
       console.error('Error updating talent:', error)

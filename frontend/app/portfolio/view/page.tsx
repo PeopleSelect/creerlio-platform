@@ -318,7 +318,10 @@ function PortfolioViewPageInner() {
         // Determine which user's portfolio to load
         let targetUserId: string | null = null
         let targetTalentId: string | null = null
-        
+        // Declare here so business-view API path can set it, preventing redundant retry logic below
+        let portfolioData: any = null
+        let portfolioError: any = null
+
         if (viewTalentId) {
           // Business is viewing a talent's profile — use service-role API to bypass RLS
           if (!uid) {
@@ -339,14 +342,12 @@ function PortfolioViewPageInner() {
           targetTalentId = String(tProfile.id)
           if (!cancelled) setViewingTalentId(targetTalentId)
 
-          // Use portfolio data returned by the API (fetched with service role)
+          // Set portfolioData so all subsequent retry/verification blocks are skipped
+          portfolioData = tPortfolio || null
           if (!cancelled) setUserId(targetUserId)
           const saved = tPortfolio?.metadata && typeof tPortfolio.metadata === 'object' ? tPortfolio.metadata : null
-          if (saved) {
-            if (!cancelled) setMeta(saved)
-            // Continue to load connection/section data below
-          }
-          // Fall through to connection status check; meta may still be null if no portfolio
+          if (saved && !cancelled) setMeta(saved)
+          // Fall through to connection status check
         } else {
           // User viewing their own portfolio
           if (!uid) {
@@ -366,9 +367,6 @@ function PortfolioViewPageInner() {
         if (!cancelled) setUserId(targetUserId || uid)
 
         // Try to load portfolio from talent_bank_items (own profile only — business view already loaded via API above)
-        let portfolioData = null
-        let portfolioError = null
-
         if (targetUserId && !viewTalentId) {
           console.log('[View Portfolio] Attempting to load portfolio for user_id:', targetUserId, 'talent_id:', viewTalentId)
           
@@ -632,41 +630,44 @@ function PortfolioViewPageInner() {
               }
               
               // Fetch talent name for display in video chat
-              try {
-                const talentNameRes = await supabase
-                  .from('talent_profiles')
-                  .select('name, title')
-                  .eq('id', connReqRes.data.talent_id)
-                  .maybeSingle()
-                
-                if (!talentNameRes.error && talentNameRes.data) {
-                  const name = talentNameRes.data.name || talentNameRes.data.title || 'Talent'
-                  setTalentName(name)
+              // When viewTalentId is set, profile data was already fetched via service-role API above
+              // For non-business views (own portfolio), query directly
+              if (!viewTalentId) {
+                try {
+                  const talentNameRes = await supabase
+                    .from('talent_profiles')
+                    .select('name, title')
+                    .eq('id', connReqRes.data.talent_id)
+                    .maybeSingle()
+
+                  if (!talentNameRes.error && talentNameRes.data) {
+                    const name = talentNameRes.data.name || talentNameRes.data.title || 'Talent'
+                    setTalentName(name)
+                  }
+                } catch (err) {
+                  console.error('[View Portfolio] Error loading talent name:', err)
                 }
-              } catch (err) {
-                console.error('[View Portfolio] Error loading talent name:', err)
               }
-              
+
               // Check if this request was initiated by the current business
               // Use initiated_by field if available, otherwise fall back to checking business_id
               const initiatedBy = connReqRes.data.initiated_by || (connReqRes.data.business_id === currentBusinessId ? 'business' : 'talent')
               if (currentBusinessId && initiatedBy === 'business') {
                 setIsBusinessInitiated(true)
-                
+
                 // Load talent summary for business-initiated requests (like from Business Map)
                 // Check if status is pending (or null/empty, which defaults to pending)
                 const isPending = !connReqRes.data.status || connReqRes.data.status === 'pending'
-                if (isPending) {
+                if (isPending && !viewTalentId) {
                   try {
                     const talentRes = await supabase
                       .from('talent_profiles')
                       .select('id, title, experience_years, skills, city, state, country, search_summary, availability_description')
                       .eq('id', connReqRes.data.talent_id)
                       .maybeSingle()
-                    
+
                     if (!talentRes.error && talentRes.data) {
                       setTalentSummary(talentRes.data)
-                      // Also set talent name from this query if not already set
                       if (!talentName && talentRes.data.title) {
                         setTalentName(talentRes.data.title)
                       }
@@ -1397,20 +1398,41 @@ function PortfolioViewPageInner() {
       }
 
       console.log('[View Portfolio] Loading attachments for user_id:', userId, 'missing IDs:', Array.from(missing))
-      const { data, error } = await supabase
-        .from('talent_bank_items')
-        .select('id,item_type,title,metadata,file_path,file_type,file_url')
-        .eq('user_id', userId)
-        .in('id', missing)
 
-      if (error) {
-        console.error('[View Portfolio] Error loading attachments:', error)
-        // Don't return - try to continue with what we have
+      let attachmentItems: any[] = []
+
+      if (viewingTalentId) {
+        // Business view — use service-role API to bypass RLS
+        try {
+          const { data: sessionData } = await supabase.auth.getSession()
+          const token = sessionData.session?.access_token
+          const res = await fetch('/api/talent/attachments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ talent_id: viewingTalentId, item_ids: Array.from(missing) }),
+          })
+          if (res.ok) {
+            const json = await res.json()
+            attachmentItems = json.items || []
+          }
+        } catch (err) {
+          console.error('[View Portfolio] Error loading attachments via API:', err)
+        }
+      } else {
+        const { data, error } = await supabase
+          .from('talent_bank_items')
+          .select('id,item_type,title,metadata,file_path,file_type,file_url')
+          .eq('user_id', userId)
+          .in('id', missing)
+        if (error) {
+          console.error('[View Portfolio] Error loading attachments:', error)
+        }
+        attachmentItems = data ?? []
       }
 
       if (cancelled) return
       const next: Record<number, any> = {}
-      for (const it of data ?? []) next[(it as any).id] = it
+      for (const it of attachmentItems) next[(it as any).id] = it
       if (Object.keys(next).length) {
         setTbItemCache((prev) => ({ ...prev, ...next }))
       }
@@ -1419,7 +1441,7 @@ function PortfolioViewPageInner() {
     return () => {
       cancelled = true
     }
-  }, [userId, projects, education, experience, referees, personalDocuments, licencesAccreditations, tbItemCache])
+  }, [userId, viewingTalentId, projects, education, experience, referees, personalDocuments, licencesAccreditations, tbItemCache])
 
   function clampStyle(lines = 5) {
     // Reliable 5-line clamp without depending on Tailwind line-clamp utilities/plugins.

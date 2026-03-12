@@ -1952,56 +1952,24 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
       ].map((r) => r.talent_id).filter(Boolean)))
 
       let talentNameMap: Record<string, string> = {}
-      let talentTitleMap: Record<string, string> = {}
 
       if (talentIds.length > 0) {
-        // Batch 1: fetch all talent_profiles at once
-        const profilesRes = await supabase
-          .from('talent_profiles')
-          .select('id, name, title, user_id')
-          .in('id', talentIds)
-
-        const userIdByTalentId: Record<string, string> = {}
-        if (!profilesRes.error && profilesRes.data) {
-          for (const tp of profilesRes.data) {
-            const key = String(tp.id)
-            if (tp.user_id) userIdByTalentId[key] = String(tp.user_id)
-            if (tp.name?.trim()) talentNameMap[key] = tp.name.trim()
-            else if (tp.title?.trim()) talentTitleMap[key] = tp.title.trim()
-          }
-        }
-
-        // Batch 2: for any still-missing names, check talent_bank_items portfolio metadata
-        const stillMissing = talentIds.filter((id) => !talentNameMap[String(id)])
-        if (stillMissing.length > 0) {
-          const userIdsToQuery = stillMissing.map((id) => userIdByTalentId[String(id)] || String(id))
-          const bankRes = await supabase
-            .from('talent_bank_items')
-            .select('user_id, metadata')
-            .in('user_id', userIdsToQuery)
-            .eq('item_type', 'portfolio')
-
-          if (!bankRes.error && bankRes.data) {
-            // Build a reverse map: user_id → talent_id
-            const talentByUserId: Record<string, string> = {}
-            for (const tid of stillMissing) {
-              const uid = userIdByTalentId[String(tid)] || String(tid)
-              talentByUserId[uid] = String(tid)
+        // Use service-role API endpoint to bypass RLS — business users can't read other users' profiles directly
+        const { data: sessionRes } = await supabase.auth.getSession()
+        const accessToken = sessionRes?.session?.access_token
+        if (accessToken) {
+          try {
+            const namesRes = await fetch('/api/talent/names', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+              body: JSON.stringify({ talent_ids: talentIds }),
+            })
+            if (namesRes.ok) {
+              const { names } = await namesRes.json()
+              talentNameMap = names || {}
             }
-            for (const item of bankRes.data) {
-              const talentId = talentByUserId[String(item.user_id)]
-              if (talentId && !talentNameMap[talentId] && item.metadata?.name?.trim()) {
-                talentNameMap[talentId] = String(item.metadata.name).trim()
-              }
-            }
-          }
-        }
-
-        // Fill any remaining gaps from title map
-        for (const id of talentIds) {
-          const key = String(id)
-          if (!talentNameMap[key] && talentTitleMap[key]) {
-            talentNameMap[key] = talentTitleMap[key]
+          } catch (err) {
+            console.error('[Business Connections] Failed to fetch talent names:', err)
           }
         }
       }
@@ -2011,22 +1979,12 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
       const acceptedWithNames = acceptedReqs.map((r) => {
         const talentIdStr = String(r.talent_id)
         const talentName = talentNameMap[talentIdStr]
-        const talentTitle = talentTitleMap[talentIdStr]
-
-        if (!talentName || !talentName.trim()) {
-          console.error('[Business Connections] ✗✗✗ CRITICAL ERROR: Could not find talent name for:', talentIdStr, '- All attempts failed. This should not happen.')
-          // As absolute last resort, try to query portfolio metadata directly one more time
-          // But for now, we'll need to reload connections or show an error
-          // The UI will show "Loading name..." for these cases
-        } else {
-          console.log('[Business Connections] ✓✓✓ Mapping connection with name:', { talentId: talentIdStr, talentName })
-        }
 
         // NEVER use "Talent" as fallback - always show actual name
         return {
           ...r,
           talent_name: (talentName && talentName.trim()) || null, // null will show "Loading name..." in UI
-          talent_title: (talentTitle && talentTitle.trim()) || null
+          talent_title: null
         }
       })
       

@@ -83,29 +83,17 @@ function BusinessMessagesPageInner() {
   }
 
   async function ensureConversation(selectedTalentId: string, businessId: string) {
-    const existingRes = await supabase
-      .from('conversations')
-      .select('id')
-      .eq('talent_id', selectedTalentId)
-      .eq('business_id', businessId)
-      .maybeSingle()
-    if (!existingRes.error && (existingRes.data as any)?.id) return String((existingRes.data as any).id)
-
-    const createRes = await supabase
-      .from('conversations')
-      .insert({ talent_id: selectedTalentId, business_id: businessId })
-      .select('id')
-      .single()
-    if (!createRes.error && (createRes.data as any)?.id) return String((createRes.data as any).id)
-
-    // If insert hit unique constraint, re-fetch
-    const again = await supabase
-      .from('conversations')
-      .select('id')
-      .eq('talent_id', selectedTalentId)
-      .eq('business_id', businessId)
-      .maybeSingle()
-    return (again.data as any)?.id ? String((again.data as any).id) : null
+    // Use service-role API to avoid RLS 403s on conversations table
+    const { data: sessionRes } = await supabase.auth.getSession()
+    const token = sessionRes.session?.access_token
+    if (!token) return null
+    const res = await fetch(
+      `/api/messages?talent_id=${encodeURIComponent(selectedTalentId)}&business_id=${encodeURIComponent(businessId)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    if (!res.ok) return null
+    const json = await res.json()
+    return json.conversation_id || null
   }
 
   async function refreshConsentStatus(selectedTalentId: string) {

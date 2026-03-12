@@ -320,22 +320,33 @@ function PortfolioViewPageInner() {
         let targetTalentId: string | null = null
         
         if (viewTalentId) {
-          // Business is viewing a talent's profile
-          // First, get the user_id from talent_profiles.id
-          const talentRes = await supabase
-            .from('talent_profiles')
-            .select('user_id, id')
-            .eq('id', viewTalentId)
-            .maybeSingle()
-          
-          if (talentRes.error || !talentRes.data) {
-            setError('Talent profile not found.')
+          // Business is viewing a talent's profile — use service-role API to bypass RLS
+          if (!uid) {
+            setError('Please sign in to view talent profiles.')
             return
           }
-          
-          targetUserId = talentRes.data.user_id
-          targetTalentId = String(talentRes.data.id)
+          const accessToken = sessionRes.session?.access_token
+          const apiRes = await fetch(`/api/talent/names?talent_id=${encodeURIComponent(viewTalentId)}`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          })
+          if (!apiRes.ok) {
+            const apiErr = await apiRes.json().catch(() => ({}))
+            setError(apiErr.error || 'Talent profile not found.')
+            return
+          }
+          const { profile: tProfile, portfolio: tPortfolio } = await apiRes.json()
+          targetUserId = tProfile.user_id || viewTalentId
+          targetTalentId = String(tProfile.id)
           if (!cancelled) setViewingTalentId(targetTalentId)
+
+          // Use portfolio data returned by the API (fetched with service role)
+          if (!cancelled) setUserId(targetUserId)
+          const saved = tPortfolio?.metadata && typeof tPortfolio.metadata === 'object' ? tPortfolio.metadata : null
+          if (saved) {
+            if (!cancelled) setMeta(saved)
+            // Continue to load connection/section data below
+          }
+          // Fall through to connection status check; meta may still be null if no portfolio
         } else {
           // User viewing their own portfolio
           if (!uid) {
@@ -354,12 +365,11 @@ function PortfolioViewPageInner() {
         
         if (!cancelled) setUserId(targetUserId || uid)
 
-        // Try to load portfolio from talent_bank_items
-        // Note: user_id in talent_bank_items should match the UUID from talent_profiles.user_id
+        // Try to load portfolio from talent_bank_items (own profile only — business view already loaded via API above)
         let portfolioData = null
         let portfolioError = null
-        
-        if (targetUserId) {
+
+        if (targetUserId && !viewTalentId) {
           console.log('[View Portfolio] Attempting to load portfolio for user_id:', targetUserId, 'talent_id:', viewTalentId)
           
           // Try with UUID string first (Supabase auth format)

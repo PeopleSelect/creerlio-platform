@@ -49,11 +49,25 @@ export default function TalentSnapshotsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [accessToken, setAccessToken] = useState<string | null>(null)
   const [decidingId, setDecidingId] = useState<string | null>(null)
+  const [profileDefaults, setProfileDefaults] = useState<{ location?: string; experience_years?: number }>({})
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { router.push('/login'); return }
       setAccessToken(session.access_token)
+      // Load talent profile to pre-fill snapshot defaults
+      const { data: tp } = await supabase
+        .from('talent_profiles')
+        .select('city, country, experience_years')
+        .eq('id', session.user.id)
+        .maybeSingle()
+      if (tp) {
+        const locParts = [tp.city, tp.country].filter(Boolean)
+        setProfileDefaults({
+          location: locParts.length > 0 ? locParts.join(', ') : undefined,
+          experience_years: tp.experience_years ?? undefined,
+        })
+      }
     })
   }, [router])
 
@@ -215,6 +229,7 @@ export default function TalentSnapshotsPage() {
           <div className="rounded-2xl bg-slate-900 border border-slate-800 p-6 mb-6">
             <h2 className="font-semibold text-white mb-4">Create new snapshot</h2>
             <SnapshotBuilder
+              initial={profileDefaults}
               onSaved={(snap) => {
                 setSnapshots((prev) => [{ ...snap, skills_json: snap.skills ?? [], view_count: 0, search_appearance_count: 0 }, ...prev])
                 setCreating(false)

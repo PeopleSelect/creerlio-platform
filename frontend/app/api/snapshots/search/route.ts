@@ -12,8 +12,10 @@ export async function GET(req: NextRequest) {
     const skills    = searchParams.get('skills')?.trim() || ''
     const industry  = searchParams.get('industry')?.trim() || ''
     const location  = searchParams.get('location')?.trim() || ''
-    const minYears  = parseInt(searchParams.get('min_years') || '0', 10)
-    const maxYears  = parseInt(searchParams.get('max_years') || '99', 10)
+    const minYearsRaw = searchParams.get('min_years')?.trim()
+    const maxYearsRaw = searchParams.get('max_years')?.trim()
+    const minYears  = minYearsRaw ? parseInt(minYearsRaw, 10) : null
+    const maxYears  = maxYearsRaw ? parseInt(maxYearsRaw, 10) : null
     const page      = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
     const limit     = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)))
     const offset    = (page - 1) * limit
@@ -24,10 +26,17 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from('anonymous_snapshots')
       .select('*', { count: 'exact' })
-      .gte('experience_years', isNaN(minYears) ? 0 : minYears)
-      .lte('experience_years', isNaN(maxYears) ? 99 : maxYears)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
+
+    // Only apply experience filter when user explicitly provided values.
+    // Omitting it avoids excluding snapshots where experience_years is NULL.
+    if (minYears !== null && !isNaN(minYears)) {
+      query = query.gte('experience_years', minYears)
+    }
+    if (maxYears !== null && !isNaN(maxYears)) {
+      query = query.lte('experience_years', maxYears)
+    }
 
     // Location filter (case-insensitive partial match)
     if (location) {

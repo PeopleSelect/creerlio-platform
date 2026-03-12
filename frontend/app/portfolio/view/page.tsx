@@ -321,6 +321,8 @@ function PortfolioViewPageInner() {
         // Declare here so business-view API path can set it, preventing redundant retry logic below
         let portfolioData: any = null
         let portfolioError: any = null
+        // Hoisted so video/attachment loading later in load() can reuse it for business views
+        let businessAccessToken: string | null = null
 
         if (viewTalentId) {
           // Business is viewing a talent's profile — use service-role API to bypass RLS
@@ -329,6 +331,7 @@ function PortfolioViewPageInner() {
             return
           }
           const accessToken = sessionRes.session?.access_token
+          businessAccessToken = accessToken || null
           const apiRes = await fetch(`/api/talent/names?talent_id=${encodeURIComponent(viewTalentId)}`, {
             headers: { Authorization: `Bearer ${accessToken}` },
           })
@@ -838,115 +841,53 @@ function PortfolioViewPageInner() {
             }
           }
           
+          // Helper: fetch talent_bank_items via service-role API (business view) or direct Supabase (own view)
+          const fetchTalentBankItems = async (opts: { item_ids?: number[], item_types?: string[], limit?: number }): Promise<any[]> => {
+            if (viewTalentId && businessAccessToken) {
+              try {
+                const res = await fetch('/api/talent/attachments', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${businessAccessToken}` },
+                  body: JSON.stringify({ talent_id: viewTalentId, ...opts }),
+                })
+                if (res.ok) return (await res.json()).items || []
+              } catch { /* fall through */ }
+              return []
+            }
+            // Own view — direct Supabase
+            let q = supabase.from('talent_bank_items').select('id,title,file_path,file_type,item_type,file_url,metadata').eq('user_id', targetUserForFiles)
+            if (opts.item_ids?.length) q = q.in('id', opts.item_ids)
+            if (opts.item_types?.length) q = q.in('item_type', opts.item_types).order('created_at', { ascending: false }).limit(opts.limit ?? 20) as any
+            const { data } = await q
+            return data || []
+          }
+
           if (introId) {
             try {
-              const vidRow = await supabase
-              .from('talent_bank_items')
-              .select('id,title,file_path,file_type,item_type,file_url')
-              .eq('user_id', targetUserForFiles)
-              .eq('id', introId)
-                .maybeSingle()
-              
-              console.log('[View Portfolio] Intro video query result:', { 
-                error: vidRow.error, 
-                data: vidRow.data,
-                targetUserForFiles,
-                introId
-              })
-              
-              if (vidRow.error) {
-                console.error('[View Portfolio] Error loading intro video item:', vidRow.error)
-                // Check if it's a permission/RLS error or not found error
-                const isNotFound = vidRow.error.code === 'PGRST116' || vidRow.error.message?.includes('not found')
-                const isPermissionError = vidRow.error.code === 'PGRST301' || vidRow.error.message?.includes('permission') || vidRow.error.message?.includes('RLS')
-                
-                if (isNotFound || isPermissionError) {
-                  console.log('[View Portfolio] Video not found or permission denied, trying to find by item_type...', { isNotFound, isPermissionError })
-                  const fallbackVid = await supabase
-                    .from('talent_bank_items')
-                    .select('id,title,file_path,file_type,item_type,file_url')
-                    .eq('user_id', targetUserForFiles)
-                    .or('item_type.eq.intro_video,item_type.eq.business_introduction,item_type.eq.video')
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle()
-                  
-                  console.log('[View Portfolio] Fallback video query result:', { error: fallbackVid.error, data: fallbackVid.data })
-                  
-                  if (!fallbackVid.error && fallbackVid.data) {
-                    console.log('[View Portfolio] Found intro video via fallback:', fallbackVid.data)
-                    await loadVideoFromData(fallbackVid.data)
-                    return
-                  } else if (fallbackVid.error) {
-                    console.error('[View Portfolio] Fallback video query also failed:', fallbackVid.error)
-                  }
-                }
-              } else if (vidRow.data) {
-                await loadVideoFromData(vidRow.data)
-              } else if (!cancelled) {
-                setIntroVideoUrl(null)
-                setIntroVideoTitle('Introduction Video (file not found)')
+              const items = await fetchTalentBankItems({ item_ids: [introId] })
+              const vidRow = items[0] || null
+              if (vidRow) {
+                await loadVideoFromData(vidRow)
+              } else {
+                // Fallback: search by item_type
+                const fallbackItems = await fetchTalentBankItems({ item_types: ['intro_video', 'business_introduction', 'video'], limit: 1 })
+                if (fallbackItems[0]) await loadVideoFromData(fallbackItems[0])
+                else if (!cancelled) { setIntroVideoUrl(null); setIntroVideoTitle('Introduction Video (file not found)') }
               }
             } catch (err) {
               console.error('[View Portfolio] Error loading intro video:', err)
-              if (!cancelled) {
-                setIntroVideoUrl(null)
-                setIntroVideoTitle('Introduction Video (file not found)')
-              }
+              if (!cancelled) { setIntroVideoUrl(null); setIntroVideoTitle('Introduction Video (file not found)') }
             }
-            } else {
+          } else {
             // No intro video ID in metadata - try to find any intro video
-            console.log('[View Portfolio] No introVideoId in metadata, searching for intro video...', {
-              targetUserForFiles,
-              viewTalentId,
-              requestId
-            })
             try {
-              // Try multiple item_type values that might contain intro videos
-              const fallbackVid = await supabase
-                .from('talent_bank_items')
-                .select('id,title,file_path,file_type,item_type,file_url')
-                .eq('user_id', targetUserForFiles)
-                .in('item_type', ['intro_video', 'business_introduction', 'video'])
-                .order('created_at', { ascending: false })
-                .limit(5)
-              
-              console.log('[View Portfolio] Fallback video search result:', { 
-                error: fallbackVid.error, 
-                data: fallbackVid.data,
-                count: fallbackVid.data?.length || 0
-              })
-              
-              // Find the first video item (not portfolio metadata)
-              const videoItem = fallbackVid.data?.find((item: any) => 
-                item.item_type !== 'portfolio' && (item.file_path || item.file_url)
-              )
-              
-              if (videoItem) {
-                console.log('[View Portfolio] Found video item in fallback search:', videoItem)
-                await loadVideoFromData(videoItem)
-              } else if (!fallbackVid.error && fallbackVid.data && fallbackVid.data.length > 0) {
-                // If we found items but no video, log what we found
-                console.log('[View Portfolio] Found items but no video:', fallbackVid.data.map((i: any) => ({
-                  id: i.id,
-                  item_type: i.item_type,
-                  has_file_path: !!i.file_path,
-                  has_file_url: !!i.file_url
-                })))
-                if (!cancelled) {
-                  setIntroVideoUrl(null)
-                  setIntroVideoTitle(null)
-                }
-              } else if (!cancelled) {
-                setIntroVideoUrl(null)
-                setIntroVideoTitle(null)
-              }
+              const fallbackItems = await fetchTalentBankItems({ item_types: ['intro_video', 'business_introduction', 'video'], limit: 5 })
+              const videoItem = fallbackItems.find((item: any) => item.item_type !== 'portfolio' && (item.file_path || item.file_url))
+              if (videoItem) await loadVideoFromData(videoItem)
+              else if (!cancelled) { setIntroVideoUrl(null); setIntroVideoTitle(null) }
             } catch (err) {
               console.error('[View Portfolio] Error searching for intro video:', err)
-              if (!cancelled) {
-                setIntroVideoUrl(null)
-                setIntroVideoTitle(null)
-              }
+              if (!cancelled) { setIntroVideoUrl(null); setIntroVideoTitle(null) }
             }
           }
         }
@@ -956,22 +897,33 @@ function PortfolioViewPageInner() {
         if (saved && portfolioData && targetUserForFiles && !introVideoUrl) {
           const selections: number[] = Array.isArray(saved?.portfolioSelections) ? saved.portfolioSelections : []
           if (selections.length) {
-            const { data: selItems, error: selErr } = await supabase
-              .from('talent_bank_items')
-              .select('id,title,file_path,file_type')
-              .eq('user_id', targetUserForFiles)
-              .in('id', selections)
+            let selItems: any[] = []
+            if (viewTalentId && businessAccessToken) {
+              try {
+                const res = await fetch('/api/talent/attachments', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${businessAccessToken}` },
+                  body: JSON.stringify({ talent_id: viewTalentId, item_ids: selections }),
+                })
+                if (res.ok) selItems = (await res.json()).items || []
+              } catch { /* ignore */ }
+            } else {
+              const { data } = await supabase
+                .from('talent_bank_items')
+                .select('id,title,file_path,file_type')
+                .eq('user_id', targetUserForFiles)
+                .in('id', selections)
+              selItems = data || []
+            }
 
-            if (!selErr && Array.isArray(selItems)) {
-              const firstVideo = selItems.find(
-                (it: any) => it?.file_path && (it?.file_type?.startsWith?.('video') ?? false)
-              )
-              if (firstVideo?.file_path) {
-                const url = await signedUrl(String(firstVideo.file_path), 60 * 30, !!viewTalentId)
-                if (!cancelled) {
-                  setIntroVideoUrl(url)
-                  setIntroVideoTitle(firstVideo.title || 'Introduction Video')
-                }
+            const firstVideo = selItems.find(
+              (it: any) => it?.file_path && (it?.file_type?.startsWith?.('video') ?? false)
+            )
+            if (firstVideo?.file_path) {
+              const url = await signedUrl(String(firstVideo.file_path), 60 * 30, !!viewTalentId)
+              if (!cancelled) {
+                setIntroVideoUrl(url)
+                setIntroVideoTitle(firstVideo.title || 'Introduction Video')
               }
             }
           }

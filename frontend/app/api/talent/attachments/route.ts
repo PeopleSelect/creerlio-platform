@@ -2,9 +2,11 @@ export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/talent/attachments
- * Batch-fetch talent bank attachment items by ID, using service role to bypass RLS.
+ * Batch-fetch talent bank items using service role to bypass RLS.
  * Caller must be authenticated. Intended for business users viewing connected talent portfolios.
- * Body: { talent_id: string, item_ids: number[] }
+ * Body: { talent_id: string, item_ids?: number[], item_types?: string[], limit?: number }
+ *   - item_ids: fetch specific items by ID
+ *   - item_types: fetch items matching any of the given item_type values
  * Returns: { items: TalentBankItem[] }
  */
 
@@ -23,11 +25,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const talentId = String(body?.talent_id || '').trim()
     const itemIds: number[] = (body?.item_ids || []).map(Number).filter((n: number) => Number.isFinite(n) && n > 0)
+    const itemTypes: string[] = (body?.item_types || []).map(String).filter(Boolean)
+    const limit: number = Math.min(Number(body?.limit) || 20, 100)
 
     if (!talentId) {
       return NextResponse.json({ error: 'talent_id is required' }, { status: 400 })
     }
-    if (itemIds.length === 0) {
+    if (itemIds.length === 0 && itemTypes.length === 0) {
       return NextResponse.json({ items: [] })
     }
 
@@ -42,11 +46,20 @@ export async function POST(request: NextRequest) {
 
     const targetUserId = profile?.user_id || talentId
 
-    const { data: items, error } = await supabase
+    let query = supabase
       .from('talent_bank_items')
       .select('id,item_type,title,metadata,file_path,file_type,file_url')
       .eq('user_id', targetUserId)
-      .in('id', itemIds)
+
+    if (itemIds.length > 0) {
+      query = query.in('id', itemIds)
+    }
+    if (itemTypes.length > 0) {
+      query = query.in('item_type', itemTypes)
+      query = (query as any).order('created_at', { ascending: false }).limit(limit)
+    }
+
+    const { data: items, error } = await query
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })

@@ -183,8 +183,7 @@ export default function BusinessDashboard() {
   const [connAccepted, setConnAccepted] = useState<any[]>([])
   const [connDeclined, setConnDeclined] = useState<any[]>([])
   const [connWithdrawn, setConnWithdrawn] = useState<any[]>([]) // Previous connections - talents who withdrew
-  const [hasReloadedForMissingNames, setHasReloadedForMissingNames] = useState(false)
-  const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null) // Track which talent is being sent an opportunity
+const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null) // Track which talent is being sent an opportunity
   const [acceptingReconnect, setAcceptingReconnect] = useState<string | null>(null) // Track which reconnection is being accepted
   const [reconnectModal, setReconnectModal] = useState<{ open: boolean; connection: any | null; message: string }>({
     open: false,
@@ -1840,29 +1839,6 @@ export default function BusinessDashboard() {
     // Debug logging disabled
   }, [activeTab])
 
-  // Auto-reload connections if any are missing names (only once to avoid infinite loops)
-  useEffect(() => {
-    if (connAccepted.length > 0 && !hasReloadedForMissingNames && !connLoading) {
-      const missingNames = connAccepted.filter(r => !r.talent_name || !r.talent_name.trim())
-      if (missingNames.length > 0) {
-        console.log('[Business Connections] Auto-reloading connections with missing names:', missingNames.length)
-        setHasReloadedForMissingNames(true)
-        // Delay reload slightly to avoid rapid re-renders
-        const timer = setTimeout(() => {
-          loadConnections().then(() => {
-            // Reset the flag after reload completes
-            setTimeout(() => setHasReloadedForMissingNames(false), 3000)
-          })
-        }, 2000)
-        return () => clearTimeout(timer)
-      } else {
-        // All connections have names, reset the flag
-        if (hasReloadedForMissingNames) {
-          setHasReloadedForMissingNames(false)
-        }
-      }
-    }
-  }, [connAccepted, hasReloadedForMissingNames, connLoading])
 
   useEffect(() => {
     if (activeTab !== 'vacancies') return
@@ -1965,9 +1941,7 @@ export default function BusinessDashboard() {
       // Previous connections - talents who withdrew/discontinued their connection
       const withdrawnReqs = reqs.filter((r) => r.status === 'discontinued')
 
-      // Fetch talent names for all connections (pending, accepted, withdrawn)
-      // Priority: portfolio metadata (most reliable) > talent_profiles.name > talent_profiles.title > API route
-      // talent_id in talent_connection_requests references talent_profiles(id)
+      // Batch-fetch talent names — single query per source instead of N×6 sequential queries
       const talentIds = Array.from(new Set([
         ...pendingFromTalent,
         ...pendingFromBusiness,
@@ -1976,207 +1950,60 @@ export default function BusinessDashboard() {
         ...declinedReqs,
         ...withdrawnReqs
       ].map((r) => r.talent_id).filter(Boolean)))
-      console.log('[Business Connections] Fetching talent names for IDs:', talentIds)
+
       let talentNameMap: Record<string, string> = {}
       let talentTitleMap: Record<string, string> = {}
-      
+
       if (talentIds.length > 0) {
-        // Get access token for API calls
-        const { data: sessionRes } = await supabase.auth.getSession()
-        const accessToken = sessionRes?.session?.access_token || null
-        
-        for (const talentId of talentIds) {
-          const talentIdStr = String(talentId)
-          console.log('[Business Connections] Querying talent name for ID:', talentIdStr)
-          let foundName = false
-          let userId: string | null = null
-          
-          // Step 1: Query talent_profiles to get user_id (needed for portfolio query)
-          const res = await supabase
-            .from('talent_profiles')
-            .select('id, name, title, user_id')
-            .eq('id', talentIdStr)
-            .maybeSingle()
-          
-          if (!res.error && res.data) {
-            userId = res.data.user_id || null
+        // Batch 1: fetch all talent_profiles at once
+        const profilesRes = await supabase
+          .from('talent_profiles')
+          .select('id, name, title, user_id')
+          .in('id', talentIds)
 
-            // Store the title/role if available
-            if (res.data.title && String(res.data.title).trim()) {
-              talentTitleMap[talentIdStr] = String(res.data.title).trim()
-            }
-
-            // Try name from talent_profiles (but portfolio metadata is more reliable)
-            if (res.data.name && String(res.data.name).trim()) {
-              const name = String(res.data.name).trim()
-              console.log('[Business Connections] Found name in talent_profiles (will check portfolio first):', { id: talentIdStr, name })
-            }
-          }
-          
-          // Step 2: ALWAYS check portfolio metadata FIRST (most reliable - this is what talent sets when building portfolio)
-          // Try both user_id (from talent_profiles) and talent_id (in case they're the same)
-          const userIdsToTry = userId && userId !== talentIdStr ? [userId, talentIdStr] : [talentIdStr]
-          for (const uid of userIdsToTry) {
-            if (foundName) break
-            
-            console.log('[Business Connections] Checking portfolio metadata for user_id:', uid)
-            // Use limit(1) to handle multiple portfolio items (shouldn't happen but just in case)
-            const resBank = await supabase
-              .from('talent_bank_items')
-              .select('metadata')
-              .eq('user_id', uid)
-              .eq('item_type', 'portfolio')
-              .limit(1)
-              .maybeSingle()
-            
-            if (!resBank.error && resBank.data?.metadata?.name) {
-              const metaName = String(resBank.data.metadata.name).trim()
-              if (metaName) {
-                talentNameMap[talentIdStr] = metaName
-                foundName = true
-                console.log('[Business Connections] ✓✓✓ Found talent name from portfolio metadata:', { id: talentIdStr, user_id: uid, name: metaName })
-                break
-              }
-            } else if (resBank.error && !resBank.error.message.includes('JSON object requested')) {
-              // Ignore "multiple rows" error, just log other errors
-              console.warn('[Business Connections] Portfolio metadata query error for user_id:', uid, resBank.error.message)
-            }
-          }
-          
-          // Step 3: If portfolio metadata not found, try talent_profiles.name or title
-          if (!foundName && res.data) {
-            // Try name first (preferred)
-            if (res.data.name && String(res.data.name).trim()) {
-              const name = String(res.data.name).trim()
-              talentNameMap[talentIdStr] = name
-              foundName = true
-              console.log('[Business Connections] ✓✓✓ Found talent name from talent_profiles.name:', { id: talentIdStr, name })
-            } 
-            // Try title as fallback (less preferred but better than nothing)
-            else if (res.data.title && String(res.data.title).trim()) {
-              const titleName = String(res.data.title).trim()
-              talentNameMap[talentIdStr] = titleName
-              foundName = true
-              console.log('[Business Connections] ✓✓✓ Using talent_profiles.title as name:', { id: talentIdStr, name: titleName })
-            }
-          }
-          
-          // Step 4: If still not found and talent_profiles query failed, try portfolio metadata with talent_id directly
-          if (!foundName && (res.error || !res.data)) {
-            console.warn('[Business Connections] talent_profiles query failed, trying portfolio metadata with talent_id directly:', talentIdStr)
-            const resBankDirect = await supabase
-              .from('talent_bank_items')
-              .select('metadata')
-              .eq('user_id', talentIdStr)
-              .eq('item_type', 'portfolio')
-              .limit(1)
-              .maybeSingle()
-            
-            if (!resBankDirect.error && resBankDirect.data?.metadata?.name) {
-              const metaName = String(resBankDirect.data.metadata.name).trim()
-              if (metaName) {
-                talentNameMap[talentIdStr] = metaName
-                foundName = true
-                console.log('[Business Connections] ✓✓✓ Found talent name from portfolio metadata (direct query):', { id: talentIdStr, name: metaName })
-              }
-            }
-          }
-          
-          // Step 5: If still not found, try querying all portfolio items and finding one with name
-          if (!foundName) {
-            console.log('[Business Connections] Trying to find name from any portfolio item for user_id:', userId || talentIdStr)
-            const resBankAll = await supabase
-              .from('talent_bank_items')
-              .select('metadata')
-              .eq('user_id', userId || talentIdStr)
-              .eq('item_type', 'portfolio')
-              .limit(10) // Get up to 10 portfolio items
-            
-            if (!resBankAll.error && resBankAll.data && resBankAll.data.length > 0) {
-              // Find first item with a name in metadata
-              for (const item of resBankAll.data) {
-                if (item.metadata?.name && String(item.metadata.name).trim()) {
-                  const metaName = String(item.metadata.name).trim()
-                  talentNameMap[talentIdStr] = metaName
-                  foundName = true
-                  console.log('[Business Connections] ✓✓✓ Found talent name from portfolio metadata (multiple items query):', { id: talentIdStr, name: metaName })
-                  break
-                }
-              }
-            }
-          }
-          
-          if (!foundName) {
-            console.warn('[Business Connections] ⚠ Could not find talent name from direct queries for:', talentIdStr)
+        const userIdByTalentId: Record<string, string> = {}
+        if (!profilesRes.error && profilesRes.data) {
+          for (const tp of profilesRes.data) {
+            const key = String(tp.id)
+            if (tp.user_id) userIdByTalentId[key] = String(tp.user_id)
+            if (tp.name?.trim()) talentNameMap[key] = tp.name.trim()
+            else if (tp.title?.trim()) talentTitleMap[key] = tp.title.trim()
           }
         }
-        
-        // Step 5: For any still missing names, try API route as final fallback (within the loop scope)
-        const missingNamesInLoop = talentIds.filter(id => !talentNameMap[String(id)])
-        if (missingNamesInLoop.length > 0 && accessToken) {
-          console.log('[Business Connections] Trying API route for missing names (within loop):', missingNamesInLoop)
-          for (const talentId of missingNamesInLoop) {
-            const talentIdStr = String(talentId)
-            try {
-              const apiRes = await fetch(`/api/talent/name?talent_id=${encodeURIComponent(talentIdStr)}`, {
-                headers: {
-                  'Authorization': `Bearer ${accessToken}`,
-                },
-              })
-              
-              if (apiRes.ok) {
-                const data = await apiRes.json()
-                if (data.name && String(data.name).trim()) {
-                  talentNameMap[talentIdStr] = String(data.name).trim()
-                  console.log('[Business Connections] ✓ Found talent name via API route:', { id: talentIdStr, name: data.name })
-                }
-              } else if (apiRes.status === 404) {
-                console.warn('[Business Connections] API route returned 404 for:', talentIdStr, '- Name not found or route issue')
+
+        // Batch 2: for any still-missing names, check talent_bank_items portfolio metadata
+        const stillMissing = talentIds.filter((id) => !talentNameMap[String(id)])
+        if (stillMissing.length > 0) {
+          const userIdsToQuery = stillMissing.map((id) => userIdByTalentId[String(id)] || String(id))
+          const bankRes = await supabase
+            .from('talent_bank_items')
+            .select('user_id, metadata')
+            .in('user_id', userIdsToQuery)
+            .eq('item_type', 'portfolio')
+
+          if (!bankRes.error && bankRes.data) {
+            // Build a reverse map: user_id → talent_id
+            const talentByUserId: Record<string, string> = {}
+            for (const tid of stillMissing) {
+              const uid = userIdByTalentId[String(tid)] || String(tid)
+              talentByUserId[uid] = String(tid)
+            }
+            for (const item of bankRes.data) {
+              const talentId = talentByUserId[String(item.user_id)]
+              if (talentId && !talentNameMap[talentId] && item.metadata?.name?.trim()) {
+                talentNameMap[talentId] = String(item.metadata.name).trim()
               }
-            } catch (apiErr) {
-              console.warn('[Business Connections] API route error for:', talentIdStr, apiErr)
             }
           }
         }
-      }
-      
-      // Final API route attempt for any still missing names (before mapping)
-      // Get access token again in case it's out of scope
-      const { data: finalSessionRes } = await supabase.auth.getSession()
-      const finalAccessToken = finalSessionRes?.session?.access_token || null
-      const missingNames = talentIds.filter(id => !talentNameMap[String(id)])
-      if (missingNames.length > 0 && finalAccessToken) {
-        console.log('[Business Connections] Making final API call for missing names:', missingNames)
-        const namePromises = missingNames.map(async (talentId) => {
-          const talentIdStr = String(talentId)
-          try {
-            const apiRes = await fetch(`/api/talent/name?talent_id=${encodeURIComponent(talentIdStr)}`, {
-              headers: {
-                'Authorization': `Bearer ${finalAccessToken}`,
-              },
-            })
-            
-            if (apiRes.ok) {
-              const data = await apiRes.json()
-              if (data.name && String(data.name).trim()) {
-                return { talentIdStr, name: String(data.name).trim() }
-              }
-            } else if (apiRes.status === 404) {
-              console.warn('[Business Connections] API route not found (404) - route may not exist yet for:', talentIdStr)
-            }
-          } catch (apiErr) {
-            console.warn('[Business Connections] Final API route error for:', talentIdStr, apiErr)
+
+        // Fill any remaining gaps from title map
+        for (const id of talentIds) {
+          const key = String(id)
+          if (!talentNameMap[key] && talentTitleMap[key]) {
+            talentNameMap[key] = talentTitleMap[key]
           }
-          return null
-        })
-        
-        const nameResults = await Promise.all(namePromises)
-        nameResults.forEach(result => {
-          if (result) {
-            talentNameMap[result.talentIdStr] = result.name
-            console.log('[Business Connections] ✓✓✓ Found talent name via final API call:', { id: result.talentIdStr, name: result.name })
-          }
-        })
+        }
       }
       
       // Add talent names to accepted connections - NEVER use "Talent" as fallback

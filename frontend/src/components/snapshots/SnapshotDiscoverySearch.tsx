@@ -84,14 +84,27 @@ export default function SnapshotDiscoverySearch() {
     [buildQuery]
   )
 
-  // Auto-search on filter change (debounced)
+  const hasActiveFilters =
+    filters.skills.trim() !== '' ||
+    filters.location.trim() !== '' ||
+    filters.min_years !== '' ||
+    filters.max_years !== '' ||
+    selectedIndustries.length > 0
+
+  // Auto-search on filter change (debounced) — only when at least one filter is set
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!hasActiveFilters) {
+      setResults([])
+      setTotal(null)
+      setSearched(false)
+      return
+    }
     debounceRef.current = setTimeout(() => {
       search(1)
     }, 400)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [filters, selectedIndustries, search])
+  }, [filters, selectedIndustries, search, hasActiveFilters])
 
   const hasMore = total !== null && results.length < total
 
@@ -201,8 +214,21 @@ export default function SnapshotDiscoverySearch() {
         </div>
       )}
 
-      {/* Empty state */}
-      {!loading && searched && results.length === 0 && (
+      {/* Prompt when no filters entered */}
+      {!hasActiveFilters && (
+        <div className="text-center py-12 rounded-2xl bg-slate-900 border border-slate-800">
+          <div className="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <p className="text-slate-400 font-medium">Start your search</p>
+          <p className="text-slate-600 text-sm mt-1">Enter a skill, location, or industry to find anonymous candidates</p>
+        </div>
+      )}
+
+      {/* Empty state — filters active but no results */}
+      {!loading && searched && hasActiveFilters && results.length === 0 && (
         <div className="text-center py-12 rounded-2xl bg-slate-900 border border-slate-800">
           <div className="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center mx-auto mb-4">
             <svg className="w-7 h-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">

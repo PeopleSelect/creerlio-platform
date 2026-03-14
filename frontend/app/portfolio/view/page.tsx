@@ -352,12 +352,31 @@ function PortfolioViewPageInner() {
           if (saved && !cancelled) setMeta(saved)
           // Fall through to connection status check
         } else {
-          // User viewing their own portfolio
+          // Talent viewing their own portfolio — use service-role API to avoid RLS issues on users table
           if (!uid) {
             setError('Please sign in to view your portfolio.')
             return
           }
-          targetUserId = uid
+          const accessToken = sessionRes.session?.access_token
+          businessAccessToken = accessToken || null
+          const ownApiRes = await fetch(`/api/talent/names?talent_id=${encodeURIComponent(uid)}`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          })
+          if (ownApiRes.ok) {
+            const { profile: ownProfile, portfolio: ownPortfolio } = await ownApiRes.json()
+            if (ownProfile) {
+              targetUserId = ownProfile.user_id || uid
+              targetTalentId = String(ownProfile.id)
+              portfolioData = ownPortfolio || null
+              if (!cancelled) setUserId(targetUserId)
+              const saved = ownPortfolio?.metadata && typeof ownPortfolio.metadata === 'object' ? ownPortfolio.metadata : null
+              if (saved && !cancelled) setMeta(saved)
+            } else {
+              targetUserId = uid
+            }
+          } else {
+            targetUserId = uid
+          }
         }
         
         // For business viewing talent profile, we still need to be authenticated (as business)
@@ -369,8 +388,8 @@ function PortfolioViewPageInner() {
         
         if (!cancelled) setUserId(targetUserId || uid)
 
-        // Try to load portfolio from talent_bank_items (own profile only — business view already loaded via API above)
-        if (targetUserId && !viewTalentId) {
+        // Try to load portfolio from talent_bank_items (fallback only — both paths now use API above)
+        if (targetUserId && !viewTalentId && !portfolioData) {
           console.log('[View Portfolio] Attempting to load portfolio for user_id:', targetUserId, 'talent_id:', viewTalentId)
           
           // Try with UUID string first (Supabase auth format)

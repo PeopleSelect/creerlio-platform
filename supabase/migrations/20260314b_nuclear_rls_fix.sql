@@ -76,10 +76,10 @@ ALTER TABLE public.talent_snapshots ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.talent_snapshots TO authenticated;
 GRANT SELECT ON public.talent_snapshots TO anon;
 
-CREATE POLICY "ts_select_own"    ON public.talent_snapshots FOR SELECT TO authenticated USING (talent_profile_id::text = auth.uid()::text);
-CREATE POLICY "ts_insert_own"    ON public.talent_snapshots FOR INSERT TO authenticated WITH CHECK (talent_profile_id::text = auth.uid()::text);
-CREATE POLICY "ts_update_own"    ON public.talent_snapshots FOR UPDATE TO authenticated USING (talent_profile_id::text = auth.uid()::text) WITH CHECK (talent_profile_id::text = auth.uid()::text);
-CREATE POLICY "ts_delete_own"    ON public.talent_snapshots FOR DELETE TO authenticated USING (talent_profile_id::text = auth.uid()::text);
+CREATE POLICY "ts_select_own"    ON public.talent_snapshots FOR SELECT TO authenticated USING (talent_id::text = auth.uid()::text);
+CREATE POLICY "ts_insert_own"    ON public.talent_snapshots FOR INSERT TO authenticated WITH CHECK (talent_id::text = auth.uid()::text);
+CREATE POLICY "ts_update_own"    ON public.talent_snapshots FOR UPDATE TO authenticated USING (talent_id::text = auth.uid()::text) WITH CHECK (talent_id::text = auth.uid()::text);
+CREATE POLICY "ts_delete_own"    ON public.talent_snapshots FOR DELETE TO authenticated USING (talent_id::text = auth.uid()::text);
 
 -- ============================================================
 -- Grant on public.users (belt-and-suspenders)

@@ -67,6 +67,14 @@ export interface BusinessProfilePageData {
 
   acknowledgement_of_country?: string | null
 
+  // Public discovery fields
+  hiring_interests?: string[]
+  industries_served?: string[]
+  contact_email?: string | null
+  website_url?: string | null
+  enquiry_enabled?: boolean
+  badges?: string[]
+
   // FUTURE-READY HOOKS (stubs only)
   // AI_MATCH_SCORE
   // TALENT_RECOMMENDATIONS

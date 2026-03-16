@@ -1,14 +1,17 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { Search } from 'lucide-react'
 
 export default function HomePage() {
   const router = useRouter()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [searchQ, setSearchQ] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -55,6 +58,7 @@ export default function HomePage() {
             <nav className="hidden lg:flex items-center gap-x-8 text-sm text-gray-600">
               <Link href="/talent" className="hover:text-blue-600 transition-colors">Talent</Link>
               <Link href="/business" className="hover:text-blue-600 transition-colors">Business</Link>
+              <Link href="/businesses" className="hover:text-blue-600 transition-colors">Find Businesses</Link>
               <Link href="/search" className="hover:text-blue-600 transition-colors">Search</Link>
               {isAdmin && (
                 <Link href="/admin" className="hover:text-blue-600 transition-colors">
@@ -108,6 +112,52 @@ export default function HomePage() {
           />
           <div className="absolute inset-0 bg-transparent" />
           <div className="relative max-w-7xl mx-auto px-6 sm:px-8 py-20 sm:py-24 lg:py-28" />
+        </section>
+
+        {/* Business Search */}
+        <section className="w-full bg-white border-b border-gray-100">
+          <div className="max-w-4xl mx-auto px-6 sm:px-8 py-12 text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Find Businesses on Creerlio</h2>
+            <p className="text-gray-500 mb-6 text-sm">Search law firms, agencies, studios, and more by name, industry, or location.</p>
+            <form
+              onSubmit={e => {
+                e.preventDefault()
+                const q = searchQ.trim()
+                router.push(`/businesses${q ? `?q=${encodeURIComponent(q)}` : ''}`)
+              }}
+              className="flex items-center gap-2 max-w-lg mx-auto"
+            >
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={searchQ}
+                  onChange={e => setSearchQ(e.target.value)}
+                  placeholder="e.g. Law firm, Marketing agency, Accountant Sydney…"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 py-3 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <button
+                type="submit"
+                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+              >
+                Search
+              </button>
+            </form>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {['Law firm', 'Marketing agency', 'Software company', 'Recruitment agency'].map(ex => (
+                <button
+                  key={ex}
+                  type="button"
+                  onClick={() => router.push(`/businesses?q=${encodeURIComponent(ex)}`)}
+                  className="rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* Engagement and Relationships */}
@@ -309,10 +359,16 @@ export default function HomePage() {
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Start with intent</h2>
               <div className="flex flex-wrap gap-4">
                 <Link
+                  href="/businesses"
+                  className="px-6 py-3 rounded-xl bg-[#2B4EA2] hover:bg-[#243F86] text-white font-semibold transition-colors"
+                >
+                  Find Businesses
+                </Link>
+                <Link
                   href="/search"
                   className="px-6 py-3 rounded-xl bg-[#2B4EA2] hover:bg-[#243F86] text-white font-semibold transition-colors"
                 >
-                  Search Businesses or Jobs
+                  Search Jobs
                 </Link>
                 <Link
                   href="/login/talent?mode=signup&redirect=/dashboard/talent"

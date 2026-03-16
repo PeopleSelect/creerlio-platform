@@ -6,7 +6,6 @@ import { useState, useEffect, useRef, useId } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import { Search, MapPin, Building2, ArrowRight, Loader2, X } from 'lucide-react'
-import { INDUSTRY_OPTIONS } from '@/constants/industries'
 
 interface BusinessResult {
   slug: string
@@ -33,14 +32,22 @@ interface LocSuggestion {
 function IndustryCombobox({
   value, onChange,
 }: { value: string; onChange: (v: string) => void }) {
-  const listId                  = useId()
-  const [query, setQuery]       = useState(value)
-  const [open, setOpen]         = useState(false)
+  const listId                    = useId()
+  const [query, setQuery]         = useState(value)
+  const [open, setOpen]           = useState(false)
   const [activeIdx, setActiveIdx] = useState(0)
+  const [options, setOptions]     = useState<string[]>([])
+
+  useEffect(() => {
+    fetch('/api/taxonomy/industries')
+      .then(r => r.json())
+      .then(j => setOptions((j.industries || []).map((i: { name: string }) => i.name)))
+      .catch(() => {})
+  }, [])
 
   const filtered = query.trim()
-    ? INDUSTRY_OPTIONS.filter(o => o.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
-    : INDUSTRY_OPTIONS.slice(0, 8)
+    ? options.filter(o => o.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
+    : options.slice(0, 8)
 
   useEffect(() => { setQuery(value) }, [value])
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAnonServer, supabaseServiceServer } from '@/lib/supabaseServer'
+import { createClient } from '@supabase/supabase-js'
 
 // GET /api/businesses/search?q=...&industry=...&location=...&limit=20&offset=0
 // Public endpoint — returns BUSINESSES ONLY. Talent profiles are never included.
@@ -11,19 +11,21 @@ export async function GET(req: NextRequest) {
   const limit    = Math.min(Number(searchParams.get('limit') || 20), 50)
   const offset   = Math.max(Number(searchParams.get('offset') || 0), 0)
 
-  // Public search — use anon client (matches public RLS on business_profile_pages)
-  // Falls back to service role if anon key missing
-  let svc: ReturnType<typeof supabaseAnonServer>
-  try {
-    svc = supabaseAnonServer()
-  } catch {
-    svc = supabaseServiceServer()
+  // Build client inline — avoids any module-level env resolution issues
+  const url     = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const svcKey  = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!url || (!anonKey && !svcKey)) {
+    return NextResponse.json({ businesses: [], total: 0, _debug: 'missing supabase env' }, { status: 500 })
   }
 
-  // Step 1: Fetch all published business pages (no joins — maximally reliable)
+  const svc = createClient(url, svcKey || anonKey!, { auth: { persistSession: false } })
+
+  // Step 1: Fetch all published business pages
   let pagesQuery = svc
     .from('business_profile_pages')
-    .select('business_id, slug, name, tagline, logo_url, industries_served, hiring_interests, badges, website_url, contact_email, enquiry_enabled')
+    .select('business_id, slug, name, tagline, logo_url, industries_served, badges, website_url, contact_email, enquiry_enabled')
     .eq('is_published', true)
     .order('name')
     .limit(500)
@@ -34,16 +36,20 @@ export async function GET(req: NextRequest) {
 
   const { data: pages, error: pagesError } = await pagesQuery
 
-  if (pagesError || !pages || pages.length === 0) {
-    return NextResponse.json({ businesses: [], total: 0, _debug: pagesError?.message })
+  if (pagesError) {
+    return NextResponse.json({ businesses: [], total: 0, _debug: `pages error: ${pagesError.message}` })
   }
 
-  // Step 2: Fetch business_profiles for enrichment (location + industry)
+  if (!pages || pages.length === 0) {
+    return NextResponse.json({ businesses: [], total: 0, _debug: 'no published pages found' })
+  }
+
+  // Step 2: Fetch business_profiles for enrichment
   const businessIds = pages.map((p: any) => p.business_id).filter(Boolean)
   const { data: profiles } = businessIds.length > 0
     ? await svc
         .from('business_profiles')
-        .select('id, city, state, country, location, website, description, industry, business_name')
+        .select('id, city, state, country, location, website, description, industry')
         .in('id', businessIds)
     : { data: [] }
 
@@ -84,7 +90,5 @@ export async function GET(req: NextRequest) {
   }
 
   const total = businesses.length
-  const paginated = businesses.slice(offset, offset + limit)
-
-  return NextResponse.json({ businesses: paginated, total })
+  return NextResponse.json({ businesses: businesses.slice(offset, offset + limit), total })
 }

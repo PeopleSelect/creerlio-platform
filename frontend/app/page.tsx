@@ -80,6 +80,7 @@ export default function HomePage() {
               <Link href="/business" className="hover:text-blue-600 transition-colors">Business</Link>
               <Link href="/businesses" className="hover:text-blue-600 transition-colors">Find Businesses</Link>
               <Link href="/search" className="hover:text-blue-600 transition-colors">Search</Link>
+              <Link href="/login/customer" className="hover:text-blue-600 transition-colors">Customer Login</Link>
               {isAdmin && (
                 <Link href="/admin" className="hover:text-blue-600 transition-colors">
                   Admin
@@ -209,6 +210,30 @@ export default function HomePage() {
                   {ex}
                 </button>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Customer CTA */}
+        <section className="w-full bg-blue-50 border-b border-blue-100">
+          <div className="max-w-4xl mx-auto px-6 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <p className="font-semibold text-gray-900 text-sm">Looking to contact a business?</p>
+              <p className="text-xs text-gray-500 mt-0.5">Create a free Customer account to send enquiries, track conversations, and save businesses.</p>
+            </div>
+            <div className="flex gap-3 shrink-0">
+              <Link
+                href="/login/customer?mode=signup"
+                className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+              >
+                Create Customer Account
+              </Link>
+              <Link
+                href="/login/customer?mode=signin"
+                className="rounded-lg border border-blue-200 bg-white px-5 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
+              >
+                Sign In
+              </Link>
             </div>
           </div>
         </section>

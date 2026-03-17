@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { useState, useEffect, useRef, Suspense } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 import {
   Building2, MapPin, Globe, Mail, Phone, ArrowLeft, Loader2,
   ShieldCheck, Star, Briefcase, Send, CheckCircle2, ChevronRight,
-  Users, Wrench, BadgeCheck,
+  Users, Wrench, BadgeCheck, UserPlus,
 } from 'lucide-react'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -160,12 +161,21 @@ function EnquiryModal({
 
 function BusinessPublicPageInner() {
   const params = useParams()
+  const router = useRouter()
   const slug = typeof params?.slug === 'string' ? params.slug : ''
 
-  const [data, setData]       = useState<BusinessData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [notFound, setNF]     = useState(false)
-  const [modal, setModal]     = useState<'general' | 'consultation' | 'message' | null>(null)
+  const [data, setData]           = useState<BusinessData | null>(null)
+  const [loading, setLoading]     = useState(true)
+  const [notFound, setNF]         = useState(false)
+  const [modal, setModal]         = useState<'general' | 'consultation' | 'message' | null>(null)
+  // Customer session state
+  const [customerToken, setCToken] = useState<string | null>(null)
+  const [isCustomer, setIsCustomer] = useState(false)
+  const [customerConnModal, setCCModal] = useState<'general' | 'consultation' | null>(null)
+  const [ccMessage, setCCMessage]  = useState('')
+  const [ccSending, setCCSending]  = useState(false)
+  const [ccDone, setCCDone]        = useState(false)
+  const [ccErr, setCCErr]          = useState('')
 
   useEffect(() => {
     if (!slug) return
@@ -175,7 +185,57 @@ function BusinessPublicPageInner() {
       .then(j => { if (j) setData(j) })
       .catch(() => setNF(true))
       .finally(() => setLoading(false))
+
+    // Check if visitor is a logged-in customer
+    supabase.auth.getSession().then(({ data: sd }) => {
+      const session = sd?.session
+      if (!session) return
+      const meta = session.user.user_metadata || {}
+      if (meta.registration_type === 'customer') {
+        setCToken(session.access_token)
+        setIsCustomer(true)
+      }
+    }).catch(() => {})
   }, [slug])
+
+  function openCustomerModal(type: 'general' | 'consultation') {
+    if (!isCustomer) {
+      const redirect = encodeURIComponent(`/businesses/${slug}`)
+      router.push(`/login/customer?mode=signup&redirect=${redirect}&action=enquiry&type=${type}`)
+      return
+    }
+    setCCModal(type)
+    setCCMessage('')
+    setCCDone(false)
+    setCCErr('')
+  }
+
+  async function sendCustomerConnect(e: React.FormEvent) {
+    e.preventDefault()
+    if (!customerToken || !data?.business_id || !ccMessage.trim()) return
+    setCCSending(true)
+    setCCErr('')
+    try {
+      const res = await fetch('/api/customer/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${customerToken}` },
+        body: JSON.stringify({
+          business_id:  data.business_id,
+          body:         ccMessage.trim(),
+          enquiry_type: customerConnModal || 'general',
+        }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || 'Failed to send')
+      }
+      setCCDone(true)
+    } catch (err: any) {
+      setCCErr(err.message || 'Something went wrong')
+    } finally {
+      setCCSending(false)
+    }
+  }
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -258,26 +318,32 @@ function BusinessPublicPageInner() {
             </div>
           </div>
 
-          {/* Contact actions — general enquiries only (not for talent) */}
+          {/* Contact actions — customer-gated */}
           {data.enquiry_enabled && data.business_id && (
             <div className="mt-6 border-t border-gray-100 pt-5">
               <p className="text-xs text-gray-400 mb-3 uppercase tracking-wide font-medium">General enquiries</p>
               <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
-                  onClick={() => setModal('general')}
+                  onClick={() => openCustomerModal('general')}
                   className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
                 >
                   <Mail className="h-4 w-4" /> Send Enquiry
                 </button>
                 <button
                   type="button"
-                  onClick={() => setModal('consultation')}
+                  onClick={() => openCustomerModal('consultation')}
                   className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   <Phone className="h-4 w-4" /> Request Consultation
                 </button>
               </div>
+              {!isCustomer && (
+                <p className="mt-3 text-xs text-gray-400">
+                  <UserPlus className="inline h-3 w-3 mr-1" />
+                  You'll be asked to create a free Customer account to send your enquiry.
+                </p>
+              )}
             </div>
           )}
         </section>
@@ -422,19 +488,21 @@ function BusinessPublicPageInner() {
           <section className="rounded-2xl bg-blue-600 p-8 text-white text-center">
             <h2 className="text-xl font-bold mb-2">Get in touch with {data.name}</h2>
             <p className="text-blue-100 mb-6 text-sm">
-              For general enquiries, services, or to request a consultation.
+              {isCustomer
+                ? 'Send your enquiry directly through your Customer account.'
+                : 'Create a free Customer account to send enquiries and track your conversations.'}
             </p>
             <div className="flex justify-center flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => setModal('general')}
+                onClick={() => openCustomerModal('general')}
                 className="rounded-lg bg-white px-6 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
               >
-                Send Enquiry
+                {isCustomer ? 'Send Enquiry' : 'Register & Send Enquiry'}
               </button>
               <button
                 type="button"
-                onClick={() => setModal('consultation')}
+                onClick={() => openCustomerModal('consultation')}
                 className="rounded-lg border border-white/40 px-6 py-2.5 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
               >
                 Request Consultation
@@ -450,6 +518,58 @@ function BusinessPublicPageInner() {
               )}
             </div>
           </section>
+        )}
+
+        {/* ── Customer Connect Modal ─────────────────────────── */}
+        {customerConnModal && data.business_id && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+            onClick={e => { if (e.target === e.currentTarget) setCCModal(null) }}>
+            <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
+              {ccDone ? (
+                <div className="text-center py-4">
+                  <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-500 mb-3" />
+                  <h3 className="text-lg font-semibold text-gray-900">Enquiry sent!</h3>
+                  <p className="mt-2 text-sm text-gray-500">
+                    {data.name} will be in touch. View your conversation in your{' '}
+                    <Link href="/dashboard/customer/messages" className="text-blue-600 hover:underline">Customer Dashboard</Link>.
+                  </p>
+                  <button type="button" onClick={() => setCCModal(null)}
+                    className="mt-6 rounded-lg bg-blue-600 px-6 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                    Close
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-5">
+                    {customerConnModal === 'consultation' ? 'Request a Consultation' : `Contact ${data.name}`}
+                  </h3>
+                  <form onSubmit={sendCustomerConnect} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Your message *</label>
+                      <textarea required rows={5} value={ccMessage} onChange={e => setCCMessage(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                        placeholder={customerConnModal === 'consultation'
+                          ? 'Describe what you'd like to discuss in a consultation...'
+                          : 'Tell them what you're looking for...'}
+                      />
+                    </div>
+                    {ccErr && <p className="text-sm text-red-600">{ccErr}</p>}
+                    <div className="flex gap-3 pt-1">
+                      <button type="button" onClick={() => setCCModal(null)}
+                        className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                        Cancel
+                      </button>
+                      <button type="submit" disabled={ccSending}
+                        className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+                        {ccSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        Send
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
         )}
       </main>
 

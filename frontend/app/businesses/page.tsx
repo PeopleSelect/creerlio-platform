@@ -6,6 +6,7 @@ import { useState, useEffect, useRef, useId } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import { Search, MapPin, Building2, ArrowRight, Loader2, X } from 'lucide-react'
+import { INDUSTRY_OPTIONS } from '@/constants/industries'
 
 interface BusinessResult {
   slug: string
@@ -39,9 +40,13 @@ function IndustryCombobox({
   const [options, setOptions]     = useState<string[]>([])
 
   useEffect(() => {
+    setOptions([...INDUSTRY_OPTIONS])
     fetch('/api/taxonomy/industries')
       .then(r => r.json())
-      .then(j => setOptions((j.industries || []).map((i: { name: string }) => i.name)))
+      .then(j => {
+        const names: string[] = (j.industries || []).map((i: { name: string }) => i.name)
+        if (names.length > 0) setOptions(names)
+      })
       .catch(() => {})
   }, [])
 

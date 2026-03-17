@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
-import { supabaseServiceServer } from '@/lib/supabaseServer'
+import { supabaseAnonServer } from '@/lib/supabaseServer'
 
 // GET /api/taxonomy/industries
 // Public — returns all 29 top-level industries sorted by name
 export async function GET() {
-  const svc = supabaseServiceServer()
+  const svc = supabaseAnonServer()
 
   const { data, error } = await svc
     .from('industries')
-    .select('id, name, slug')
+    .select('id, name')
     .order('name')
 
   if (error) {

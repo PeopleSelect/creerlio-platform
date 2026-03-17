@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseServiceServer } from '@/lib/supabaseServer'
+import { supabaseAnonServer } from '@/lib/supabaseServer'
 
 // GET /api/taxonomy/search?q=<string>&limit=20
-// Public — full-text search across all professions with their sector + industry context
+// Public — full-text search across all professions with sector + industry context
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const q     = (searchParams.get('q') || '').trim()
@@ -12,9 +12,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ results: [] })
   }
 
-  const svc = supabaseServiceServer()
+  const svc = supabaseAnonServer()
 
-  // Use ilike for broad partial match; GIN index on name column accelerates this
   const { data, error } = await svc
     .from('sector_professions')
     .select(`

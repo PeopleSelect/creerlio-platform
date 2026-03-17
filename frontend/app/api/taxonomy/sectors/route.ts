@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseServiceServer } from '@/lib/supabaseServer'
+import { supabaseAnonServer } from '@/lib/supabaseServer'
 
-// GET /api/taxonomy/sectors?industry_id=<uuid>
+// GET /api/taxonomy/sectors?industry_id=<id>
 // Public — returns all sectors for a given industry
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'industry_id is required' }, { status: 400 })
   }
 
-  const svc = supabaseServiceServer()
+  const svc = supabaseAnonServer()
 
   const { data, error } = await svc
     .from('industry_sectors')

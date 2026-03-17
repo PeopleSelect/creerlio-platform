@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseServiceServer } from '@/lib/supabaseServer'
+import { supabaseAnonServer } from '@/lib/supabaseServer'
 
 // GET /api/businesses/[slug]
 // Public — returns full business page data. Never returns talent data.
@@ -10,7 +10,7 @@ export async function GET(
   const slug = params?.slug
   if (!slug) return NextResponse.json({ error: 'Missing slug' }, { status: 400 })
 
-  const svc = supabaseServiceServer()
+  const svc = supabaseAnonServer()
 
   const { data: page, error } = await svc
     .from('business_profile_pages')

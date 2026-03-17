@@ -16,8 +16,7 @@ export async function GET(
     .from('business_profile_pages')
     .select(`
       *,
-      businesses!inner ( id, industry ),
-      business_profiles!inner (
+      business_profiles (
         id, city, state, country, location, website, description, industry
       )
     `)
@@ -29,27 +28,28 @@ export async function GET(
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  const bp: any = Array.isArray((page as any).business_profiles)
+    ? (page as any).business_profiles[0]
+    : (page as any).business_profiles
+
   // Fetch services
   const { data: services } = await svc
     .from('business_products_services')
     .select('id, name, category, short_description, who_it_is_for, problem_it_solves, logo_or_icon')
-    .eq('business_id', page.businesses?.id || '')
+    .eq('business_id', page.business_id || '')
     .order('name')
 
   // Fetch active talent requests (anonymous — no talent data)
   const { data: requests } = await svc
     .from('business_talent_requests')
     .select('id, role_title, location, experience_level, notes, created_at')
-    .eq('business_id', page.businesses?.id || '')
+    .eq('business_id', page.business_id || '')
     .eq('is_active', true)
     .order('created_at', { ascending: false })
 
-  const bp: any = page.business_profiles
-  const biz: any = page.businesses
-
   return NextResponse.json({
     slug:              page.slug,
-    business_id:       biz?.id || null,
+    business_id:       (page as any).business_id || null,
     name:              page.name,
     tagline:           page.tagline,
     mission:           page.mission,
@@ -57,7 +57,7 @@ export async function GET(
     hero_image_url:    page.hero_image_url,
     value_prop_headline: page.value_prop_headline,
     value_prop_body:   page.value_prop_body,
-    industry:          biz?.industry || bp?.industry || null,
+    industry:          bp?.industry || null,
     location:          [bp?.city, bp?.state, bp?.country].filter(Boolean).join(', ') || bp?.location || null,
     website_url:       (page as any).website_url || bp?.website || null,
     contact_email:     (page as any).contact_email || null,

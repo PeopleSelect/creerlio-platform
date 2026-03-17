@@ -13,86 +13,65 @@ export async function GET(req: NextRequest) {
 
   const svc = supabaseServiceServer()
 
-  // business_profile_pages.business_id → business_profiles.id (no direct FK to businesses table)
-  // Industry/location filters applied in JS after fetch for reliability
-  let query = svc
+  // Step 1: Fetch all published business pages (no joins — maximally reliable)
+  let pagesQuery = svc
     .from('business_profile_pages')
-    .select(`
-      slug,
-      name,
-      tagline,
-      logo_url,
-      industries_served,
-      hiring_interests,
-      badges,
-      website_url,
-      contact_email,
-      enquiry_enabled,
-      business_profiles (
-        id,
-        city,
-        state,
-        country,
-        location,
-        website,
-        description,
-        industry
-      )
-    `)
+    .select('business_id, slug, name, tagline, logo_url, industries_served, hiring_interests, badges, website_url, contact_email, enquiry_enabled')
     .eq('is_published', true)
     .order('name')
     .limit(500)
 
-  // Keyword filter on DB-side columns (name, tagline only — both are on business_profile_pages)
   if (q) {
-    query = query.or(`name.ilike.%${q}%,tagline.ilike.%${q}%`)
+    pagesQuery = pagesQuery.or(`name.ilike.%${q}%,tagline.ilike.%${q}%`)
   }
 
-  const { data, error } = await query
+  const { data: pages, error: pagesError } = await pagesQuery
 
-  if (error) {
-    // Fallback: no join, no industry filter — returns all published by name match
-    const fallback = await svc
-      .from('business_profile_pages')
-      .select('slug, name, tagline, logo_url, industries_served, badges, website_url, contact_email, enquiry_enabled')
-      .eq('is_published', true)
-      .ilike('name', q ? `%${q}%` : '%')
-      .order('name')
-      .limit(200)
-
-    return NextResponse.json({
-      businesses: fallback.data || [],
-      total: (fallback.data || []).length,
-    })
+  if (pagesError || !pages || pages.length === 0) {
+    return NextResponse.json({ businesses: [], total: 0, _debug: pagesError?.message })
   }
 
-  // Shape rows
-  let businesses = (data || []).map((row: any) => ({
-    slug:              row.slug,
-    name:              row.name,
-    tagline:           row.tagline,
-    logo_url:          row.logo_url,
-    industry:          row.business_profiles?.industry || null,
-    location:          [row.business_profiles?.city, row.business_profiles?.state, row.business_profiles?.country]
-                         .filter(Boolean).join(', ') || row.business_profiles?.location || null,
-    description:       row.business_profiles?.description || null,
-    industries_served: Array.isArray(row.industries_served) ? row.industries_served : [],
-    badges:            Array.isArray(row.badges) ? row.badges : [],
-    website_url:       row.website_url || row.business_profiles?.website || null,
-    enquiry_enabled:   row.enquiry_enabled ?? true,
-  }))
+  // Step 2: Fetch business_profiles for enrichment (location + industry)
+  const businessIds = pages.map((p: any) => p.business_id).filter(Boolean)
+  const { data: profiles } = businessIds.length > 0
+    ? await svc
+        .from('business_profiles')
+        .select('id, city, state, country, location, website, description, industry, business_name')
+        .in('id', businessIds)
+    : { data: [] }
 
-  // JS-side filters (reliable cross-field matching across joined fields)
+  const profileMap: Record<string, any> = {}
+  for (const p of profiles || []) profileMap[p.id] = p
+
+  // Step 3: Shape and merge
+  let businesses = pages.map((row: any) => {
+    const prof = profileMap[row.business_id] || {}
+    return {
+      slug:              row.slug,
+      name:              row.name,
+      tagline:           row.tagline,
+      logo_url:          row.logo_url,
+      industry:          prof.industry || null,
+      location:          [prof.city, prof.state, prof.country].filter(Boolean).join(', ') || prof.location || null,
+      description:       prof.description || null,
+      industries_served: Array.isArray(row.industries_served) ? row.industries_served : [],
+      badges:            Array.isArray(row.badges) ? row.badges : [],
+      website_url:       row.website_url || prof.website || null,
+      enquiry_enabled:   row.enquiry_enabled ?? true,
+    }
+  })
+
+  // Step 4: JS-side filters
   if (industry) {
-    businesses = businesses.filter(b => {
+    businesses = businesses.filter((b: any) => {
       const bizIndustry = (b.industry || '').toLowerCase()
-      const servedList  = b.industries_served.map((s: string) => s.toLowerCase())
+      const servedList  = (b.industries_served as string[]).map(s => s.toLowerCase())
       return bizIndustry.includes(industry) || servedList.some(s => s.includes(industry))
     })
   }
 
   if (location) {
-    businesses = businesses.filter(b =>
+    businesses = businesses.filter((b: any) =>
       (b.location || '').toLowerCase().includes(location)
     )
   }

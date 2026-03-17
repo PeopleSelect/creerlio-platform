@@ -245,28 +245,39 @@ function BusinessPublicPageInner() {
                   <a href={data.website_url.startsWith('http') ? data.website_url : `https://${data.website_url}`}
                     target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1.5 hover:text-blue-600 transition-colors">
-                    <Globe className="h-4 w-4" />Visit website
+                    <Globe className="h-4 w-4" />{data.website_url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                  </a>
+                )}
+                {data.contact_email && (
+                  <a href={`mailto:${data.contact_email}`}
+                    className="flex items-center gap-1.5 hover:text-blue-600 transition-colors">
+                    <Mail className="h-4 w-4" />{data.contact_email}
                   </a>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Contact actions */}
+          {/* Contact actions — general enquiries only (not for talent) */}
           {data.enquiry_enabled && data.business_id && (
-            <div className="mt-6 flex flex-wrap gap-3">
-              <button
-                onClick={() => setModal('general')}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
-              >
-                <Mail className="h-4 w-4" /> Send Enquiry
-              </button>
-              <button
-                onClick={() => setModal('consultation')}
-                className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                <Phone className="h-4 w-4" /> Request Consultation
-              </button>
+            <div className="mt-6 border-t border-gray-100 pt-5">
+              <p className="text-xs text-gray-400 mb-3 uppercase tracking-wide font-medium">General enquiries</p>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => setModal('general')}
+                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+                >
+                  <Mail className="h-4 w-4" /> Send Enquiry
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModal('consultation')}
+                  className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Phone className="h-4 w-4" /> Request Consultation
+                </button>
+              </div>
             </div>
           )}
         </section>
@@ -377,21 +388,52 @@ function BusinessPublicPageInner() {
           </section>
         )}
 
-        {/* ── 7. Contact CTA ────────────────────────────────── */}
+        {/* ── 7. Talent CTA ─────────────────────────────────── */}
+        {(hasTalentRequests || hasHiringInterests) && (
+          <section className="rounded-2xl bg-violet-600 p-8 text-white">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+              <div className="flex-1">
+                <h2 className="text-lg font-bold mb-1">Are you a talent looking to connect?</h2>
+                <p className="text-violet-100 text-sm">
+                  Talent enquiries require a registered profile. Create your free talent profile to
+                  express interest in {data.name} and be discovered by businesses like them.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 shrink-0">
+                <Link
+                  href="/login/talent?mode=signup"
+                  className="rounded-lg bg-white px-6 py-2.5 text-sm font-semibold text-violet-700 hover:bg-violet-50 transition-colors text-center"
+                >
+                  Create Talent Profile
+                </Link>
+                <Link
+                  href="/login/talent?mode=signin"
+                  className="rounded-lg border border-white/40 px-6 py-2.5 text-sm font-semibold text-white hover:bg-white/10 transition-colors text-center"
+                >
+                  Sign In
+                </Link>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── 8. General contact CTA ────────────────────────── */}
         {data.enquiry_enabled && data.business_id && (
           <section className="rounded-2xl bg-blue-600 p-8 text-white text-center">
-            <h2 className="text-xl font-bold mb-2">Interested in working with {data.name}?</h2>
+            <h2 className="text-xl font-bold mb-2">Get in touch with {data.name}</h2>
             <p className="text-blue-100 mb-6 text-sm">
-              Get in touch to learn more about their services or request a consultation.
+              For general enquiries, services, or to request a consultation.
             </p>
             <div className="flex justify-center flex-wrap gap-3">
               <button
+                type="button"
                 onClick={() => setModal('general')}
                 className="rounded-lg bg-white px-6 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
               >
                 Send Enquiry
               </button>
               <button
+                type="button"
                 onClick={() => setModal('consultation')}
                 className="rounded-lg border border-white/40 px-6 py-2.5 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
               >

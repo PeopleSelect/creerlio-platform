@@ -11,40 +11,44 @@ export async function GET(req: NextRequest) {
   const limit    = Math.min(Number(searchParams.get('limit') || 20), 50)
   const offset   = Math.max(Number(searchParams.get('offset') || 0), 0)
 
-  // Build client inline — avoids any module-level env resolution issues
-  const url     = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const url    = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  const svcKey  = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!url || (!anonKey && !svcKey)) {
+  if (!url || (!svcKey && !anonKey)) {
     return NextResponse.json({ businesses: [], total: 0, _debug: 'missing supabase env' }, { status: 500 })
   }
 
   const svc = createClient(url, svcKey || anonKey!, { auth: { persistSession: false } })
 
-  // Step 1: Fetch all published business pages
-  let pagesQuery = svc
-    .from('business_profile_pages')
-    .select('business_id, slug, name, tagline, logo_url, industries_served, badges, website_url, contact_email, enquiry_enabled')
-    .eq('is_published', true)
-    .order('name')
-    .limit(500)
+  // Try full column set first; fall back to base columns if discovery migration not yet run
+  const fullCols = 'business_id, slug, name, tagline, logo_url, industries_served, badges, website_url, contact_email, enquiry_enabled'
+  const baseCols = 'business_id, slug, name, tagline, logo_url'
 
-  if (q) {
-    pagesQuery = pagesQuery.or(`name.ilike.%${q}%,tagline.ilike.%${q}%`)
-  }
+  let pages: any[] | null = null
 
-  const { data: pages, error: pagesError } = await pagesQuery
+  for (const cols of [fullCols, baseCols]) {
+    let q2 = svc
+      .from('business_profile_pages')
+      .select(cols)
+      .eq('is_published', true)
+      .order('name')
+      .limit(500)
 
-  if (pagesError) {
-    return NextResponse.json({ businesses: [], total: 0, _debug: `pages error: ${pagesError.message}` })
+    if (q) q2 = q2.or(`name.ilike.%${q}%,tagline.ilike.%${q}%`)
+
+    const { data, error } = await q2
+    if (!error) { pages = data; break }
+    if (!error.message.includes('does not exist')) {
+      return NextResponse.json({ businesses: [], total: 0, _debug: error.message })
+    }
   }
 
   if (!pages || pages.length === 0) {
-    return NextResponse.json({ businesses: [], total: 0, _debug: 'no published pages found' })
+    return NextResponse.json({ businesses: [], total: 0, _debug: pages === null ? 'query failed' : 'no published pages' })
   }
 
-  // Step 2: Fetch business_profiles for enrichment
+  // Fetch business_profiles for enrichment (location + industry)
   const businessIds = pages.map((p: any) => p.business_id).filter(Boolean)
   const { data: profiles } = businessIds.length > 0
     ? await svc
@@ -56,7 +60,6 @@ export async function GET(req: NextRequest) {
   const profileMap: Record<string, any> = {}
   for (const p of profiles || []) profileMap[p.id] = p
 
-  // Step 3: Shape and merge
   let businesses = pages.map((row: any) => {
     const prof = profileMap[row.business_id] || {}
     return {
@@ -74,7 +77,6 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  // Step 4: JS-side filters
   if (industry) {
     businesses = businesses.filter((b: any) => {
       const bizIndustry = (b.industry || '').toLowerCase()

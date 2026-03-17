@@ -17,7 +17,7 @@ export async function GET(
     .select(`
       *,
       business_profiles (
-        id, city, state, country, location, website, description, industry
+        id, city, state, country, location, website, email, description, industry
       )
     `)
     .eq('slug', slug)
@@ -60,7 +60,7 @@ export async function GET(
     industry:          bp?.industry || null,
     location:          [bp?.city, bp?.state, bp?.country].filter(Boolean).join(', ') || bp?.location || null,
     website_url:       (page as any).website_url || bp?.website || null,
-    contact_email:     (page as any).contact_email || null,
+    contact_email:     (page as any).contact_email || bp?.email || null,
     enquiry_enabled:   (page as any).enquiry_enabled ?? true,
     description:       bp?.description || null,
     industries_served: Array.isArray((page as any).industries_served) ? (page as any).industries_served : [],

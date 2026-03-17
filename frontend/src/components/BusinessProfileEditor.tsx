@@ -3753,6 +3753,10 @@ export default function BusinessProfileEditor() {
         const rawName = typeof profile.name === 'string' ? profile.name.trim() : ''
         const rawTitle = typeof profile.title === 'string' ? profile.title.trim() : ''
         const rawBio = typeof profile.bio === 'string' ? profile.bio.trim() : ''
+        const websiteLink = (profile.socialLinks || []).find(
+          (s: any) => String(s?.platform || '').toLowerCase() === 'website'
+        )
+        const rawWebsite = String((websiteLink as any)?.url || '').trim() || null
         const basePayload: Record<string, any> = { user_id: uid }
         let fields: Record<string, any> = {
           business_name: rawName || null,
@@ -3760,6 +3764,7 @@ export default function BusinessProfileEditor() {
           description: rawBio || null,
           category: rawTitle || null,
           industry: rawTitle || null,
+          website: rawWebsite,
         }
 
         for (let i = 0; i < 6; i += 1) {

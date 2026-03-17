@@ -13,9 +13,8 @@ export async function GET(req: NextRequest) {
 
   const svc = supabaseServiceServer()
 
-  // Fetch all published business pages with profile data joined
-  // Industry filter is applied in JS because PostgREST .or() across two embedded
-  // tables (businesses + business_profiles) doesn't work via the JS client
+  // business_profile_pages.business_id → business_profiles.id (no direct FK to businesses table)
+  // Industry/location filters applied in JS after fetch for reliability
   let query = svc
     .from('business_profile_pages')
     .select(`
@@ -29,10 +28,6 @@ export async function GET(req: NextRequest) {
       website_url,
       contact_email,
       enquiry_enabled,
-      businesses!inner (
-        id,
-        industry
-      ),
       business_profiles (
         id,
         city,
@@ -46,9 +41,9 @@ export async function GET(req: NextRequest) {
     `)
     .eq('is_published', true)
     .order('name')
-    .limit(500) // fetch all, paginate in JS after industry filter
+    .limit(500)
 
-  // Keyword filter on DB-side columns (name, tagline)
+  // Keyword filter on DB-side columns (name, tagline only — both are on business_profile_pages)
   if (q) {
     query = query.or(`name.ilike.%${q}%,tagline.ilike.%${q}%`)
   }
@@ -56,7 +51,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query
 
   if (error) {
-    // Fallback: simpler query without joins
+    // Fallback: no join, no industry filter — returns all published by name match
     const fallback = await svc
       .from('business_profile_pages')
       .select('slug, name, tagline, logo_url, industries_served, badges, website_url, contact_email, enquiry_enabled')
@@ -77,8 +72,7 @@ export async function GET(req: NextRequest) {
     name:              row.name,
     tagline:           row.tagline,
     logo_url:          row.logo_url,
-    // Canonical industry: check business_profiles first (editor saves here), then businesses
-    industry:          row.business_profiles?.industry || row.businesses?.industry || null,
+    industry:          row.business_profiles?.industry || null,
     location:          [row.business_profiles?.city, row.business_profiles?.state, row.business_profiles?.country]
                          .filter(Boolean).join(', ') || row.business_profiles?.location || null,
     description:       row.business_profiles?.description || null,
@@ -88,11 +82,11 @@ export async function GET(req: NextRequest) {
     enquiry_enabled:   row.enquiry_enabled ?? true,
   }))
 
-  // JS-side filters (reliable cross-field matching)
+  // JS-side filters (reliable cross-field matching across joined fields)
   if (industry) {
     businesses = businesses.filter(b => {
-      const bizIndustry  = (b.industry || '').toLowerCase()
-      const servedList   = b.industries_served.map((s: string) => s.toLowerCase())
+      const bizIndustry = (b.industry || '').toLowerCase()
+      const servedList  = b.industries_served.map((s: string) => s.toLowerCase())
       return bizIndustry.includes(industry) || servedList.some(s => s.includes(industry))
     })
   }

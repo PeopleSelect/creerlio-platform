@@ -12,6 +12,10 @@ export default function HomePage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [searchQ, setSearchQ] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [industries, setIndustries] = useState<string[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const suggestRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -40,8 +44,24 @@ export default function HomePage() {
       checkAuth().catch(() => {})
     })
 
+    // Load industry list for autocomplete
+    fetch('/api/taxonomy/industries')
+      .then(r => r.json())
+      .then(j => { if (j.industries?.length) setIndustries(j.industries.map((i: any) => i.name)) })
+      .catch(() => {})
+
+    // Close suggestions on outside click
+    const handleClick = (e: MouseEvent) => {
+      if (suggestRef.current && !suggestRef.current.contains(e.target as Node) &&
+          searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+
     return () => {
       sub?.subscription?.unsubscribe()
+      document.removeEventListener('mousedown', handleClick)
     }
   }, [])
 
@@ -122,6 +142,7 @@ export default function HomePage() {
             <form
               onSubmit={e => {
                 e.preventDefault()
+                setShowSuggestions(false)
                 const q = searchQ.trim()
                 router.push(`/businesses${q ? `?q=${encodeURIComponent(q)}` : ''}`)
               }}
@@ -133,10 +154,42 @@ export default function HomePage() {
                   ref={searchRef}
                   type="text"
                   value={searchQ}
-                  onChange={e => setSearchQ(e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value
+                    setSearchQ(val)
+                    if (val.trim().length >= 1) {
+                      const q = val.trim().toLowerCase()
+                      setSuggestions(industries.filter(i => i.toLowerCase().includes(q)).slice(0, 6))
+                      setShowSuggestions(true)
+                    } else {
+                      setShowSuggestions(false)
+                    }
+                  }}
+                  onFocus={() => {
+                    if (searchQ.trim().length >= 1 && suggestions.length > 0) setShowSuggestions(true)
+                  }}
                   placeholder="e.g. Law firm, Marketing agency, Accountant Sydney…"
                   className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 py-3 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+                {showSuggestions && suggestions.length > 0 && (
+                  <div ref={suggestRef} className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                    {suggestions.map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => {
+                          setSearchQ(s)
+                          setShowSuggestions(false)
+                          router.push(`/businesses?q=${encodeURIComponent(s)}`)
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <button
                 type="submit"

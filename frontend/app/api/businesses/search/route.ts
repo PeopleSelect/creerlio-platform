@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseServiceServer } from '@/lib/supabaseServer'
+import { supabaseAnonServer, supabaseServiceServer } from '@/lib/supabaseServer'
 
 // GET /api/businesses/search?q=...&industry=...&location=...&limit=20&offset=0
 // Public endpoint — returns BUSINESSES ONLY. Talent profiles are never included.
@@ -11,7 +11,14 @@ export async function GET(req: NextRequest) {
   const limit    = Math.min(Number(searchParams.get('limit') || 20), 50)
   const offset   = Math.max(Number(searchParams.get('offset') || 0), 0)
 
-  const svc = supabaseServiceServer()
+  // Public search — use anon client (matches public RLS on business_profile_pages)
+  // Falls back to service role if anon key missing
+  let svc: ReturnType<typeof supabaseAnonServer>
+  try {
+    svc = supabaseAnonServer()
+  } catch {
+    svc = supabaseServiceServer()
+  }
 
   // Step 1: Fetch all published business pages (no joins — maximally reliable)
   let pagesQuery = svc

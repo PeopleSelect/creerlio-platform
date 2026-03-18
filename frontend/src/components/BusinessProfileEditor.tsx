@@ -2691,10 +2691,12 @@ export default function BusinessProfileEditor() {
   }
 
   const fetchImageAsFile = async (url: string, name: string) => {
-    const res = await fetch(url)
+    // Route through server-side proxy to avoid CORS on external URLs (e.g. DALL-E)
+    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`
+    const res = await fetch(proxyUrl)
     if (!res.ok) throw new Error('Failed to download image')
     const blob = await res.blob()
-    const ext = blob.type?.split('/')[1] || 'png'
+    const ext = blob.type?.split('/')[1]?.split(';')[0] || 'png'
     return new File([blob], `${name}.${ext}`, { type: blob.type || 'image/png' })
   }
 

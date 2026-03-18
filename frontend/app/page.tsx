@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Search } from 'lucide-react'
+import { Search, ChevronDown } from 'lucide-react'
 
 export default function HomePage() {
   const router = useRouter()
@@ -16,6 +16,8 @@ export default function HomePage() {
   const [industries, setIndustries] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const suggestRef = useRef<HTMLDivElement>(null)
+  const [showSignInMenu, setShowSignInMenu] = useState(false)
+  const signInRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -56,6 +58,9 @@ export default function HomePage() {
           searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setShowSuggestions(false)
       }
+      if (signInRef.current && !signInRef.current.contains(e.target as Node)) {
+        setShowSignInMenu(false)
+      }
     }
     document.addEventListener('mousedown', handleClick)
 
@@ -80,7 +85,6 @@ export default function HomePage() {
               <Link href="/business" className="hover:text-blue-600 transition-colors">Business</Link>
               <Link href="/businesses" className="hover:text-blue-600 transition-colors">Find Businesses</Link>
               <Link href="/search" className="hover:text-blue-600 transition-colors">Search</Link>
-              <Link href="/login/customer" className="hover:text-blue-600 transition-colors">Customer Login</Link>
               {isAdmin && (
                 <Link href="/admin" className="hover:text-blue-600 transition-colors">
                   Admin
@@ -113,18 +117,40 @@ export default function HomePage() {
               >
                 Business Account
               </Link>
-              <Link
-                href="/login/customer?mode=signup&redirect=/dashboard/customer"
-                className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 font-semibold text-xs text-white transition-colors"
-              >
-                Customer Account
-              </Link>
-              <Link
-                href="/login/customer"
-                className="px-3 py-2 rounded-lg border border-gray-300 hover:border-gray-400 font-semibold text-xs text-gray-700 transition-colors"
-              >
-                Sign In
-              </Link>
+              <div ref={signInRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowSignInMenu(v => !v)}
+                  className="flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 hover:border-gray-400 font-semibold text-xs text-gray-700 transition-colors"
+                >
+                  Sign In <ChevronDown className="h-3 w-3" />
+                </button>
+                {showSignInMenu && (
+                  <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden min-w-[160px]">
+                    <Link
+                      href="/login/talent?mode=signin"
+                      onClick={() => setShowSignInMenu(false)}
+                      className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                    >
+                      Talent
+                    </Link>
+                    <Link
+                      href="/login/business?mode=signin"
+                      onClick={() => setShowSignInMenu(false)}
+                      className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                    >
+                      Business
+                    </Link>
+                    <Link
+                      href="/login/customer?mode=signin"
+                      onClick={() => setShowSignInMenu(false)}
+                      className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                    >
+                      Customer
+                    </Link>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

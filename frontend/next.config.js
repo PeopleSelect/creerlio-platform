@@ -1,3 +1,5 @@
+const path = require('path')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -17,15 +19,13 @@ const nextConfig = {
   },
 
   env: {
-    // Demo-safe fallback for Mapbox
-    NEXT_PUBLIC_MAPBOX_TOKEN:
-      process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
-      'pk.eyJ1IjoiY3JlZXJsaW8iLCJhIjoiY21pY3IxZHljMXFwNTJzb2FydzR4b3F1YSJ9.Is8-GyfEdqwKKEo2cGO65g',
+    NEXT_PUBLIC_MAPBOX_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
   },
 
   webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,
+      '@': path.resolve(__dirname, 'src'),
       'mapbox-gl': 'mapbox-gl',
     };
     return config;

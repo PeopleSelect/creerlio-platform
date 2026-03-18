@@ -2699,7 +2699,7 @@ export default function BusinessProfileEditor() {
   }
 
   const handleWebsiteImport = async () => {
-    const url = getWebsiteImportUrl()
+    const url = websiteImportUrl.trim() || getWebsiteImportUrl()
     setWebsiteImportOpen(true)
     if (!url) {
       setWebsiteImportError('Add a website URL first, then import.')
@@ -2709,10 +2709,10 @@ export default function BusinessProfileEditor() {
     setWebsiteImportError(null)
     setWebsiteImportResult(null)
     try {
-      const res = await fetch('/api/website/metadata', {
+      const res = await fetch('/api/public-lite/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, aiMode: 'safe' }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -2720,7 +2720,6 @@ export default function BusinessProfileEditor() {
         return
       }
       setWebsiteImportResult(data)
-      setWebsiteImportOpen(true)
     } catch (err: any) {
       setWebsiteImportError(err?.message || 'Failed to import website.')
     } finally {
@@ -2730,24 +2729,25 @@ export default function BusinessProfileEditor() {
 
   const applyWebsiteImport = async () => {
     if (!websiteImportResult) return
-    const about = String(websiteImportResult.description || '').trim()
-    const services = Array.isArray(websiteImportResult.services) ? websiteImportResult.services : []
-    const summary = about || services.join(', ')
+    const r = websiteImportResult
 
     setProfile((prev) => ({
       ...prev,
-      bio: about || prev.bio,
+      bio: r.summary || prev.bio,
+      cultureDecisions: r.culture_values || prev.cultureDecisions,
+      cultureFeedback: r.work_environment || prev.cultureFeedback,
     }))
-    if (summary) {
+
+    if (r.what_company_does || r.summary) {
       setProductsOverview((prev) => ({
         ...prev,
-        summary: prev.summary || summary,
+        summary: r.what_company_does || r.summary || prev.summary,
         short_headline: prev.short_headline || 'Products & Services',
       }))
     }
 
-    const logoUrl = String(websiteImportResult.logo || '').trim()
-    const bannerUrl = String(websiteImportResult.banner || '').trim()
+    const logoUrl = String(r.logo_url || '').trim()
+    const bannerUrl = String(r.banner_url || '').trim()
     try {
       if (logoUrl) {
         const logoFile = await fetchImageAsFile(logoUrl, 'logo')
@@ -6056,14 +6056,14 @@ export default function BusinessProfileEditor() {
       {/* Website import modal */}
       {websiteImportOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6" onClick={() => setWebsiteImportOpen(false)}>
-          <div className="w-full max-w-3xl bg-white rounded-xl shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-3xl bg-white rounded-xl shadow-xl p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <div className="text-lg font-semibold">Import from Website</div>
+              <div className="text-lg font-semibold">Import &amp; Generate from Website</div>
               <button className="text-sm underline" onClick={() => setWebsiteImportOpen(false)}>Close</button>
             </div>
 
             <p className="text-sm text-gray-600 mb-4">
-              This fills your draft only. You still need to save the section to update the live profile.
+              Enter your website URL — AI will read it and generate your business name, summary, culture, and images. Fills draft only; save each section to publish.
             </p>
 
             <div className="mb-4">
@@ -6080,47 +6080,96 @@ export default function BusinessProfileEditor() {
                   type="button"
                   onClick={handleWebsiteImport}
                   disabled={websiteImportLoading}
-                  className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-60"
+                  className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-60 whitespace-nowrap"
                 >
-                  {websiteImportLoading ? 'Importing…' : 'Fetch'}
+                  {websiteImportLoading ? 'Generating…' : 'Generate with AI'}
                 </button>
               </div>
+              {websiteImportLoading && (
+                <p className="text-xs text-gray-500 mt-2">Reading your website and generating content — this takes 20–40 seconds…</p>
+              )}
               {websiteImportError && (
                 <p className="text-sm text-red-600 mt-2">{websiteImportError}</p>
               )}
             </div>
 
             {websiteImportResult && (
-              <div className="grid md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">About</p>
-                  <p className="text-gray-700">{websiteImportResult.description || '—'}</p>
+              <div className="space-y-4">
+                {/* Images preview */}
+                <div className="grid grid-cols-2 gap-3">
+                  {websiteImportResult.logo_url && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Logo / Avatar</p>
+                      <img src={websiteImportResult.logo_url} alt="Generated logo" className="w-24 h-24 object-cover rounded-full border border-gray-200" />
+                    </div>
+                  )}
+                  {websiteImportResult.banner_url && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Banner</p>
+                      <img src={websiteImportResult.banner_url} alt="Generated banner" className="w-full h-24 object-cover rounded-lg border border-gray-200" />
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">Services</p>
-                  <p className="text-gray-700">
-                    {Array.isArray(websiteImportResult.services) && websiteImportResult.services.length > 0
-                      ? websiteImportResult.services.join(', ')
-                      : '—'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">Logo</p>
-                  <p className="text-gray-700">{websiteImportResult.logo || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">Banner</p>
-                  <p className="text-gray-700">{websiteImportResult.banner || '—'}</p>
+
+                <div className="grid md:grid-cols-2 gap-4 text-sm">
+                  {websiteImportResult.name && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Business Name</p>
+                      <p className="text-gray-800 font-medium">{websiteImportResult.name}</p>
+                    </div>
+                  )}
+                  {websiteImportResult.short_tagline && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Tagline</p>
+                      <p className="text-gray-800">{websiteImportResult.short_tagline}</p>
+                    </div>
+                  )}
+                  {websiteImportResult.summary && (
+                    <div className="md:col-span-2">
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Summary / Bio</p>
+                      <p className="text-gray-800">{websiteImportResult.summary}</p>
+                    </div>
+                  )}
+                  {websiteImportResult.what_company_does && (
+                    <div className="md:col-span-2">
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">What the Business Does</p>
+                      <p className="text-gray-800">{websiteImportResult.what_company_does}</p>
+                    </div>
+                  )}
+                  {websiteImportResult.culture_values && (
+                    <div className="md:col-span-2">
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Culture &amp; Values</p>
+                      <p className="text-gray-800">{websiteImportResult.culture_values}</p>
+                    </div>
+                  )}
+                  {websiteImportResult.work_environment && (
+                    <div className="md:col-span-2">
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Work Environment</p>
+                      <p className="text-gray-800">{websiteImportResult.work_environment}</p>
+                    </div>
+                  )}
+                  {websiteImportResult.typical_roles && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Typical Roles</p>
+                      <p className="text-gray-800">{websiteImportResult.typical_roles}</p>
+                    </div>
+                  )}
+                  {Array.isArray(websiteImportResult.industries) && websiteImportResult.industries.length > 0 && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Industries</p>
+                      <p className="text-gray-800">{websiteImportResult.industries.join(', ')}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            <div className="mt-4 flex justify-end gap-2">
-              <button className="px-4 py-2 rounded border" onClick={() => setWebsiteImportOpen(false)}>
+            <div className="mt-5 flex justify-end gap-2">
+              <button className="px-4 py-2 rounded border border-gray-300 text-gray-700" onClick={() => setWebsiteImportOpen(false)}>
                 Cancel
               </button>
               <button
-                className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-60"
+                className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-40"
                 onClick={applyWebsiteImport}
                 disabled={!websiteImportResult}
               >

@@ -175,7 +175,7 @@ function CustomerLoginPageInner() {
             </div>
           ) : (
             <form onSubmit={handleReset} className="space-y-4">
-              <input required type="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} placeholder="Email address" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input required type="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} placeholder="Email address" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               {error && <p className="text-sm text-red-600">{error}</p>}
               <button type="submit" disabled={busy} className="w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Send reset link
@@ -241,7 +241,7 @@ function CustomerLoginPageInner() {
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input required type="email" value={email} onChange={e => setEmail(e.target.value)}
-                      className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="you@example.com" />
                   </div>
                 </div>
@@ -250,7 +250,7 @@ function CustomerLoginPageInner() {
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input required type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
-                      className="w-full pl-9 pr-10 rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-9 pr-10 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="••••••••" />
                     <button type="button" onClick={() => setShowPw(p => !p)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -275,7 +275,7 @@ function CustomerLoginPageInner() {
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input required type="text" value={name} onChange={e => setName(e.target.value)}
-                      className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Jane Smith" />
                   </div>
                 </div>
@@ -284,7 +284,7 @@ function CustomerLoginPageInner() {
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input required type="email" value={email} onChange={e => setEmail(e.target.value)}
-                      className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="you@example.com" />
                   </div>
                 </div>
@@ -293,7 +293,7 @@ function CustomerLoginPageInner() {
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input required type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
-                      className="w-full pl-9 pr-10 rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-9 pr-10 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Min. 8 characters" />
                     <button type="button" onClick={() => setShowPw(p => !p)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -306,7 +306,7 @@ function CustomerLoginPageInner() {
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input required type={showPw ? 'text' : 'password'} value={confirmPw} onChange={e => setConfirmPw(e.target.value)}
-                      className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="••••••••" />
                   </div>
                 </div>
@@ -316,19 +316,19 @@ function CustomerLoginPageInner() {
                     <div className="relative">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                       <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-                        className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Phone number" />
                     </div>
                     <div className="relative">
                       <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                       <input type="text" value={company} onChange={e => setCompany(e.target.value)}
-                        className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Company (if representing a business)" />
                     </div>
                     <div className="relative">
                       <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                       <input type="text" value={location} onChange={e => setLocation(e.target.value)}
-                        className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full pl-9 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Location" />
                     </div>
                   </div>

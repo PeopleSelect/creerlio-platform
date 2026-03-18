@@ -549,8 +549,8 @@ function BusinessPublicPageInner() {
                       <textarea required rows={5} value={ccMessage} onChange={e => setCCMessage(e.target.value)}
                         className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                         placeholder={customerConnModal === 'consultation'
-                          ? 'Describe what you'd like to discuss in a consultation...'
-                          : 'Tell them what you're looking for...'}
+                          ? "Describe what you'd like to discuss in a consultation..."
+                          : "Tell them what you're looking for..."}
                       />
                     </div>
                     {ccErr && <p className="text-sm text-red-600">{ccErr}</p>}

@@ -8,6 +8,7 @@ import VideoChat from '@/components/VideoChat'
 import { useBusinessContext } from '@/components/BusinessContext'
 import LocationDropdownsString from '@/components/LocationDropdownsString'
 import { INDUSTRY_OPTIONS } from '@/constants/industries'
+import DeleteAccountSection from '@/components/DeleteAccountSection'
 
 interface User {
   id: string
@@ -3405,6 +3406,8 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                     </button>
                   </div>
                 </div>
+
+                <DeleteAccountSection />
               </div>
             </div>
           </div>

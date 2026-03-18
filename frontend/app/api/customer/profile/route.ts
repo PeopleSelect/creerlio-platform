@@ -87,11 +87,11 @@ export async function PATCH(req: NextRequest) {
   const svc = supabaseServiceServer()
   const { data, error } = await svc
     .from('customer_profiles')
-    .update(update)
-    .eq('user_id', user.id)
+    .upsert({ user_id: user.id, email: user.email ?? '', ...update }, { onConflict: 'user_id' })
     .select()
     .maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!data) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
   return NextResponse.json({ profile: data })
 }

@@ -100,22 +100,28 @@ export default function HomePage() {
               )}
             </nav>
 
-            <div className="flex gap-3">
+            <div className="flex gap-2 flex-wrap justify-end">
               <Link
                 href="/login/talent?mode=signup&redirect=/dashboard/talent"
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+                className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-xs text-white transition-colors"
               >
-                Create Talent Account
+                Talent Account
               </Link>
               <Link
                 href="/login/business?mode=signup&redirect=/dashboard/business"
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+                className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-xs text-white transition-colors"
               >
-                Create Business Account
+                Business Account
               </Link>
               <Link
-                href="/login/talent?mode=signin&redirect=/dashboard/talent"
-                className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-sm text-white transition-colors"
+                href="/login/customer?mode=signup&redirect=/dashboard/customer"
+                className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 font-semibold text-xs text-white transition-colors"
+              >
+                Customer Account
+              </Link>
+              <Link
+                href="/login/customer"
+                className="px-3 py-2 rounded-lg border border-gray-300 hover:border-gray-400 font-semibold text-xs text-gray-700 transition-colors"
               >
                 Sign In
               </Link>

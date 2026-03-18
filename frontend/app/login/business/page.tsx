@@ -28,6 +28,7 @@ function BusinessLoginPageInner() {
   const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resetSent, setResetSent] = useState(false)
 
   useEffect(() => {
     // Ensure mode matches URL parameter
@@ -49,6 +50,18 @@ function BusinessLoginPageInner() {
       if (data.session?.user?.id) router.replace(redirectTo)
     }).catch(() => {})
   }, [router, redirectTo, initialMode])
+
+  const sendReset = async () => {
+    if (!email.trim()) { setError('Enter your email address first.'); return }
+    setBusy(true)
+    setError(null)
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    setBusy(false)
+    if (err) { setError(err.message); return }
+    setResetSent(true)
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -320,6 +333,23 @@ function BusinessLoginPageInner() {
               </button>
             </div>
           </div>
+          {mode === 'signin' && (
+            <div className="text-right -mt-2">
+              <button
+                type="button"
+                onClick={sendReset}
+                disabled={busy}
+                className="text-xs text-gray-500 hover:text-green-600 transition-colors"
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
+          {resetSent && (
+            <div className="border border-green-500/30 bg-green-500/10 text-green-700 rounded-lg p-3 text-sm">
+              Password reset email sent — check your inbox.
+            </div>
+          )}
           <button
             type="submit"
             disabled={busy}

@@ -60,8 +60,9 @@ export default function CustomerProfilePage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ name, phone, company, location }),
     })
-    if (res.ok) { setSavedOk(true); setTimeout(() => setSavedOk(false), 3000) }
-    else { const j = await res.json(); setError(j.error || 'Save failed') }
+    const j = await res.json()
+    if (res.ok && j.profile) { setSavedOk(true); setTimeout(() => setSavedOk(false), 3000) }
+    else { setError(j.error || 'Save failed — please try again') }
     setSaving(false)
   }
 
@@ -119,7 +120,7 @@ export default function CustomerProfilePage() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Full name *</label>
                 <input required value={name} onChange={e => setName(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
@@ -130,19 +131,19 @@ export default function CustomerProfilePage() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
                 <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="+61 400 000 000" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Company</label>
                 <input value={company} onChange={e => setCompany(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Optional" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Location</label>
                 <input value={location} onChange={e => setLocation(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="City, Country" />
               </div>
 

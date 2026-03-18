@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import LocationDropdownsString from '@/components/LocationDropdownsString'
 import { CollapsibleTextarea } from '@/components/CollapsibleTextarea'
+import DeleteAccountSection from '@/components/DeleteAccountSection'
 
 // Helper function to geocode location using Mapbox
 async function geocodeLocation(location: string): Promise<{ lat: number; lng: number } | null> {
@@ -653,6 +654,8 @@ export default function EditTalentProfilePage() {
             </Link>
           </div>
         </form>
+
+        <DeleteAccountSection />
       </div>
     </div>
   )

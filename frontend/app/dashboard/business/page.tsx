@@ -1411,17 +1411,15 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
         return
       }
 
-      // Resolve business profile id defensively
-      let businessProfileId: string | null = businessProfile?.id ? String(businessProfile.id) : null
-      if (!businessProfileId) {
-        const bp = await supabase.from('business_profiles').select('id').eq('user_id', uid).maybeSingle()
-        if (bp.error || !bp.data?.id) {
-          setVacanciesError('No business profile found for this user.')
-          setVacancies([])
-          return
-        }
-        businessProfileId = String(bp.data.id)
+      // Always resolve business profile id from the current auth session to avoid stale closure state
+      // when switching between business accounts without a full page reload.
+      const bpLookup = await supabase.from('business_profiles').select('id').eq('user_id', uid).maybeSingle()
+      if (bpLookup.error || !bpLookup.data?.id) {
+        setVacanciesError('No business profile found for this user.')
+        setVacancies([])
+        return
       }
+      const businessProfileId: string = String(bpLookup.data.id)
 
       const filterKeys = ['location_id', 'business_profile_id', 'business_id', 'company_id'] as const
       const selectors = [
@@ -1515,12 +1513,10 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
       if (!uid) { setApplications([]); return }
 
       // Get business profile id
-      let bpId: string | null = businessProfile?.id ? String(businessProfile.id) : null
-      if (!bpId) {
-        const bp = await supabase.from('business_profiles').select('id').eq('user_id', uid).maybeSingle()
-        if (!bp.data?.id) { setApplications([]); return }
-        bpId = String(bp.data.id)
-      }
+      // Always resolve from current auth session to avoid stale closure state
+      const bpLookupA = await supabase.from('business_profiles').select('id').eq('user_id', uid).maybeSingle()
+      if (!bpLookupA.data?.id) { setApplications([]); return }
+      const bpId: string = String(bpLookupA.data.id)
 
       // Get all job ids for this business (try multiple FK columns defensively)
       let jobData: any[] | null = null

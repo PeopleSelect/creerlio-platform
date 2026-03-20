@@ -2452,8 +2452,8 @@ function PortfolioViewPageInner() {
                       <h3 className="text-xl font-bold text-white mb-2">
                         {connectionStatus === 'accepted' ? 'Connection' : 'Connection Request'}
                       </h3>
-                      <p className="text-gray-400">
-                        {connectionStatus === 'accepted' 
+                      <p className="text-white">
+                        {connectionStatus === 'accepted'
                           ? 'This connection has been accepted. You can discontinue it at any time.'
                           : 'Review the talent\'s portfolio below. You can accept or decline this connection request.'}
                       </p>

@@ -155,13 +155,48 @@ export async function GET(req: NextRequest) {
 
     const { data: requests, error } = await supabase
       .from('snapshot_access_requests')
-      .select('id, snapshot_id, requester_name, requester_company, requester_email, reason, status, decided_at, approved_share_token, created_at')
+      .select('id, snapshot_id, requester_name, requester_company, requester_email, requester_user_id, reason, status, decided_at, approved_share_token, created_at')
       .in('snapshot_id', snapshotIds)
       .order('created_at', { ascending: false })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    return NextResponse.json({ requests: requests || [] })
+    // Enrich with business profile slug for requesters who are registered business users
+    const requesterUserIds = (requests || [])
+      .map((r: any) => r.requester_user_id)
+      .filter(Boolean)
+
+    let slugByUserId: Record<string, string> = {}
+    if (requesterUserIds.length > 0) {
+      const { data: bps } = await supabase
+        .from('business_profiles')
+        .select('id, user_id')
+        .in('user_id', requesterUserIds)
+
+      if (bps && bps.length > 0) {
+        const bpIds = bps.map((b: any) => b.id)
+        const { data: pages } = await supabase
+          .from('business_profile_pages')
+          .select('business_id, slug')
+          .in('business_id', bpIds)
+          .eq('is_published', true)
+
+        const slugByBpId: Record<string, string> = {}
+        for (const p of (pages || [])) {
+          slugByBpId[p.business_id] = p.slug
+        }
+        for (const bp of bps) {
+          if (slugByBpId[bp.id]) slugByUserId[bp.user_id] = slugByBpId[bp.id]
+        }
+      }
+    }
+
+    const enriched = (requests || []).map((r: any) => ({
+      ...r,
+      business_slug: r.requester_user_id ? (slugByUserId[r.requester_user_id] || null) : null,
+    }))
+
+    return NextResponse.json({ requests: enriched })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Internal error' }, { status: 500 })
   }

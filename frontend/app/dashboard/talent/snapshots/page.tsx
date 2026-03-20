@@ -54,9 +54,9 @@ function SnapshotInfoTooltip() {
         ?
       </button>
       {open && (
-        <div className="absolute left-7 top-1/2 -translate-y-1/2 z-50 w-80 rounded-2xl bg-slate-800 border border-slate-700 shadow-2xl p-4 text-left">
+        <div className="absolute left-0 top-full mt-2 z-50 w-80 rounded-2xl bg-slate-800 border border-slate-700 shadow-2xl p-4 text-left">
           {/* Arrow */}
-          <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-slate-800 border-l border-b border-slate-700 rotate-45" />
+          <div className="absolute -top-1.5 left-2 w-3 h-3 bg-slate-800 border-l border-t border-slate-700 rotate-45" />
           <p className="font-semibold text-white text-sm mb-2">What are Anonymous Snapshots?</p>
           <p className="text-slate-400 text-xs leading-relaxed mb-3">
             A snapshot lets you be discovered by recruiters and businesses <span className="text-white font-medium">without revealing your name or identity</span>. Only your skills, experience level, location, and summary are visible — recruiters must request access before seeing your full profile.

@@ -1448,7 +1448,8 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
 
           if (!res.error) {
             data = (res.data || []) as any[]
-            break outer
+            if (data.length > 0) break outer
+            break  // no results for this filterKey — try next one
           }
 
           lastErr = res.error

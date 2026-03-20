@@ -122,12 +122,9 @@ export default function BusinessBankPage() {
       const thumbMap: Record<string, string> = {}
       for (const item of mediaItems) {
         if (item.file_path) {
-          const { data: urlData } = await supabase.storage
-            .from(BUCKET)
-            .createSignedUrl(item.file_path, 3600)
-          if (urlData) {
-            thumbMap[String(item.id)] = urlData.signedUrl
-          }
+          // business-bank is a public bucket — getPublicUrl never fails
+          const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(item.file_path)
+          if (urlData?.publicUrl) thumbMap[String(item.id)] = urlData.publicUrl
         } else if (item.file_url) {
           thumbMap[String(item.id)] = item.file_url
         }
@@ -965,13 +962,14 @@ export default function BusinessBankPage() {
     return /^https?:\/\//i.test(value)
   }
 
-  async function openFile(path: string) {
+  function openFile(path: string) {
     if (isExternalUrl(path)) {
       window.open(path, '_blank')
       return
     }
-    const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60 * 10)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+    // business-bank is a public bucket — use public URL directly
+    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
+    if (data?.publicUrl) window.open(data.publicUrl, '_blank')
   }
 
   function renderThumb(item: BusinessBankItem) {

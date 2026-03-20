@@ -925,18 +925,15 @@ function BusinessProfileViewPageInner() {
               .maybeSingle()
             const videoItem = vidRow.data as any
             if (videoItem) {
-              // For uploaded/recorded videos, use file_path to get signed URL
-              if (videoItem.file_path) {
-                const { data: urlData } = await supabase.storage.from('business-bank').createSignedUrl(videoItem.file_path, 60 * 30)
-                if (!cancelled) {
-                  setIntroVideoUrl(urlData?.signedUrl ?? null)
-                  setIntroVideoTitle('Introduction Video')
-                }
-              }
-              // For linked videos, use file_url directly
-              else if (videoItem.file_url) {
+              // For uploaded/recorded videos, prefer public file_url, fall back to signed URL
+              if (videoItem.file_url) {
                 if (!cancelled) {
                   setIntroVideoUrl(videoItem.file_url)
+                  setIntroVideoTitle('Introduction Video')
+                }
+              } else if (videoItem.file_path) {
+                if (!cancelled) {
+                  setIntroVideoUrl(businessBankPublicUrl(videoItem.file_path))
                   setIntroVideoTitle('Introduction Video')
                 }
               }
@@ -1935,17 +1932,22 @@ function BusinessProfileViewPageInner() {
     return m?.[1] ?? ''
   }
 
+  function businessBankPublicUrl(path: string): string {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+    const encoded = path.split('/').map(encodeURIComponent).join('/')
+    return `${supabaseUrl}/storage/v1/object/public/business-bank/${encoded}`
+  }
+
   async function ensureSignedUrl(path: string) {
     if (!path) return
     if (thumbUrls[path]) return
-    const { data } = await supabase.storage.from('business-bank').createSignedUrl(path, 60 * 30)
-    if (data?.signedUrl) setThumbUrls((prev) => ({ ...prev, [path]: data.signedUrl }))
+    const url = businessBankPublicUrl(path)
+    setThumbUrls((prev) => ({ ...prev, [path]: url }))
   }
 
   async function openPath(path: string, fileType: string | null | undefined, title: string) {
     if (!path) return
-    const { data } = await supabase.storage.from('business-bank').createSignedUrl(path, 60 * 30)
-    const url = data?.signedUrl
+    const url = businessBankPublicUrl(path)
     if (!url) return
     const ft = (fileType || '').toLowerCase()
     if (ft.includes('pdf')) {
@@ -1976,7 +1978,7 @@ function BusinessProfileViewPageInner() {
     const label = isImg ? 'IMG' : isVid ? 'VID' : isPdf ? 'PDF' : (type ? type.toUpperCase().slice(0, 4) : 'FILE')
 
     if (path && (isImg || isVid) && !thumbUrls[path]) ensureSignedUrl(path).catch(() => {})
-    const url = path ? thumbUrls[path] : null
+    const url = (path ? thumbUrls[path] : null) || (item?.url && (isImg || isVid) ? String(item.url) : null)
 
     if (url && isImg) {
       // eslint-disable-next-line @next/next/no-img-element
@@ -2041,9 +2043,9 @@ function BusinessProfileViewPageInner() {
     const shouldMintFresh = path && (isImg || isVid) && (!hasFresh || (rawUrl && isSupabaseSignedObjectUrl(rawUrl)))
     if (shouldMintFresh) ensureSignedUrl(path).catch(() => {})
 
-    // Prefer a freshly minted signed URL when we have a path.
-    // Avoid reusing stored signed URLs (they expire and cause broken thumbnails).
-    const url = path ? thumbUrls[path] : rawUrl || null
+    // Prefer a freshly minted URL when we have a path.
+    // Fall back to rawUrl (e.g. public URL stored in a.url) if thumbUrls isn't ready yet.
+    const url = (path ? thumbUrls[path] : null) || rawUrl || null
 
     if (url && isImg) {
       return (
@@ -2826,8 +2828,8 @@ function BusinessProfileViewPageInner() {
                                       {card.category}{card.lifecycle_stage ? ` • ${card.lifecycle_stage}` : ''}
                                     </div>
                                   </div>
-                                  <div className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10">
-                                    {access?.visibility_level || 'public_summary'}
+                                  <div className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 capitalize">
+                                    {(access?.visibility_level || 'public_summary').replace(/_/g, ' ')}
                                   </div>
                                 </div>
                                 <div className="mt-3 text-sm text-slate-300 whitespace-pre-wrap">{card.short_description}</div>

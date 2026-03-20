@@ -216,7 +216,7 @@ async function main() {
   const { error: profileErr } = await supabase
     .from('talent_profiles')
     .upsert(
-      { ...PROFILE, user_id: userId, email: DEMO_EMAIL, updated_at: new Date().toISOString() },
+      { ...PROFILE, id: userId, user_id: userId, email: DEMO_EMAIL, updated_at: new Date().toISOString() },
       { onConflict: 'user_id' }
     )
   if (profileErr) {

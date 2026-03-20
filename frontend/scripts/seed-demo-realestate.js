@@ -336,7 +336,7 @@ async function main() {
   // ── Talent profile ────────────────────────────────────────────────────────
   const { error: profileErr } = await supabase
     .from('talent_profiles')
-    .upsert({ ...PROFILE, user_id: userId, email: DEMO_EMAIL, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+    .upsert({ ...PROFILE, id: userId, user_id: userId, email: DEMO_EMAIL, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
   if (profileErr) { console.error('❌  Profile upsert failed:', profileErr.message); process.exit(1) }
   console.log('✅  talent_profiles upserted')
 

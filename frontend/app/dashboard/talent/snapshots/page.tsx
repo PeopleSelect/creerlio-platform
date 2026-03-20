@@ -37,6 +37,46 @@ interface AccessRequest {
 
 type Tab = 'snapshots' | 'analytics' | 'requests'
 
+function SnapshotInfoTooltip() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative inline-flex items-center">
+      <button
+        type="button"
+        title="What are Anonymous Snapshots?"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        className="w-5 h-5 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold flex items-center justify-center transition-colors shrink-0"
+        aria-label="What are Anonymous Snapshots?"
+      >
+        ?
+      </button>
+      {open && (
+        <div className="absolute left-7 top-1/2 -translate-y-1/2 z-50 w-80 rounded-2xl bg-slate-800 border border-slate-700 shadow-2xl p-4 text-left">
+          {/* Arrow */}
+          <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-slate-800 border-l border-b border-slate-700 rotate-45" />
+          <p className="font-semibold text-white text-sm mb-2">What are Anonymous Snapshots?</p>
+          <p className="text-slate-400 text-xs leading-relaxed mb-3">
+            A snapshot lets you be discovered by recruiters and businesses <span className="text-white font-medium">without revealing your name or identity</span>. Only your skills, experience level, location, and summary are visible — recruiters must request access before seeing your full profile.
+          </p>
+          <p className="font-semibold text-white text-xs mb-1.5">How to use:</p>
+          <ol className="text-slate-400 text-xs leading-relaxed space-y-1.5 list-none">
+            <li className="flex gap-2"><span className="text-emerald-400 font-bold shrink-0">1.</span><span>Click <span className="text-white font-medium">+ New snapshot</span> and fill in your headline, skills, and a brief summary.</span></li>
+            <li className="flex gap-2"><span className="text-emerald-400 font-bold shrink-0">2.</span><span>Toggle your snapshot <span className="text-white font-medium">Active</span> so it appears in recruiter searches.</span></li>
+            <li className="flex gap-2"><span className="text-emerald-400 font-bold shrink-0">3.</span><span>When a recruiter is interested, they send an <span className="text-white font-medium">access request</span> — you decide whether to share your full profile.</span></li>
+            <li className="flex gap-2"><span className="text-emerald-400 font-bold shrink-0">4.</span><span>Track views and search appearances in the <span className="text-white font-medium">Analytics</span> tab.</span></li>
+          </ol>
+          <div className="mt-3 pt-3 border-t border-slate-700">
+            <p className="text-slate-500 text-xs">You can create up to 10 snapshots — useful for targeting different roles or industries.</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function TalentSnapshotsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -188,7 +228,10 @@ export default function TalentSnapshotsPage() {
             </svg>
           </Link>
           <div className="flex-1">
-            <h1 className="font-bold text-white">Anonymous Snapshots</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-bold text-white">Anonymous Snapshots</h1>
+              <SnapshotInfoTooltip />
+            </div>
             <p className="text-xs text-slate-500">Discover opportunities without revealing your identity</p>
           </div>
           {!creating && editingId === null && (

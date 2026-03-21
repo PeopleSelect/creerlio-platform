@@ -130,7 +130,6 @@ export async function syncJobs(
           is_auto_synced:    true,
           first_seen_at:     now,
           last_seen_at:      now,
-          published_at:      now,
           // FK columns
           business_id:       business_id,
           ...(business_profile_id ? { business_profile_id } : {}),

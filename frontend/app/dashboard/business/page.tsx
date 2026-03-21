@@ -1423,16 +1423,18 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
 
       // Always resolve business profile id from the current auth session to avoid stale closure state
       // when switching between business accounts without a full page reload.
-      const bpLookup = await supabase.from('business_profiles').select('id').eq('user_id', uid).maybeSingle()
+      const bpLookup = await supabase.from('business_profiles').select('id, business_id').eq('user_id', uid).maybeSingle()
       if (bpLookup.error || !bpLookup.data?.id) {
         setVacanciesError('No business profile found for this user.')
         setVacancies([])
         return
       }
       const businessProfileId: string = String(bpLookup.data.id)
+      const businessId: string | null = bpLookup.data.business_id ?? null
 
       const filterKeys = ['location_id', 'business_profile_id', 'business_id', 'company_id'] as const
       const selectors = [
+        'id,title,status,is_active,employment_type,location,city,country,created_at,application_url,application_email,is_auto_synced',
         'id,title,status,is_active,employment_type,location,city,country,created_at,application_url,application_email',
         'id,title,status,is_active,location,city,country,employment_type,created_at',
         'id,title,status,is_active,created_at',
@@ -1444,7 +1446,10 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
       let lastErr: any = null
 
       outer: for (const fk of filterKeys) {
-        const filterValue = fk === 'location_id' ? activeLocationId : businessProfileId
+        const filterValue =
+          fk === 'location_id' ? activeLocationId
+          : fk === 'business_id' ? businessId
+          : businessProfileId
         if (!filterValue) continue
         for (const sel of selectors) {
           const res: any = await (supabase

@@ -1406,13 +1406,14 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
 
     // Geocode the route query to get Point B
     const geocodePointB = async () => {
+      const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
       onRouteStateChangeRef.current({ busy: true })
 
       try {
         const geocodeRes = await fetch(`/api/map/geocode?q=${encodeURIComponent(props.externalRouteQuery)}&limit=1`)
         const geocodeData = await geocodeRes.json().catch(() => null)
 
-        if (!geocodeData.features || geocodeData.features.length === 0) {
+        if (!geocodeData?.features || geocodeData.features.length === 0) {
           onRouteStateChangeRef.current({ busy: false, error: 'Location not found' })
           return
         }
@@ -1592,6 +1593,7 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
 
         // Recalculate route when marker is dragged
         pointBMarker.on('dragend', async () => {
+          const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
           try {
             const pointAInfo = getPointAFromSelection()
             if (!pointAInfo) return

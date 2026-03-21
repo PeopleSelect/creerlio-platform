@@ -1,7 +1,8 @@
 /**
  * Enriches MinterEllison auto-synced job descriptions by fetching each
  * individual job detail page from careers.minterellison.com and storing
- * clean, sanitized HTML for rich rendering.
+ * clean, sanitized HTML. Strips generic boilerplate — keeps only the
+ * job-specific sections (Team, Role, Responsibilities, Requirements, etc.)
  *
  * Run from /frontend: node scripts/minterellison-enrich-descriptions.js
  */
@@ -21,6 +22,31 @@ const sb = createClient(
 )
 
 const ME_BIZ_ID = '9ae96870-d022-4fd1-bdd9-60477af00665'
+
+// Paragraphs that are generic MinterEllison boilerplate across all jobs
+const BOILERPLATE_PATTERNS = [
+  /MinterEllison is one of Australia.s largest independent law/i,
+  /heritage of almost 200 years/i,
+  /nearly 200 years building something exceptional/i,
+  /authentic and enduring relationships/i,
+  /Clients seek out MinterEllison to help them solve/i,
+  /full-service legal offering and complementary consulting/i,
+  /Best Employer|Employer of Choice/i,
+  /leading the way with AI and other emerging technologies/i,
+  /sustainable ways of working.*social.*financial.*health benefits/i,
+  /We use cookies/i,
+  /cookie preferences/i,
+  /defined not just by its legal expertise, but by its people/i,
+  /High-performing, collaborative, and driven by curiosity/i,
+  /For you, this means the opportunity to work on industry-leading/i,
+  /We offer opportunities to work on industry-leading mandates/i,
+  /opportunity to work on industry-leading matters for top-tier clients/i,
+  /we have spent nearly/i,
+]
+
+function isBoilerplate(text) {
+  return BOILERPLATE_PATTERNS.some(p => p.test(text))
+}
 
 function fetchUrl(url, headers = {}) {
   return new Promise((resolve, reject) => {
@@ -62,13 +88,15 @@ function sanitizeHtml(html) {
     .replace(/\s+on\w+="[^"]*"/gi, '')
     .replace(/\s+on\w+='[^']*'/gi, '')
     .replace(/href="javascript:[^"]*"/gi, '')
+    // Clean up &nbsp; to spaces
+    .replace(/&nbsp;/g, ' ')
+    // Remove trailing whitespace
     .trim()
 }
 
 /**
- * Fetch iCIMS job detail page and extract the job description HTML.
- * The description is in span.jobdescription; we strip the Location/Contract
- * header paragraphs at the top.
+ * Fetch iCIMS job detail page, extract description, strip boilerplate.
+ * Returns sanitized HTML with only job-specific content.
  */
 async function fetchJobHtml(url) {
   if (!url || !url.startsWith('http')) return null
@@ -80,22 +108,62 @@ async function fetchJobHtml(url) {
 
     const $ = cheerio.load(body)
 
-    // iCIMS uses span.jobdescription for the full job content
+    // iCIMS job content is in span.jobdescription
     const container = $('span.jobdescription, .jobdescription').first()
     if (!container.length) return null
 
-    // Remove leading empty/metadata paragraphs (Location, Contract Type, etc.)
-    container.find('p').each((_, el) => {
-      const text = $(el).text().trim()
-      if (!text || /^(Location|Contract Type|Job Type|Department|Requisition)/i.test(text)) {
-        $(el).remove()
-      }
-    })
+    // Strategy: find the first "section heading" paragraph (a <p> whose only
+    // substantive content is a <strong> tag, e.g. "The Team", "The Role").
+    // Include only that paragraph and everything after it.
+    const children = container.children().toArray()
+    let startIdx = -1
 
-    const html = sanitizeHtml(container.html() || '')
+    for (let i = 0; i < children.length; i++) {
+      const $el = $(children[i])
+      const text = $el.text().replace(/\s+/g, ' ').trim()
+      if (!text) continue
+
+      // A heading paragraph contains a <strong> whose text is short (< 60 chars)
+      // and the paragraph text itself is mostly just that heading
+      const $strong = $el.find('strong')
+      if ($strong.length > 0) {
+        const strongText = $strong.first().text().trim()
+        if (strongText.length > 0 && strongText.length < 60 && text.length < 80) {
+          startIdx = i
+          break
+        }
+      }
+    }
+
+    // If no heading found, find the first non-boilerplate, non-metadata paragraph
+    if (startIdx < 0) {
+      for (let i = 0; i < children.length; i++) {
+        const $el = $(children[i])
+        const text = $el.text().replace(/\s+/g, ' ').trim()
+        if (!text) continue
+        if (/^(Location|Contract Type|Job Type|Department|Requisition)\s*:/i.test(text)) continue
+        if (isBoilerplate(text)) continue
+        startIdx = i
+        break
+      }
+    }
+
+    const effectiveStart = startIdx >= 0 ? startIdx : 0
+
+    const resultParts = []
+    for (let i = effectiveStart; i < children.length; i++) {
+      const $el = $(children[i])
+      const text = $el.text().replace(/\s+/g, ' ').trim()
+      if (!text) continue
+      if (isBoilerplate(text)) continue
+      if (/^(Location|Contract Type|Job Type|Department|Requisition)\s*:/i.test(text)) continue
+      resultParts.push(sanitizeHtml($.html($el)))
+    }
+
+    const html = resultParts.join('\n')
     const plainText = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 
-    if (plainText.length < 100) return null
+    if (plainText.length < 80) return null
     return html
   } catch (e) {
     return null
@@ -106,7 +174,7 @@ function delay(ms) { return new Promise(r => setTimeout(r, ms)) }
 
 async function run() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  console.log(' MinterEllison Description Enrichment (HTML)')
+  console.log(' MinterEllison Description Enrichment (job-specific HTML)')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
   if (!cheerio) {
@@ -128,13 +196,15 @@ async function run() {
 
   for (let i = 0; i < jobs.length; i++) {
     const job = jobs[i]
-    if (!job.application_url?.startsWith('http')) { process.stdout.write('✗'); failed++; continue }
+    if (!job.application_url || !job.application_url.startsWith('http')) {
+      process.stdout.write('✗'); failed++; continue
+    }
     if (i > 0) await delay(600)
 
     const html = await fetchJobHtml(job.application_url)
     if (!html) {
       process.stdout.write('?')
-      console.log(`\n  No description found: ${job.title}`)
+      console.log(`\n  No content: ${job.title}`)
       failed++
       continue
     }

@@ -1457,7 +1457,7 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
             .select(sel)
             .eq(fk, filterValue)
             .order('created_at', { ascending: false })
-            .limit(50) as any)
+            .limit(200) as any)
 
           if (!res.error) {
             data = (res.data || []) as any[]

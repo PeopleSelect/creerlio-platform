@@ -4354,6 +4354,34 @@ Declined Career Requests
                         Close
                       </button>
                       <div className="flex items-center gap-3">
+                        {/* Withdraw Request — only for talent-initiated pending requests */}
+                        {isTalentInitiatedRequest(selectedRequest) && selectedRequest.status === 'pending' && (
+                          <button
+                            disabled={isCancelling}
+                            onClick={async () => {
+                              if (!confirm(`Withdraw your connection request to ${selectedRequest.business_name || 'this business'}?`)) return
+                              setIsCancelling(true)
+                              try {
+                                const { error } = await supabase
+                                  .from('talent_connection_requests')
+                                  .update({ status: 'discontinued', responded_at: new Date().toISOString() })
+                                  .eq('id', selectedRequest.id)
+                                if (error) throw error
+                                setConnRequests((prev) => prev.filter((r) => r.id !== selectedRequest.id))
+                                setConnWithdrawn((prev) => [{ ...selectedRequest, status: 'discontinued' }, ...prev])
+                                setSelectedRequest(null)
+                              } catch (err: any) {
+                                alert('Failed to withdraw request: ' + (err.message || 'Unknown error'))
+                              } finally {
+                                setIsCancelling(false)
+                              }
+                            }}
+                            className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isCancelling ? 'Withdrawing...' : 'Withdraw Request'}
+                          </button>
+                        )}
+
                         {/* View Business Profile Button */}
                         <button
                           onClick={async () => {

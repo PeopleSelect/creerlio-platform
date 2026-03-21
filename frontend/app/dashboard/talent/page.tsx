@@ -751,6 +751,7 @@ export default function TalentDashboard() {
                 const business = job?.business_profile_id ? businessMap.get(String(job.business_profile_id)) : null
                 
                 return {
+                  ...app,
                   jobs: job ? {
                     ...job,
                     business_profiles: business || null

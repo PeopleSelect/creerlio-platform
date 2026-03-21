@@ -3257,8 +3257,12 @@ export default function TalentDashboard() {
                   
                   const jobLocation = job.location || job.city || job.country || null
                   const employmentType = job.employment_type || null
-                  const jobDescription = job.description || null
-                  const appliedDate = new Date(app.created_at)
+                  const rawDescription = job.description || null
+                  const jobDescription = rawDescription
+                    ? rawDescription.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+                    : null
+                  const appliedDateObj = app.created_at ? new Date(app.created_at) : null
+                  const appliedDate = appliedDateObj && !isNaN(appliedDateObj.getTime()) ? appliedDateObj : null
                   const status = app.status || 'applied'
                   
                   const handleWithdraw = async () => {
@@ -3343,11 +3347,11 @@ export default function TalentDashboard() {
                               </p>
                             )}
                             <p className="text-gray-500 text-sm">
-                              <span className="font-medium">Applied:</span> {appliedDate.toLocaleDateString('en-AU', { 
-                                year: 'numeric', 
-                                month: 'long', 
-                                day: 'numeric' 
-                              })}
+                              <span className="font-medium">Applied:</span> {appliedDate ? appliedDate.toLocaleDateString('en-AU', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                              }) : 'Date unavailable'}
                             </p>
                             {app.updated_at && app.updated_at !== app.created_at && (
                               <p className="text-gray-500 text-sm">

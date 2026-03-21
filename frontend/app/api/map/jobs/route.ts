@@ -85,6 +85,7 @@ export async function GET(request: NextRequest) {
       .select('id,title,description,location,city,state,country,employment_type,status,business_profile_id,latitude,longitude')
       .ilike('status', 'published%') // RLS requires published; tolerate trailing spaces
       .or('is_active.is.true,is_active.is.null')
+      .limit(500)
 
     // If show_all is false, only show jobs that match filters
     if (!showAll) {
@@ -121,6 +122,7 @@ export async function GET(request: NextRequest) {
         .select('id,title,description,location,city,state,country,employment_type,status,business_profile_id')
         .ilike('status', 'published%')
         .or('is_active.is.true,is_active.is.null')
+        .limit(500)
       
       if (!showAll && q.trim()) {
         const searchTerm = q.trim()

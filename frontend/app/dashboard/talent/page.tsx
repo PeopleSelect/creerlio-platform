@@ -480,96 +480,45 @@ export default function TalentDashboard() {
     }
   }, [talentMapShowAllBusinesses, talentMapSearchCenter])
 
-  // Fetch route suggestions
+  // Fetch route suggestions via proxy
   useEffect(() => {
-    const fetchTalentMapRouteSuggestions = async (q: string) => {
-      const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
-      const qq = q.trim()
-      if (!qq || qq.length < 2) {
-        setTalentMapRouteSuggestions([])
-        setTalentMapRouteActiveIdx(0)
-        return
-      }
-      if (!token) return
-      talentMapRouteAbortRef.current?.abort()
-      const ac = new AbortController()
-      talentMapRouteAbortRef.current = ac
-      try {
-        const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(qq)}.json`)
-        u.searchParams.set('access_token', token)
-        u.searchParams.set('limit', '6')
-        u.searchParams.set('types', 'address,place,locality,neighborhood,postcode,region')
-        u.searchParams.set('country', 'AU')
-        const res = await fetch(u.toString(), { signal: ac.signal })
-        const json: any = await res.json().catch(() => null)
+    const qq = talentMapRouteQueryDebounced.trim()
+    if (!talentMapRouteSuggestionsOpen || qq.length < 2) {
+      setTalentMapRouteSuggestions([])
+      return
+    }
+    talentMapRouteAbortRef.current?.abort()
+    const ac = new AbortController()
+    talentMapRouteAbortRef.current = ac
+    fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&types=address,place,locality,neighborhood,postcode,region&country=AU`, { signal: ac.signal })
+      .then(r => r.json()).catch(() => null)
+      .then(json => {
         const feats = Array.isArray(json?.features) ? json.features : []
-        const next = feats
-          .map((f: any) => {
-            const id = String(f?.id || '')
-            const label = String(f?.place_name || '').trim()
-            const center = f?.center
-            const lng = Array.isArray(center) ? center[0] : null
-            const lat = Array.isArray(center) ? center[1] : null
-            if (!id || !label || typeof lng !== 'number' || typeof lat !== 'number') return null
-            return { id, label, lng, lat }
-          })
-          .filter(Boolean)
-          .slice(0, 6) as any
+        const next = feats.map((f: any) => {
+          const center = f?.center
+          const lng = Array.isArray(center) ? center[0] : null
+          const lat = Array.isArray(center) ? center[1] : null
+          if (!f?.id || !f?.place_name || typeof lng !== 'number' || typeof lat !== 'number') return null
+          return { id: String(f.id), label: String(f.place_name).trim(), lng, lat }
+        }).filter(Boolean).slice(0, 6) as any
         setTalentMapRouteSuggestions(next)
         setTalentMapRouteActiveIdx(0)
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.error('Error fetching route suggestions:', err)
-        }
-      }
-    }
-    if (talentMapRouteSuggestionsOpen && talentMapRouteQueryDebounced.trim().length >= 2) {
-      fetchTalentMapRouteSuggestions(talentMapRouteQueryDebounced)
-    } else {
-      setTalentMapRouteSuggestions([])
-    }
+      })
+      .catch(() => {})
   }, [talentMapRouteQueryDebounced, talentMapRouteSuggestionsOpen])
 
-  // Fetch radius-search location suggestions
+  // Fetch radius-search location suggestions via proxy
   const talentMapLocAbortRef = useRef<AbortController | null>(null)
   useEffect(() => {
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
     const qq = talentMapLocQuery.trim()
     if (!qq || qq.length < 2) {
       setTalentMapLocSuggestions([])
       return
     }
-    if (!token) {
-      // Fallback: use server-side geocode proxy
-      const ac = new AbortController()
-      talentMapLocAbortRef.current?.abort()
-      talentMapLocAbortRef.current = ac
-      fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}`, { signal: ac.signal })
-        .then(r => r.json()).catch(() => null)
-        .then(json => {
-          const feats = Array.isArray(json?.features) ? json.features : []
-          const next = feats.map((f: any) => {
-            const center = f?.center
-            const lng = Array.isArray(center) ? center[0] : null
-            const lat = Array.isArray(center) ? center[1] : null
-            if (!f?.id || !f?.place_name || typeof lng !== 'number' || typeof lat !== 'number') return null
-            return { id: String(f.id), label: String(f.place_name), lng, lat }
-          }).filter(Boolean).slice(0, 6) as any
-          setTalentMapLocSuggestions(next)
-          setTalentMapLocActiveIdx(0)
-        })
-        .catch(() => {})
-      return () => ac.abort()
-    }
     talentMapLocAbortRef.current?.abort()
     const ac = new AbortController()
     talentMapLocAbortRef.current = ac
-    const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(qq)}.json`)
-    u.searchParams.set('access_token', token)
-    u.searchParams.set('limit', '6')
-    u.searchParams.set('types', 'place,locality,neighborhood,postcode,region')
-    u.searchParams.set('country', 'AU')
-    fetch(u.toString(), { signal: ac.signal })
+    fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&country=AU`, { signal: ac.signal })
       .then(r => r.json()).catch(() => null)
       .then(json => {
         const feats = Array.isArray(json?.features) ? json.features : []

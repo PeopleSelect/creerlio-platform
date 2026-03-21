@@ -8,16 +8,12 @@ import LocationDropdownsString from '@/components/LocationDropdownsString'
 import { CollapsibleTextarea } from '@/components/CollapsibleTextarea'
 import DeleteAccountSection from '@/components/DeleteAccountSection'
 
-// Helper function to geocode location using Mapbox
+// Helper function to geocode location via server-side proxy
 async function geocodeLocation(location: string): Promise<{ lat: number; lng: number } | null> {
-  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-  if (!token || !location.trim()) return null
-
+  if (!location.trim()) return null
   try {
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(location)}.json?access_token=${token}&limit=1&country=AU`
-    const response = await fetch(url)
+    const response = await fetch(`/api/map/geocode?q=${encodeURIComponent(location)}&limit=1&country=AU`)
     const data = await response.json()
-    
     if (data.features && data.features.length > 0) {
       const [lng, lat] = data.features[0].center
       return { lat, lng }

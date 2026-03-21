@@ -79,43 +79,31 @@ export default function LocationDropdownsString({
     return () => clearTimeout(timer)
   }, [cityQuery])
 
-  // Fetch city suggestions from Mapbox
+  // Fetch city suggestions via server-side proxy
   useEffect(() => {
     const fetchCitySuggestions = async (q: string) => {
-      const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
       const qq = q.trim()
       if (!qq || qq.length < 2) {
         setCitySuggestions([])
         setCityActiveIdx(0)
         return
       }
-      if (!token) return
-      
+
       cityAbortRef.current?.abort()
       const ac = new AbortController()
       cityAbortRef.current = ac
-      
+
       try {
         // Build query with country/state context if available
         let query = qq
-        if (state) {
-          query = `${qq}, ${state}`
-        }
-        if (country) {
-          query = `${query}, ${country}`
-        }
-        
-        const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`)
-        u.searchParams.set('access_token', token)
-        u.searchParams.set('limit', '6')
-        u.searchParams.set('types', 'place,locality,neighborhood,postcode,address')
-        
-        // Add country filter if country is selected
-        if (country === 'Australia' || country === 'AU') {
-          u.searchParams.set('country', 'AU')
-        }
-        
-        const res = await fetch(u.toString(), { signal: ac.signal })
+        if (state) query = `${qq}, ${state}`
+        if (country) query = `${query}, ${country}`
+
+        const countryCode = (country === 'Australia' || country === 'AU') ? 'AU' : ''
+        const params = new URLSearchParams({ q: query, types: 'place,locality,neighborhood,postcode,address' })
+        if (countryCode) params.set('country', countryCode)
+
+        const res = await fetch(`/api/map/geocode?${params.toString()}`, { signal: ac.signal })
         const json: any = await res.json().catch(() => null)
         const feats = Array.isArray(json?.features) ? json.features : []
         const next = feats

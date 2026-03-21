@@ -76,12 +76,9 @@ export default function SnapshotBuilder({ initial, onSaved, onCancel }: Snapshot
     const ac = new AbortController()
     locAbort.current = ac
     setLocBusy(true)
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
-    if (!token) { setLocBusy(false); return }
     ;(async () => {
       try {
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locDebounced)}.json?access_token=${token}&limit=6&types=place,locality,neighborhood,postcode,region`
-        const res = await fetch(url, { signal: ac.signal })
+        const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(locDebounced)}`, { signal: ac.signal })
         if (ac.signal.aborted) return
         const json: any = await res.json()
         const feats = Array.isArray(json?.features) ? json.features : []

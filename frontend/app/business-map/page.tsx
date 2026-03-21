@@ -175,17 +175,9 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
     const ac = new AbortController()
     locAbort.current = ac
 
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-    if (!token) {
-      setLocError('Mapbox token not configured')
-      setLocBusy(false)
-      return
-    }
-
     ;(async () => {
       try {
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locDebounced)}.json?access_token=${token}&limit=6&types=place,locality,neighborhood,postcode,region&country=AU`
-        const res = await fetch(url, { signal: ac.signal })
+        const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(locDebounced)}&country=AU`, { signal: ac.signal })
         if (ac.signal.aborted) return
         const json: any = await res.json()
         const feats = Array.isArray(json?.features) ? json.features : []
@@ -319,14 +311,11 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
           if (locationParts.length === 0) return null
 
           const locationString = locationParts.join(', ')
-          const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-          if (!token) return null
 
           try {
-            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locationString)}.json?access_token=${token}&limit=1&country=AU`
-            const response = await fetch(url)
+            const response = await fetch(`/api/map/geocode?q=${encodeURIComponent(locationString)}&limit=1&country=AU`)
             const geocodeData = await response.json()
-            
+
             if (geocodeData.features && geocodeData.features.length > 0) {
               const [lng, lat] = geocodeData.features[0].center
               return { lat, lng }
@@ -334,7 +323,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
           } catch (err) {
             console.warn('Geocoding failed for talent:', err)
           }
-          
+
           return null
         }
 

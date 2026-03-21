@@ -260,36 +260,26 @@ function TalentMapPageInner() {
   }, [radiusKm, searchCenter])
 
   async function fetchRouteSuggestions(q: string) {
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
     const qq = q.trim()
     if (!qq || qq.length < 2) {
       setRouteSuggestions([])
       setRouteActiveIdx(0)
       return
     }
-    if (!token) return
     routeAbortRef.current?.abort()
     const ac = new AbortController()
     routeAbortRef.current = ac
     try {
-      const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(qq)}.json`)
-      u.searchParams.set('access_token', token)
-      u.searchParams.set('limit', '6')
-      // Include 'address' type to support street-level addresses like "6 George Street Sydney"
-      u.searchParams.set('types', 'address,place,locality,neighborhood,postcode,region')
-      u.searchParams.set('country', 'AU')
-      const res = await fetch(u.toString(), { signal: ac.signal })
+      const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&types=address,place,locality,neighborhood,postcode,region&country=AU`, { signal: ac.signal })
       const json: any = await res.json().catch(() => null)
       const feats = Array.isArray(json?.features) ? json.features : []
       const next: LocSuggestion[] = feats
         .map((f: any) => {
-          const id = String(f?.id || '')
-          const label = String(f?.place_name || '').trim()
           const center = f?.center
           const lng = Array.isArray(center) ? center[0] : null
           const lat = Array.isArray(center) ? center[1] : null
-          if (!id || !label || typeof lng !== 'number' || typeof lat !== 'number') return null
-          return { id, label, lng, lat }
+          if (!f?.id || !f?.place_name || typeof lng !== 'number' || typeof lat !== 'number') return null
+          return { id: String(f.id), label: String(f.place_name).trim(), lng, lat }
         })
         .filter(Boolean)
         .slice(0, 6) as any
@@ -307,107 +297,36 @@ function TalentMapPageInner() {
   }, [routeQueryDebounced, routeSuggestionsOpen])
 
   async function fetchLocSuggestions(q: string) {
-    console.log('[LocationSuggestions] fetchLocSuggestions CALLED with:', {
-      q,
-      showAllBusinesses,
-      locOpen,
-      currentSuggestionsCount: locSuggestions.length
-    })
-    
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
     const qq = q.trim()
-    // Allow suggestions with just 1 character for better UX
     if (!qq || qq.length < 1) {
-      console.log('[LocationSuggestions] Query too short, clearing suggestions')
       setLocSuggestions([])
       setLocActiveIdx(0)
-      return
-    }
-    if (!token) {
-      console.warn('[LocationSuggestions] Mapbox token missing')
       return
     }
     locAbort.current?.abort()
     const ac = new AbortController()
     locAbort.current = ac
-    
-    console.log('[LocationSuggestions] Making Mapbox API call for:', qq)
     try {
-      const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(qq)}.json`)
-      u.searchParams.set('access_token', token)
-      u.searchParams.set('limit', '6')
-      u.searchParams.set('types', 'place,locality,neighborhood,postcode,region')
-      u.searchParams.set('country', 'AU')
-      
-      console.log('[LocationSuggestions] Fetching from:', u.toString().replace(token, 'TOKEN_HIDDEN'))
-      const res = await fetch(u.toString(), { signal: ac.signal })
-      
-      if (!res.ok) {
-        console.error('[LocationSuggestions] API response not OK:', res.status, res.statusText)
-        throw new Error(`API error: ${res.status}`)
-      }
-      
-      const json: any = await res.json().catch((parseErr) => {
-        console.error('[LocationSuggestions] JSON parse error:', parseErr)
-        return null
-      })
-      
-      console.log('[LocationSuggestions] API response received:', {
-        hasJson: !!json,
-        featuresCount: Array.isArray(json?.features) ? json.features.length : 0
-      })
-      
+      const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&country=AU`, { signal: ac.signal })
+      const json: any = await res.json().catch(() => null)
       const feats = Array.isArray(json?.features) ? json.features : []
       const next: LocSuggestion[] = feats
         .map((f: any) => {
-          const id = String(f?.id || '')
-          const label = String(f?.place_name || '').trim()
           const center = f?.center
           const lng = Array.isArray(center) ? center[0] : null
           const lat = Array.isArray(center) ? center[1] : null
-          if (!id || !label || typeof lng !== 'number' || typeof lat !== 'number') return null
-          return { id, label, lng, lat }
+          if (!f?.id || !f?.place_name || typeof lng !== 'number' || typeof lat !== 'number') return null
+          return { id: String(f.id), label: String(f.place_name).trim(), lng, lat }
         })
         .filter(Boolean)
         .slice(0, 6) as any
-      
-      console.log('[LocationSuggestions] Fetched suggestions:', {
-        query: qq,
-        count: next.length,
-        showAllBusinesses,
-        locOpen,
-        suggestions: next.map(s => s.label)
-      })
-      
-      // Always set suggestions and open dropdown if we have results
-      // This must happen regardless of showAllBusinesses state
-      console.log('[LocationSuggestions] Setting suggestions state with', next.length, 'items')
       setLocSuggestions(next)
       setLocActiveIdx(0)
-      
-      // CRITICAL: Always open dropdown when we have suggestions
-      // This ensures it works when showAllBusinesses is false
-      if (next.length > 0) {
-        console.log('[LocationSuggestions] Opening dropdown - we have', next.length, 'suggestions')
-        setLocOpen(true)
-      } else {
-        console.log('[LocationSuggestions] No suggestions found for query:', qq)
-      }
+      if (next.length > 0) setLocOpen(true)
     } catch (err: any) {
-      // Log error for debugging but don't show to user
-      console.error('[LocationSuggestions] Error fetching suggestions:', {
-        error: err,
-        name: err?.name,
-        message: err?.message,
-        showAllBusinesses
-      })
-      // Only clear if it's not an abort error (user is still typing)
       if (err?.name !== 'AbortError') {
-        console.log('[LocationSuggestions] Clearing suggestions due to error (not abort)')
         setLocSuggestions([])
         setLocActiveIdx(0)
-      } else {
-        console.log('[LocationSuggestions] Ignoring abort error (user still typing)')
       }
     }
   }

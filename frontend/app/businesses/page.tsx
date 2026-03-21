@@ -144,23 +144,16 @@ function LocationCombobox({
     return () => clearTimeout(t)
   }, [query])
 
-  // Fetch Mapbox suggestions
+  // Fetch suggestions via proxy
   useEffect(() => {
     const q = debounced.trim()
     if (!q || q.length < 2) { setSugg([]); return }
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
-    if (!token) return
 
     abortRef.current?.abort()
     const ac = new AbortController()
     abortRef.current = ac
 
-    const url = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json`)
-    url.searchParams.set('access_token', token)
-    url.searchParams.set('limit', '6')
-    url.searchParams.set('types', 'place,locality,neighborhood,postcode,address,region')
-
-    fetch(url.toString(), { signal: ac.signal })
+    fetch(`/api/map/geocode?q=${encodeURIComponent(q)}&types=place,locality,neighborhood,postcode,address,region`, { signal: ac.signal })
       .then(r => r.json())
       .then((json: any) => {
         const feats = Array.isArray(json?.features) ? json.features : []

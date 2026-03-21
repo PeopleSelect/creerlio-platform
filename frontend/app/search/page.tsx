@@ -215,71 +215,29 @@ function SearchPageInner() {
     return () => clearTimeout(timer)
   }, [mapLocQuery])
 
-  // Fetch location suggestions
+  // Fetch location suggestions via proxy
   useEffect(() => {
-    const fetchLocSuggestions = async (q: string) => {
-      const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
-      const qq = q.trim()
-      if (!qq || qq.length < 1) {
-        setMapLocSuggestions([])
-        setMapLocActiveIdx(0)
-        return
-      }
-      if (!token) return
-      mapLocAbortRef.current?.abort()
-      const ac = new AbortController()
-      mapLocAbortRef.current = ac
-      try {
-        let feats: any[] = []
-        if (token) {
-          const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(qq)}.json`)
-          u.searchParams.set('access_token', token)
-          u.searchParams.set('limit', '6')
-          u.searchParams.set('types', 'place,locality,neighborhood,postcode,region')
-          u.searchParams.set('country', 'AU')
-          const res = await fetch(u.toString(), { signal: ac.signal })
-          const json: any = await res.json().catch(() => null)
-          feats = Array.isArray(json?.features) ? json.features : []
-        } else {
-          const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}`, { signal: ac.signal })
-          const json: any = await res.json().catch(() => null)
-          feats = Array.isArray(json?.features) ? json.features : []
-        }
-
-        if (!feats.length) {
-          const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}`, { signal: ac.signal })
-          const json: any = await res.json().catch(() => null)
-          feats = Array.isArray(json?.features) ? json.features : []
-        }
-        const next = feats
-          .map((f: any) => {
-            const id = String(f?.id || '')
-            const label = String(f?.place_name || '').trim()
-            const center = f?.center
-            const lng = Array.isArray(center) ? center[0] : null
-            const lat = Array.isArray(center) ? center[1] : null
-            if (!id || !label || typeof lng !== 'number' || typeof lat !== 'number') return null
-            return { id, label, lng, lat }
-          })
-          .filter(Boolean)
-          .slice(0, 6) as any
+    const qq = mapLocDebouncedValue.trim()
+    if (!qq) { setMapLocSuggestions([]); return }
+    mapLocAbortRef.current?.abort()
+    const ac = new AbortController()
+    mapLocAbortRef.current = ac
+    fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&country=AU`, { signal: ac.signal })
+      .then(r => r.json()).catch(() => null)
+      .then(json => {
+        const feats = Array.isArray(json?.features) ? json.features : []
+        const next = feats.map((f: any) => {
+          const center = f?.center
+          const lng = Array.isArray(center) ? center[0] : null
+          const lat = Array.isArray(center) ? center[1] : null
+          if (!f?.id || !f?.place_name || typeof lng !== 'number' || typeof lat !== 'number') return null
+          return { id: String(f.id), label: String(f.place_name).trim(), lng, lat }
+        }).filter(Boolean).slice(0, 6) as any
         setMapLocSuggestions(next)
         setMapLocActiveIdx(0)
-        if (next.length > 0) {
-          setMapLocOpen(true)
-        }
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.error('Error fetching location suggestions:', err)
-        }
-      }
-    }
-
-    if (mapLocDebouncedValue.trim().length > 0) {
-      fetchLocSuggestions(mapLocDebouncedValue)
-    } else {
-      setMapLocSuggestions([])
-    }
+        if (next.length > 0) setMapLocOpen(true)
+      })
+      .catch(() => {})
   }, [mapLocDebouncedValue])
 
   // Update map resize trigger when panels collapse/expand
@@ -375,55 +333,28 @@ function SearchPageInner() {
     }
   }, [mapShowAllBusinesses, mapSearchCenter])
 
-  // Fetch route suggestions
+  // Fetch route suggestions via proxy
   useEffect(() => {
-    const fetchRouteSuggestions = async (q: string) => {
-      const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
-      const qq = q.trim()
-      if (!qq || qq.length < 2) {
-        setMapRouteSuggestions([])
-        setMapRouteActiveIdx(0)
-        return
-      }
-      if (!token) return
-      mapRouteAbortRef.current?.abort()
-      const ac = new AbortController()
-      mapRouteAbortRef.current = ac
-      try {
-        const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(qq)}.json`)
-        u.searchParams.set('access_token', token)
-        u.searchParams.set('limit', '6')
-        u.searchParams.set('types', 'address,place,locality,neighborhood,postcode,region')
-        u.searchParams.set('country', 'AU')
-        const res = await fetch(u.toString(), { signal: ac.signal })
-        const json: any = await res.json().catch(() => null)
+    const qq = mapRouteQueryDebounced.trim()
+    if (!mapRouteSuggestionsOpen || qq.length < 2) { setMapRouteSuggestions([]); return }
+    mapRouteAbortRef.current?.abort()
+    const ac = new AbortController()
+    mapRouteAbortRef.current = ac
+    fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&types=address,place,locality,neighborhood,postcode,region&country=AU`, { signal: ac.signal })
+      .then(r => r.json()).catch(() => null)
+      .then(json => {
         const feats = Array.isArray(json?.features) ? json.features : []
-        const next = feats
-          .map((f: any) => {
-            const id = String(f?.id || '')
-            const label = String(f?.place_name || '').trim()
-            const center = f?.center
-            const lng = Array.isArray(center) ? center[0] : null
-            const lat = Array.isArray(center) ? center[1] : null
-            if (!id || !label || typeof lng !== 'number' || typeof lat !== 'number') return null
-            return { id, label, lng, lat }
-          })
-          .filter(Boolean)
-          .slice(0, 6) as any
+        const next = feats.map((f: any) => {
+          const center = f?.center
+          const lng = Array.isArray(center) ? center[0] : null
+          const lat = Array.isArray(center) ? center[1] : null
+          if (!f?.id || !f?.place_name || typeof lng !== 'number' || typeof lat !== 'number') return null
+          return { id: String(f.id), label: String(f.place_name).trim(), lng, lat }
+        }).filter(Boolean).slice(0, 6) as any
         setMapRouteSuggestions(next)
         setMapRouteActiveIdx(0)
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.error('Error fetching route suggestions:', err)
-        }
-      }
-    }
-
-    if (mapRouteSuggestionsOpen && mapRouteQueryDebounced.trim().length >= 2) {
-      fetchRouteSuggestions(mapRouteQueryDebounced)
-    } else {
-      setMapRouteSuggestions([])
-    }
+      })
+      .catch(() => {})
   }, [mapRouteQueryDebounced, mapRouteSuggestionsOpen])
 
   return (

@@ -15,11 +15,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ features: [] }, { status: 200 })
     }
 
+    const types = searchParams.get('types') || 'place,locality,neighborhood,postcode,region'
+    const country = searchParams.get('country') || 'AU'
+    const limit = searchParams.get('limit') || '6'
+
     const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json`)
     u.searchParams.set('access_token', token)
-    u.searchParams.set('limit', '6')
-    u.searchParams.set('types', 'place,locality,neighborhood,postcode,region')
-    u.searchParams.set('country', 'AU')
+    u.searchParams.set('limit', limit)
+    u.searchParams.set('types', types)
+    if (country) u.searchParams.set('country', country)
 
     const res = await fetch(u.toString(), { cache: 'no-store' })
     if (!res.ok) {

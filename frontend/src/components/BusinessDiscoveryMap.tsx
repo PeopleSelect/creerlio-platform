@@ -993,14 +993,13 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
               >
                 View Business
               </a>
-              <button
-                class="job-link-btn"
-                data-job-id="${job.id}"
-                data-business-id="${job.business_profile_id || ''}"
-                style="display: inline-block; padding: 4px 10px; background: #8b5cf6; color: white; text-decoration: none; border: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center;"
+              <a
+                href="/jobs/${job.id}"
+                style="display: inline-block; padding: 4px 10px; background: #8b5cf6; color: white; text-decoration: none; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center;"
+                onclick="window.open('/jobs/${job.id}', '_blank'); return false;"
               >
-                View Jobs
-              </button>
+                View This Job
+              </a>
             </div>
           </div>
         `

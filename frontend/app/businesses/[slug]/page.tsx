@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import {
   Building2, MapPin, Globe, Mail, Phone, ArrowLeft, Loader2,
   ShieldCheck, Star, Briefcase, Send, CheckCircle2, ChevronRight,
-  Users, Wrench, BadgeCheck, UserPlus,
+  Users, Wrench, BadgeCheck, UserPlus, ExternalLink, RefreshCw,
 } from 'lucide-react'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -29,6 +29,18 @@ interface TalentRequest {
   experience_level: string | null
   notes: string | null
   created_at: string
+}
+
+interface OpenRole {
+  id: number
+  title: string
+  location: string | null
+  location_label: string | null
+  employment_type: string | null
+  description: string | null
+  application_url: string | null
+  source_url: string | null
+  is_auto_synced: boolean | null
 }
 
 interface BusinessData {
@@ -168,6 +180,7 @@ function BusinessPublicPageInner() {
   const [loading, setLoading]     = useState(true)
   const [notFound, setNF]         = useState(false)
   const [modal, setModal]         = useState<'general' | 'consultation' | 'message' | null>(null)
+  const [openRoles, setOpenRoles] = useState<OpenRole[]>([])
   // Customer session state
   const [customerToken, setCToken] = useState<string | null>(null)
   const [isCustomer, setIsCustomer] = useState(false)
@@ -182,7 +195,17 @@ function BusinessPublicPageInner() {
     setLoading(true)
     fetch(`/api/businesses/${slug}`)
       .then(r => { if (r.status === 404) { setNF(true); return null } return r.json() })
-      .then(j => { if (j) setData(j) })
+      .then(j => {
+        if (!j) return
+        setData(j)
+        // Fetch open roles for this business if we have a business_id
+        if (j.business_id) {
+          fetch(`/api/jobs/by-business?business_id=${j.business_id}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d?.jobs) setOpenRoles(d.jobs) })
+            .catch(() => {})
+        }
+      })
       .catch(() => setNF(true))
       .finally(() => setLoading(false))
 
@@ -403,7 +426,60 @@ function BusinessPublicPageInner() {
           </section>
         )}
 
-        {/* ── 5. Talent Access Requests ─────────────────────── */}
+        {/* ── 5. Open Roles (auto-synced) ───────────────────── */}
+        {openRoles.length > 0 && (
+          <section className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-semibold text-gray-900">Open Roles</h2>
+              {openRoles.some(r => r.is_auto_synced) && (
+                <span className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                  <RefreshCw className="h-3 w-3" /> Auto-synced from careers page
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-gray-500 mb-6">
+              {data!.name} currently has {openRoles.length} open position{openRoles.length !== 1 ? 's' : ''}.
+            </p>
+            <div className="space-y-4">
+              {openRoles.map(role => (
+                <div key={role.id} className="flex items-start gap-4 rounded-xl border border-gray-100 bg-gray-50 p-5">
+                  <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                    <Briefcase className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900">{role.title}</p>
+                    <div className="mt-1 flex flex-wrap gap-3 text-xs text-gray-500">
+                      {(role.location_label || role.location) && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {role.location_label || role.location}
+                        </span>
+                      )}
+                      {role.employment_type && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5">{role.employment_type}</span>
+                      )}
+                    </div>
+                    {role.description && (
+                      <p className="mt-2 text-sm text-gray-600 line-clamp-2">{role.description}</p>
+                    )}
+                  </div>
+                  {role.application_url && (
+                    <a
+                      href={role.application_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors shrink-0"
+                    >
+                      Apply <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── 6. Talent Access Requests ─────────────────────── */}
         {hasTalentRequests && (
           <section className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Open Talent Requests</h2>

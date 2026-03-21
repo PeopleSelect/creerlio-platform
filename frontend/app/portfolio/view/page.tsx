@@ -45,11 +45,11 @@ function getEmbedUrl(url?: string | null) {
     const host = u.hostname.replace(/^www\./, '')
     if (host.includes('youtube.com')) {
       const v = u.searchParams.get('v')
-      return v ? `https://www.youtube.com/embed/${v}` : null
+      return v ? `https://www.youtube.com/embed/${v}?rel=0` : null
     }
     if (host === 'youtu.be') {
       const id = u.pathname.split('/').filter(Boolean)[0]
-      return id ? `https://www.youtube.com/embed/${id}` : null
+      return id ? `https://www.youtube.com/embed/${id}?rel=0` : null
     }
     if (host.includes('vimeo.com')) {
       const id = u.pathname.split('/').filter(Boolean)[0]

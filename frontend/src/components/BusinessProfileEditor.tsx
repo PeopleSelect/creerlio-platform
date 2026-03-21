@@ -1104,7 +1104,7 @@ export default function BusinessProfileEditor() {
                             const videoId = youtubeMatch[1]
                             return (
                               <iframe
-                                src={`https://www.youtube.com/embed/${videoId}`}
+                                src={`https://www.youtube.com/embed/${videoId}?rel=0`}
                                 className="w-full aspect-video"
                                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                 allowFullScreen
@@ -4398,7 +4398,7 @@ export default function BusinessProfileEditor() {
                             const videoId = youtubeMatch[1]
                             return (
                               <iframe
-                                src={`https://www.youtube.com/embed/${videoId}`}
+                                src={`https://www.youtube.com/embed/${videoId}?rel=0`}
                                 className="w-full aspect-video"
                                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                 allowFullScreen
@@ -6461,7 +6461,7 @@ export default function BusinessProfileEditor() {
                     const videoId = youtubeMatch[1]
                     return (
                       <iframe
-                        src={`https://www.youtube.com/embed/${videoId}`}
+                        src={`https://www.youtube.com/embed/${videoId}?rel=0`}
                         className="w-full max-h-[55vh] aspect-video"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowFullScreen

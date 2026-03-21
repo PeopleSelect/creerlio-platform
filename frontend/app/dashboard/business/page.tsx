@@ -22,6 +22,7 @@ interface User {
 type TabType =
   | 'overview'
   | 'vacancies'
+  | 'job_sync'
   | 'profile'
   | 'portfolio'
   | 'applications'
@@ -174,6 +175,15 @@ export default function BusinessDashboard() {
   const [vacanciesError, setVacanciesError] = useState<string | null>(null)
   const [vacancies, setVacancies] = useState<any[]>([])
   const [vacanciesLoadedOnce, setVacanciesLoadedOnce] = useState(false)
+
+  // Job Sync state
+  const [syncCareersUrl, setSyncCareersUrl] = useState('')
+  const [syncUrlInput, setSyncUrlInput] = useState('')
+  const [syncLogs, setSyncLogs] = useState<any[]>([])
+  const [syncLoading, setSyncLoading] = useState(false)
+  const [syncRunning, setSyncRunning] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [syncLogsLoaded, setSyncLogsLoaded] = useState(false)
 
   const [businessConnMode, setBusinessConnMode] = useState<'connections' | 'from_talent' | 'outreach' | 'declined'>('connections')
   const [connLoading, setConnLoading] = useState(false)
@@ -2934,13 +2944,13 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                   setVacanciesMenuOpen((open) => !open)
                 }}
                 className={`px-6 py-3 text-sm font-medium transition-all relative ${
-                  activeTab === 'vacancies' || activeTab === 'applications'
+                  activeTab === 'vacancies' || activeTab === 'applications' || activeTab === 'job_sync'
                     ? 'text-[#20C997]'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
                 Vacancies
-                {(activeTab === 'vacancies' || activeTab === 'applications') && (
+                {(activeTab === 'vacancies' || activeTab === 'applications' || activeTab === 'job_sync') && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>
                 )}
               </button>
@@ -2967,6 +2977,17 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                     }`}
                   >
                     Applications
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('job_sync')
+                      setVacanciesMenuOpen(false)
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                      activeTab === 'job_sync' ? 'text-[#20C997]' : 'text-gray-700'
+                    }`}
+                  >
+                    Job Sync
                   </button>
                 </div>
               )}
@@ -3846,6 +3867,177 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
             )}
           </div>
         )}
+
+        {activeTab === 'job_sync' && (() => {
+          const bizId = activeBusinessId
+
+          async function loadSyncStatus() {
+            if (!bizId) return
+            setSyncLoading(true)
+            try {
+              const session = (await supabase.auth.getSession()).data.session
+              const token = session?.access_token
+              if (!token) return
+              const res = await fetch(`/api/jobs/sync?business_id=${bizId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              })
+              if (!res.ok) return
+              const d = await res.json()
+              setSyncCareersUrl(d.careers_page_url ?? '')
+              setSyncUrlInput(d.careers_page_url ?? '')
+              setSyncLogs(d.logs ?? [])
+              setSyncLogsLoaded(true)
+            } catch { /* silent */ }
+            finally { setSyncLoading(false) }
+          }
+
+          async function saveSyncUrl() {
+            if (!bizId) return
+            setSyncMessage(null)
+            setSyncLoading(true)
+            try {
+              const session = (await supabase.auth.getSession()).data.session
+              const token = session?.access_token
+              if (!token) return
+              const res = await fetch('/api/jobs/scrape-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ business_id: bizId, careers_page_url: syncUrlInput.trim() || null }),
+              })
+              const d = await res.json()
+              if (!res.ok) { setSyncMessage({ type: 'error', text: d.error || 'Save failed' }); return }
+              setSyncCareersUrl(syncUrlInput.trim())
+              setSyncMessage({ type: 'success', text: 'Saved. An initial sync has been triggered.' })
+              setTimeout(() => loadSyncStatus(), 4000)
+            } catch (e: any) { setSyncMessage({ type: 'error', text: e.message }) }
+            finally { setSyncLoading(false) }
+          }
+
+          async function runSync() {
+            if (!bizId) return
+            setSyncMessage(null)
+            setSyncRunning(true)
+            try {
+              const session = (await supabase.auth.getSession()).data.session
+              const token = session?.access_token
+              if (!token) return
+              const res = await fetch('/api/jobs/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ business_id: bizId }),
+              })
+              const d = await res.json()
+              if (!res.ok) { setSyncMessage({ type: 'error', text: d.error || 'Sync failed' }); return }
+              setSyncMessage({
+                type: 'success',
+                text: `Sync complete — ${d.jobs_found} found, ${d.jobs_created} added, ${d.jobs_updated} updated, ${d.jobs_removed} removed.`,
+              })
+              await loadSyncStatus()
+            } catch (e: any) { setSyncMessage({ type: 'error', text: e.message }) }
+            finally { setSyncRunning(false) }
+          }
+
+          if (!syncLogsLoaded) { loadSyncStatus() }
+
+          return (
+            <div className="dashboard-card rounded-xl p-6">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Job Sync</h2>
+                <p className="text-gray-600 text-sm mt-1">
+                  Paste your public careers page URL. Creerlio will automatically detect and sync job listings every 30 minutes — no manual posting required.
+                </p>
+              </div>
+
+              {/* URL input */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 mb-6">
+                <label className="block text-sm font-semibold text-gray-800 mb-2">
+                  Careers Page URL
+                </label>
+                <div className="flex gap-3 flex-col sm:flex-row">
+                  <input
+                    type="url"
+                    placeholder="https://yourcompany.com/careers"
+                    value={syncUrlInput}
+                    onChange={e => setSyncUrlInput(e.target.value)}
+                    className="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#20C997]"
+                  />
+                  <button
+                    type="button"
+                    onClick={saveSyncUrl}
+                    disabled={syncLoading}
+                    className="rounded-lg bg-[#20C997] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1DB886] transition-colors disabled:opacity-60 shrink-0"
+                  >
+                    {syncLoading ? 'Saving…' : 'Save & Sync'}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-gray-400">
+                  Supports JSON-LD structured data, Greenhouse, Lever, Workable, SmartRecruiters, and generic HTML job listings.
+                </p>
+              </div>
+
+              {/* Status message */}
+              {syncMessage && (
+                <div className={`mb-5 rounded-lg border px-4 py-3 text-sm ${
+                  syncMessage.type === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border-red-200 bg-red-50 text-red-700'
+                }`}>
+                  {syncMessage.text}
+                </div>
+              )}
+
+              {/* Manual sync button */}
+              {syncCareersUrl && (
+                <div className="flex items-center gap-4 mb-6">
+                  <button
+                    type="button"
+                    onClick={runSync}
+                    disabled={syncRunning}
+                    className="flex items-center gap-2 rounded-lg border border-[#20C997] px-5 py-2.5 text-sm font-semibold text-[#20C997] hover:bg-emerald-50 transition-colors disabled:opacity-60"
+                  >
+                    <span className={syncRunning ? 'animate-spin inline-block' : ''}>↻</span>
+                    {syncRunning ? 'Syncing…' : 'Run Sync Now'}
+                  </button>
+                  <p className="text-xs text-gray-400">Runs automatically every 30 minutes.</p>
+                </div>
+              )}
+
+              {/* Sync log */}
+              {syncLogs.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Recent Sync History</h3>
+                  <div className="space-y-2">
+                    {syncLogs.map((log: any) => (
+                      <div key={log.id} className="flex items-center gap-4 rounded-lg border border-gray-100 bg-white px-4 py-3 text-sm">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${log.status === 'success' ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                        <span className="text-gray-500 text-xs shrink-0 w-36">
+                          {new Date(log.run_at).toLocaleString()}
+                        </span>
+                        <div className="flex flex-wrap gap-3 text-xs text-gray-600">
+                          <span>Found <strong>{log.jobs_found}</strong></span>
+                          <span className="text-emerald-600">+{log.jobs_created} added</span>
+                          <span className="text-blue-600">~{log.jobs_updated} updated</span>
+                          <span className="text-red-500">-{log.jobs_removed} removed</span>
+                        </div>
+                        {log.error_message && (
+                          <span className="ml-auto text-red-500 text-xs truncate max-w-xs">{log.error_message}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!syncCareersUrl && !syncLoading && (
+                <div className="text-center py-12 text-gray-400">
+                  <p className="text-lg mb-2">🔗</p>
+                  <p className="text-sm">No careers page connected yet.</p>
+                  <p className="text-xs mt-1">Add your URL above to start automatically ingesting jobs.</p>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {activeTab === 'applications' && (() => {
           // Group applications by job

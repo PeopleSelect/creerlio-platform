@@ -383,7 +383,9 @@ export default function JobsPage() {
                       )}
                     </div>
                     {job.description && (
-                      <p className="text-gray-700 mb-4 line-clamp-2">{job.description}</p>
+                      <p className="text-gray-700 mb-4 line-clamp-2">
+                        {job.description.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}
+                      </p>
                     )}
                     {job.required_skills && job.required_skills.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-4">

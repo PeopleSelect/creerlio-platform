@@ -563,7 +563,20 @@ export default function JobDetailPage() {
           {job.description && (
             <div className="dashboard-card rounded-xl p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Job Description</h2>
-              <div className="text-gray-900 whitespace-pre-wrap">{job.description}</div>
+              {/<[a-z][\s\S]*>/i.test(job.description) ? (
+                <div
+                  className="text-gray-700 prose prose-sm max-w-none leading-relaxed
+                    [&_p]:mb-3 [&_ul]:mb-3 [&_ul]:pl-5 [&_ul]:list-disc
+                    [&_ol]:mb-3 [&_ol]:pl-5 [&_ol]:list-decimal
+                    [&_li]:mb-1 [&_h2]:font-bold [&_h2]:text-gray-900 [&_h2]:mt-4 [&_h2]:mb-2
+                    [&_h3]:font-semibold [&_h3]:text-gray-900 [&_h3]:mt-3 [&_h3]:mb-1
+                    [&_strong]:font-semibold [&_strong]:text-gray-900
+                    [&_a]:text-[#20C997] [&_a]:underline"
+                  dangerouslySetInnerHTML={{ __html: job.description }}
+                />
+              ) : (
+                <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">{job.description}</div>
+              )}
             </div>
           )}
 
@@ -571,7 +584,7 @@ export default function JobDetailPage() {
           {job.requirements && (
             <div className="dashboard-card rounded-xl p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Requirements</h2>
-              <div className="text-gray-900 whitespace-pre-wrap">{job.requirements}</div>
+              <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">{job.requirements}</div>
             </div>
           )}
 
@@ -579,7 +592,7 @@ export default function JobDetailPage() {
           {job.responsibilities && (
             <div className="dashboard-card rounded-xl p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Responsibilities</h2>
-              <div className="text-gray-900 whitespace-pre-wrap">{job.responsibilities}</div>
+              <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">{job.responsibilities}</div>
             </div>
           )}
 

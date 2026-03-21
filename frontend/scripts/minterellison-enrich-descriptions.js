@@ -1,6 +1,7 @@
 /**
  * Enriches MinterEllison auto-synced job descriptions by fetching each
- * individual job detail page from careers.minterellison.com.
+ * individual job detail page from careers.minterellison.com and storing
+ * clean, sanitized HTML for rich rendering.
  *
  * Run from /frontend: node scripts/minterellison-enrich-descriptions.js
  */
@@ -19,8 +20,7 @@ const sb = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-const ME_BIZ_ID   = '9ae96870-d022-4fd1-bdd9-60477af00665'
-const CAREERS_URL = 'https://careers.minterellison.com/search/?createNewAlert=false&q=&optionsFacetsDD_location=&optionsFacetsDD_customfield3='
+const ME_BIZ_ID = '9ae96870-d022-4fd1-bdd9-60477af00665'
 
 function fetchUrl(url, headers = {}) {
   return new Promise((resolve, reject) => {
@@ -49,22 +49,28 @@ function fetchUrl(url, headers = {}) {
   })
 }
 
-function clean(s) {
-  return (s || '')
-    .replace(/\s+/g, ' ')
-    .replace(/\u00a0/g, ' ')
-    .trim()
-}
-
 function hash(title, desc, loc) {
   return crypto.createHash('sha256')
     .update(`${title}|${desc}|${loc ?? ''}`).digest('hex').slice(0, 32)
 }
 
+function sanitizeHtml(html) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/\s+on\w+="[^"]*"/gi, '')
+    .replace(/\s+on\w+='[^']*'/gi, '')
+    .replace(/href="javascript:[^"]*"/gi, '')
+    .trim()
+}
+
 /**
- * Fetch a single iCIMS job detail page and extract the full description.
+ * Fetch iCIMS job detail page and extract the job description HTML.
+ * The description is in span.jobdescription; we strip the Location/Contract
+ * header paragraphs at the top.
  */
-async function fetchJobDescription(url) {
+async function fetchJobHtml(url) {
   if (!url || !url.startsWith('http')) return null
   if (!cheerio) return null
 
@@ -74,52 +80,33 @@ async function fetchJobDescription(url) {
 
     const $ = cheerio.load(body)
 
-    // Try iCIMS-specific selectors in order of specificity
-    const selectors = [
-      '.iCIMS_JobContent',
-      '#iCIMS_Content',
-      '.iCIMS_InfoPanel',
-      '.iCIMS_JobDetailHeader + div',
-      '.job-content',
-      '#job-description',
-      '.jobdescription',
-      '[class*="jobDescription"]',
-      '[class*="JobDescription"]',
-      '[id*="jobDescription"]',
-      '[id*="job-description"]',
-      'div[data-automation="jobDescription"]',
-      '.description',
-      'main article',
-      'main .content',
-    ]
+    // iCIMS uses span.jobdescription for the full job content
+    const container = $('span.jobdescription, .jobdescription').first()
+    if (!container.length) return null
 
-    for (const sel of selectors) {
-      const el = $(sel)
-      if (el.length > 0) {
-        const text = clean(el.text())
-        if (text.length > 100) return text
+    // Remove leading empty/metadata paragraphs (Location, Contract Type, etc.)
+    container.find('p').each((_, el) => {
+      const text = $(el).text().trim()
+      if (!text || /^(Location|Contract Type|Job Type|Department|Requisition)/i.test(text)) {
+        $(el).remove()
       }
-    }
+    })
 
-    // Fallback: grab all paragraph text from main content
-    const paragraphs = $('p').map((_, el) => clean($(el).text())).get()
-      .filter(t => t.length > 40)
-    if (paragraphs.length > 2) {
-      return paragraphs.join('\n\n')
-    }
+    const html = sanitizeHtml(container.html() || '')
+    const plainText = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 
-    return null
+    if (plainText.length < 100) return null
+    return html
   } catch (e) {
     return null
   }
 }
 
-// Delay to avoid hammering the server
 function delay(ms) { return new Promise(r => setTimeout(r, ms)) }
 
 async function run() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  console.log(' MinterEllison Description Enrichment')
+  console.log(' MinterEllison Description Enrichment (HTML)')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
   if (!cheerio) {
@@ -127,7 +114,6 @@ async function run() {
     process.exit(1)
   }
 
-  // Load all auto-synced ME jobs
   const { data: jobs, error } = await sb
     .from('jobs')
     .select('id, title, description, location, application_url, hash')
@@ -138,76 +124,36 @@ async function run() {
   if (error) { console.error('DB error:', error.message); process.exit(1) }
   console.log(`Found ${jobs.length} auto-synced jobs to enrich\n`)
 
-  // Also remove the 4 old manually-created jobs (not auto-synced) to clean up
-  console.log('[0] Removing old manually-created placeholder jobs...')
-  const { data: manualJobs } = await sb
-    .from('jobs')
-    .select('id, title')
-    .eq('business_id', ME_BIZ_ID)
-    .eq('is_auto_synced', false)
-    .eq('is_active', true)
-
-  if (manualJobs && manualJobs.length > 0) {
-    for (const j of manualJobs) {
-      await sb.from('jobs').update({ is_active: false, status: 'removed' }).eq('id', j.id)
-      console.log(`  - Removed manual job: ${j.title}`)
-    }
-  } else {
-    console.log('  No manual jobs to remove.')
-  }
-  console.log()
-
-  let enriched = 0
-  let failed = 0
-  let skipped = 0
+  let enriched = 0, failed = 0
 
   for (let i = 0; i < jobs.length; i++) {
     const job = jobs[i]
-    const applyUrl = job.application_url
+    if (!job.application_url?.startsWith('http')) { process.stdout.write('✗'); failed++; continue }
+    if (i > 0) await delay(600)
 
-    // Skip if description is already substantial (not just a business unit name)
-    const isShallow = !job.description || job.description.length < 100
-    if (!isShallow) {
-      skipped++
-      process.stdout.write('.')
-      continue
-    }
-
-    if (!applyUrl || !applyUrl.startsWith('http')) {
-      failed++
-      process.stdout.write('✗')
-      continue
-    }
-
-    // Rate limit: 1 request per 500ms
-    if (i > 0) await delay(500)
-
-    const desc = await fetchJobDescription(applyUrl)
-    if (!desc || desc.length < 50) {
+    const html = await fetchJobHtml(job.application_url)
+    if (!html) {
       process.stdout.write('?')
+      console.log(`\n  No description found: ${job.title}`)
       failed++
       continue
     }
 
-    // Update DB
-    const newHash = hash(job.title, desc, job.location || '')
+    const plainText = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+    const newHash = hash(job.title, plainText, job.location || '')
+
     const { error: updErr } = await sb
       .from('jobs')
-      .update({ description: desc, hash: newHash })
+      .update({ description: html, hash: newHash })
       .eq('id', job.id)
 
-    if (updErr) {
-      process.stdout.write('E')
-      failed++
-    } else {
-      process.stdout.write('+')
-      enriched++
-    }
+    if (updErr) { process.stdout.write('E'); failed++ }
+    else { process.stdout.write('+'); enriched++ }
   }
 
   console.log('\n')
   console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-  console.log(` Done — Enriched:${enriched}  Skipped:${skipped}  Failed:${failed}`)
+  console.log(` Done — Enriched:${enriched}  Failed:${failed}`)
   console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
 }
 

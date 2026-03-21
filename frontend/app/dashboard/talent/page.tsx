@@ -3383,13 +3383,22 @@ export default function TalentDashboard() {
                         <div className="text-xs text-gray-500">
                           Application ID: {app.id}
                         </div>
-                        <button
-                          onClick={handleWithdraw}
-                          disabled={withdrawingAppId === app.id || status === 'hired' || status === 'rejected'}
-                          className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {withdrawingAppId === app.id ? 'Withdrawing...' : 'Withdraw Application'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/jobs/${app.job_id}`}
+                            target="_blank"
+                            className="px-4 py-2 text-sm font-medium text-[#20C997] bg-[#20C997]/10 border border-[#20C997]/30 rounded-lg hover:bg-[#20C997]/20 transition-colors"
+                          >
+                            Review Job
+                          </Link>
+                          <button
+                            onClick={handleWithdraw}
+                            disabled={withdrawingAppId === app.id || status === 'hired' || status === 'rejected'}
+                            className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {withdrawingAppId === app.id ? 'Withdrawing...' : 'Withdraw Application'}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )

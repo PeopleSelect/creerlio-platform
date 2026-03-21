@@ -1407,15 +1407,11 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
 
     // Geocode the route query to get Point B
     const geocodePointB = async () => {
-      const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-      if (!MAPBOX_TOKEN) return
-
       onRouteStateChangeRef.current({ busy: true })
 
       try {
-        const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(props.externalRouteQuery)}.json?access_token=${MAPBOX_TOKEN}&limit=1`
-        const geocodeRes = await fetch(geocodeUrl)
-        const geocodeData = await geocodeRes.json()
+        const geocodeRes = await fetch(`/api/map/geocode?q=${encodeURIComponent(props.externalRouteQuery)}&limit=1`)
+        const geocodeData = await geocodeRes.json().catch(() => null)
 
         if (!geocodeData.features || geocodeData.features.length === 0) {
           onRouteStateChangeRef.current({ busy: false, error: 'Location not found' })
@@ -1642,9 +1638,8 @@ const BusinessDiscoveryMap = forwardRef<BusinessDiscoveryMapHandle, BusinessDisc
             }
 
             // Reverse geocode to get location name
-            const reverseGeocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${newLngLat.lng},${newLngLat.lat}.json?access_token=${MAPBOX_TOKEN}&limit=1`
-            const reverseRes = await fetch(reverseGeocodeUrl)
-            const reverseData = await reverseRes.json()
+            const reverseRes = await fetch(`/api/map/geocode?q=${newLngLat.lng},${newLngLat.lat}&limit=1`)
+            const reverseData = await reverseRes.json().catch(() => null)
             const newLabel = reverseData.features?.[0]?.place_name || `${newLngLat.lat.toFixed(4)}, ${newLngLat.lng.toFixed(4)}`
 
             // Update the input field with the new location

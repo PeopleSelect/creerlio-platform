@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
 
     const token = process.env.MAPBOX_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_TOKEN
     if (!token) {
-      return NextResponse.json({ features: [] }, { status: 200 })
+      console.error('[geocode] No Mapbox token configured (MAPBOX_TOKEN / NEXT_PUBLIC_MAPBOX_TOKEN)')
+      return NextResponse.json({ features: [], error: 'token_missing' }, { status: 200 })
     }
 
     const types = searchParams.get('types') || 'place,locality,neighborhood,postcode,region'
@@ -27,7 +28,9 @@ export async function GET(request: NextRequest) {
 
     const res = await fetch(u.toString(), { cache: 'no-store' })
     if (!res.ok) {
-      return NextResponse.json({ features: [] }, { status: 200 })
+      const body = await res.text().catch(() => '')
+      console.error(`[geocode] Mapbox returned ${res.status}: ${body.slice(0, 200)}`)
+      return NextResponse.json({ features: [], error: `mapbox_${res.status}` }, { status: 200 })
     }
     const json = await res.json().catch(() => null)
     const features = Array.isArray(json?.features) ? json.features : []

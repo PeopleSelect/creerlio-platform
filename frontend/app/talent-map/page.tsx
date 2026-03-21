@@ -498,25 +498,12 @@ function TalentMapPageInner() {
   }
 
   async function geocodeAndFly() {
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
     const q = locQuery.trim()
     if (!q) return
-    if (!token) {
-      setLocError('Mapbox is not configured (NEXT_PUBLIC_MAPBOX_TOKEN missing).')
-      return
-    }
     setLocBusy(true)
     setLocError(null)
-    // #region agent log
-    emitDebugLog({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4',location:'talent-map/page.tsx:geocodeAndFly',message:'geocode start',data:{query:q,radiusKm},timestamp:Date.now()})
-    // #endregion
     try {
-      const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json`)
-      u.searchParams.set('access_token', token)
-      u.searchParams.set('limit', '1')
-      u.searchParams.set('types', 'place,locality,neighborhood,postcode,region')
-      u.searchParams.set('country', 'AU')
-      const res = await fetch(u.toString())
+      const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(q)}&country=AU&limit=1&types=place,locality,neighborhood,postcode,region`)
       const json: any = await res.json().catch(() => null)
       const center = json?.features?.[0]?.center
       const lng = Array.isArray(center) ? center[0] : null
@@ -525,14 +512,10 @@ function TalentMapPageInner() {
         setLocError('Location not found. Try a suburb, city, or region.')
         return
       }
-      // Rough radius-to-zoom mapping (directional). Higher radius → lower zoom.
       const z = zoomForRadiusKm(radiusKm)
       setSearchCenter({ lng, lat, label: q })
       setFlyTo({ lng, lat, zoom: z })
       setLocQuery('')
-      // #region agent log
-      emitDebugLog({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4',location:'talent-map/page.tsx:geocodeAndFly',message:'geocode success',data:{lng,lat,zoom:z},timestamp:Date.now()})
-      // #endregion
     } catch (e: any) {
       setLocError(e?.message || 'Could not search location.')
     } finally {

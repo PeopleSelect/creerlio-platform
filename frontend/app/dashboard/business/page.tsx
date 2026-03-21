@@ -619,19 +619,11 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
     setLocBusy(true)
     setLocError(null)
 
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
-    if (!token) {
-      setLocError('Mapbox token not configured')
-      setLocBusy(false)
-      return
-    }
-
     ;(async () => {
       try {
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locDebounced)}.json?access_token=${token}&limit=6&types=place,locality,neighborhood,postcode,region&country=AU`
-        const res = await fetch(url, { signal: ac.signal })
+        const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(locDebounced)}&country=AU`, { signal: ac.signal })
         if (ac.signal.aborted) return
-        const json: any = await res.json()
+        const json: any = await res.json().catch(() => null)
         const feats = Array.isArray(json?.features) ? json.features : []
         const suggestions: LocSuggestion[] = feats.map((f: any) => ({
           id: String(f?.id || ''),
@@ -3143,6 +3135,47 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                             </a>
                           ) : '—'}
                         </p>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <label className="block text-sm font-medium text-gray-600 mb-2">Location</label>
+                      {profileEditOpen ? (
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={locQuery}
+                            onChange={(e) => {
+                              setLocQuery(e.target.value)
+                              setProfileEditDraft((prev) => ({ ...prev, location: e.target.value }))
+                              setLocOpen(true)
+                            }}
+                            onFocus={() => { if (locQuery.trim()) setLocOpen(true) }}
+                            onBlur={() => setTimeout(() => setLocOpen(false), 200)}
+                            placeholder="Start typing a city, suburb, or region..."
+                            className="w-full p-2 border border-gray-300 rounded text-gray-900"
+                          />
+                          {locOpen && locSuggestions.length > 0 && (
+                            <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                              {locSuggestions.map((s, idx) => (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => {
+                                    handleLocationSelect(s)
+                                    setLocOpen(false)
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-sm transition-colors ${idx === locActiveIdx ? 'bg-blue-50 text-blue-900' : 'bg-white text-gray-900 hover:bg-gray-50'}`}
+                                >
+                                  {s.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {locError && <p className="text-xs text-red-500 mt-1">{locError}</p>}
+                        </div>
+                      ) : (
+                        <p className="text-gray-900">{businessProfile?.location || '—'}</p>
                       )}
                     </div>
                     <div className="md:col-span-2">

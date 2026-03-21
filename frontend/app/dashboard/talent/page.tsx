@@ -301,19 +301,7 @@ export default function TalentDashboard() {
           .maybeSingle()
 
         if (profileData && profileData.latitude && profileData.longitude) {
-          // Extract just the city name if it contains commas (e.g., "Cooma, New South Wales, Australia" -> "Cooma")
-          const cityName = profileData.city?.split(',')[0]?.trim() || null
-          const locationParts = [cityName, profileData.state, profileData.country].filter(Boolean)
-          const locationLabel = locationParts.length > 0
-            ? locationParts.join(', ')
-            : profileData.location || 'Your location'
-          
-          setTalentMapSearchCenter({
-            lng: profileData.longitude,
-            lat: profileData.latitude,
-            label: locationLabel
-          })
-          // Don't auto-populate location query - let user search manually
+          // Fly map to user's location but do NOT set searchCenter — user must type a location to trigger radius search
           setTalentMapFlyTo({
             lng: profileData.longitude,
             lat: profileData.latitude,
@@ -541,6 +529,63 @@ export default function TalentDashboard() {
       setTalentMapRouteSuggestions([])
     }
   }, [talentMapRouteQueryDebounced, talentMapRouteSuggestionsOpen])
+
+  // Fetch radius-search location suggestions
+  const talentMapLocAbortRef = useRef<AbortController | null>(null)
+  useEffect(() => {
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
+    const qq = talentMapLocQuery.trim()
+    if (!qq || qq.length < 2) {
+      setTalentMapLocSuggestions([])
+      return
+    }
+    if (!token) {
+      // Fallback: use server-side geocode proxy
+      const ac = new AbortController()
+      talentMapLocAbortRef.current?.abort()
+      talentMapLocAbortRef.current = ac
+      fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}`, { signal: ac.signal })
+        .then(r => r.json()).catch(() => null)
+        .then(json => {
+          const feats = Array.isArray(json?.features) ? json.features : []
+          const next = feats.map((f: any) => {
+            const center = f?.center
+            const lng = Array.isArray(center) ? center[0] : null
+            const lat = Array.isArray(center) ? center[1] : null
+            if (!f?.id || !f?.place_name || typeof lng !== 'number' || typeof lat !== 'number') return null
+            return { id: String(f.id), label: String(f.place_name), lng, lat }
+          }).filter(Boolean).slice(0, 6) as any
+          setTalentMapLocSuggestions(next)
+          setTalentMapLocActiveIdx(0)
+        })
+        .catch(() => {})
+      return () => ac.abort()
+    }
+    talentMapLocAbortRef.current?.abort()
+    const ac = new AbortController()
+    talentMapLocAbortRef.current = ac
+    const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(qq)}.json`)
+    u.searchParams.set('access_token', token)
+    u.searchParams.set('limit', '6')
+    u.searchParams.set('types', 'place,locality,neighborhood,postcode,region')
+    u.searchParams.set('country', 'AU')
+    fetch(u.toString(), { signal: ac.signal })
+      .then(r => r.json()).catch(() => null)
+      .then(json => {
+        const feats = Array.isArray(json?.features) ? json.features : []
+        const next = feats.map((f: any) => {
+          const center = f?.center
+          const lng = Array.isArray(center) ? center[0] : null
+          const lat = Array.isArray(center) ? center[1] : null
+          if (!f?.id || !f?.place_name || typeof lng !== 'number' || typeof lat !== 'number') return null
+          return { id: String(f.id), label: String(f.place_name), lng, lat }
+        }).filter(Boolean).slice(0, 6) as any
+        setTalentMapLocSuggestions(next)
+        setTalentMapLocActiveIdx(0)
+      })
+      .catch(() => {})
+    return () => ac.abort()
+  }, [talentMapLocQuery])
 
   const isCommercialRequest = (r: any) => !Array.isArray(r?.selected_sections) || r.selected_sections.length === 0
   const careerRequests = connRequests.filter((r) => !isCommercialRequest(r))

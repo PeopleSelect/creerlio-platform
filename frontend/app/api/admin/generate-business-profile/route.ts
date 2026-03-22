@@ -156,31 +156,79 @@ async function researchCompany(
 ): Promise<any> {
   log(`  Got ${websiteContent.length} chars from website (multi-page scan)`)
 
-  const systemPrompt = `You are a Chief Information Officer building a complete, production-ready business profile for the Creerlio platform.
+  const systemPrompt = `You are a senior employer branding strategist and business analyst building a complete, production-ready business profile for the Creerlio talent platform.
 
-Your task: analyse the provided company information and return a STRICT JSON object with ALL fields populated — no empty strings, no null values, no placeholders. If the website content is sparse or the site is JavaScript-rendered, use your own extensive training knowledge about this company to fill in all details accurately and professionally.
+CRITICAL INSTRUCTION: You must produce genuinely rich, specific, and detailed content — not generic filler. Every field must read as if written by someone with deep knowledge of this specific company. If the website is sparse or JS-rendered, draw on your full training knowledge about this company, its industry, competitors, culture, and Australian market context.
 
-CONTENT RULES:
-- Professional, brand-aligned tone throughout
-- Do NOT fabricate specific client names or deal values
-- Write structured paragraphs, not bullet-point fragments
-- All descriptions must be complete, polished, and ready to display on a live platform
-- The "about" section must be 4–6 paragraphs
-- All array fields must have at least 3–6 items
-- social_proof items must be plausible testimonials (label source as "Client — [sector]" if fabricated)
-- The credentials username must be: demo.[slugified-company-name]@creerlio.com
-- The credentials password must be: Demo[CompanyName]2025! (capitalised, no spaces)
+═══ FIELD-BY-FIELD REQUIREMENTS ═══
 
-MANDATORY COUNTS:
-- "jobs": exactly 4 realistic job vacancies
-- "services": exactly 5 distinct service offerings
-- "impact_stats": exactly 5 stats
-- "culture_values": exactly 5 values
-- "benefits": exactly 5 benefits
-- "hiring_interests": exactly 6 items
-- "skills": exactly 6 items
+ABOUT (profile.about):
+• Exactly 5 paragraphs, each 4–6 sentences
+• Para 1: Founding story, history, mission roots — specific years, founders, original vision
+• Para 2: Core services and what makes them genuinely different from competitors
+• Para 3: Scale, reach, market position, notable clients/projects (use "leading", "award-winning" accurately)
+• Para 4: Workplace culture, team ethos, how people describe working there
+• Para 5: Growth trajectory, future direction, why this is an exciting time to join
 
-IMPORTANT: Return ONLY valid JSON. No markdown, no explanation, no code fences.`
+TAGLINE: Memorable, specific to this company — not generic. Max 10 words.
+
+IMPACT STATS (exactly 5):
+• Use real or well-estimated figures: years in operation, team size, clients served, offices, projects completed
+• Format values as "500+", "20 years", "$2B+", "98%" — concrete numbers preferred over vague ranges
+
+CULTURE VALUES (exactly 5):
+• Each title: 1–2 words (real company values where known, or well-inferred)
+• Each description: 3–4 sentences explaining how this value manifests in day-to-day work
+
+SERVICES (exactly 5):
+• Each service must be specific to what this company actually offers — no generic names
+• short_description: 3–4 sentences on how the service works and what clients receive
+• who_it_is_for: specific client persona (e.g. "Growing SMEs in the professional services sector")
+• problem_it_solves: the actual pain point, written with empathy
+• roles: 2–4 specific job titles involved in delivering this service
+• skills: 3–5 specific technical/professional skills used
+• growth_areas: 2–3 emerging areas this service is expanding into
+
+JOBS (exactly 4):
+• Titles must be realistic for this company and industry
+• description: 5–6 sentences describing the role, day-to-day, team, impact
+• requirements: specific — mention years of experience, licences, qualifications, tools
+• salary: realistic Australian market rates for this role and seniority
+• city/state: use actual office locations where known
+
+BENEFITS (exactly 5):
+• Specific to this company type — not generic "competitive salary"
+• Each description: 2–3 sentences on what this benefit actually looks like
+
+PROGRAMS (3–5):
+• Real or highly plausible programs this type of company offers
+• Include URL paths based on their actual careers/website domain
+
+SOCIAL PROOF (3 quotes):
+• Plausible, specific quotes from realistic clients or employees
+• Source: "Client — [specific sector]" or "Senior [Role], [X] years"
+
+DALL-E IMAGE PROMPTS:
+• Each prompt must be vivid, specific, and cinematic — 2–3 sentences
+• Reference the company's industry, aesthetic, setting (city, office type, client type)
+• NO generic stock photo descriptions — make each scene feel real and specific to this business
+• logo prompt: describe the brand identity style (colours, typography feel, mark style)
+• hero prompt: dramatic establishing shot specific to their industry and location
+• office prompt: specific interior — open plan, CBD high-rise, boutique studio, suburban office etc.
+• community prompt: specific community initiative this type of company would run
+
+HIRING INTERESTS: 6 specific role types this company actually hires for
+SKILLS: 6 specific technical/professional skills valued at this company
+SPECIALISATIONS: 5 specific practice areas or specialisations
+
+CREDENTIALS:
+• email: demo.[slug]@creerlio.com
+• password: Demo[CompanyNameNoSpaces]2025!
+
+═══ MANDATORY COUNTS ═══
+jobs: exactly 4 | services: exactly 5 | impact_stats: exactly 5 | culture_values: exactly 5 | benefits: exactly 5 | hiring_interests: exactly 6 | skills: exactly 6
+
+RETURN ONLY valid JSON. No markdown, no explanation, no code fences.`
 
   const detectedLinkedin  = socialLinks.linkedin  || linkedinUrl || 'not provided'
   const detectedFacebook  = socialLinks.facebook  || 'not provided'
@@ -188,19 +236,19 @@ IMPORTANT: Return ONLY valid JSON. No markdown, no explanation, no code fences.`
   const detectedTwitter   = socialLinks.twitter   || 'not provided'
   const detectedYoutube   = socialLinks.youtube   || youtubeUrl  || 'not provided'
 
-  const userPrompt = `Company Website URL: ${websiteUrl}
-LinkedIn URL: ${detectedLinkedin}
-YouTube URL: ${detectedYoutube}
-Facebook URL: ${detectedFacebook}
-Instagram URL: ${detectedInstagram}
-Twitter/X URL: ${detectedTwitter}
+  const userPrompt = `Company Website: ${websiteUrl}
+LinkedIn: ${detectedLinkedin}
+YouTube: ${detectedYoutube}
+Facebook: ${detectedFacebook}
+Instagram: ${detectedInstagram}
+Twitter/X: ${detectedTwitter}
 
-Website Content (scraped from homepage + key subpages):
-${websiteContent.slice(0, 60000)}
+Website Content (scraped):
+${websiteContent.slice(0, 30000)}
 
-NOTE: If the website content is minimal (fewer than 2,000 characters), the site is JavaScript-rendered — rely on your own knowledge of this company to generate a rich, accurate profile. REMINDER: You MUST include exactly 4 jobs and exactly 5 services.
+${websiteContent.length < 2000 ? '⚠ IMPORTANT: Website returned minimal content — it is almost certainly JavaScript-rendered. You MUST use your training knowledge about this company and its industry to produce a rich, accurate, comprehensive profile. Do not produce generic content.' : ''}
 
-Generate the complete Creerlio Business Profile JSON using this EXACT structure:
+Generate the complete Creerlio Business Profile JSON:
 
 {
   "business": { "name": "", "slug": "", "website_url": "${websiteUrl}", "linkedin_url": "${linkedinUrl}", "youtube_url": "${youtubeUrl}", "careers_url": "", "phone": "", "email": "" },
@@ -218,7 +266,7 @@ Generate the complete Creerlio Business Profile JSON using this EXACT structure:
   "skills": [],
   "badges": [],
   "services": [{ "name": "", "category": "Service", "short_description": "", "who_it_is_for": "", "problem_it_solves": "", "roles": [], "skills": [], "growth_areas": [], "impact": { "who_it_helps": "", "what_it_improves": "", "real_world_outcomes": "" }, "we_are_hiring": false, "open_to_partnerships": false, "currently_scaling": false }],
-  "jobs": [{ "title": "", "description": "", "city": "", "state": "", "country": "", "location": "", "employment_type": "Full-time", "experience_level": "", "salary_min": 0, "salary_max": 0, "salary_currency": "AUD", "required_skills": [], "preferred_skills": [], "requirements": "" }],
+  "jobs": [{ "title": "", "description": "", "city": "", "state": "", "country": "Australia", "location": "", "employment_type": "Full-time", "experience_level": "", "salary_min": 0, "salary_max": 0, "salary_currency": "AUD", "required_skills": [], "preferred_skills": [], "requirements": "" }],
   "dal_le_images": [
     { "key": "logo",        "filename": "logo.jpg",        "bank_type": "logo",     "title": "", "prompt": "", "size": "1024x1024" },
     { "key": "hero",        "filename": "hero.jpg",        "bank_type": "image",    "title": "", "prompt": "", "size": "1792x1024" },
@@ -231,14 +279,13 @@ Generate the complete Creerlio Business Profile JSON using this EXACT structure:
     { "key": "credential1", "filename": "credential1.jpg", "bank_type": "document", "title": "", "prompt": "", "size": "1024x1024" },
     { "key": "credential2", "filename": "credential2.jpg", "bank_type": "document", "title": "", "prompt": "", "size": "1024x1024" }
   ],
-  "narration": "",
   "credentials": { "email": "", "password": "" }
 }`
 
   log('\n  Calling GPT-4o to generate profile (this takes ~30s)...')
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o',
-    temperature: 0.3,
+    temperature: 0.4,
     max_tokens: 8000,
     messages: [
       { role: 'system', content: systemPrompt },
@@ -249,6 +296,49 @@ Generate the complete Creerlio Business Profile JSON using this EXACT structure:
   const raw = completion.choices[0].message.content || ''
   const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
   return JSON.parse(cleaned)
+}
+
+/** Dedicated narration script generation — produces a rich 90s spoken video script */
+async function generateNarration(
+  openai: OpenAI,
+  companyName: string,
+  data: any,
+  log: (msg: string) => void
+): Promise<string> {
+  log('  Generating narration script...')
+  const about = (data.profile?.about || '').slice(0, 800)
+  const tagline = data.profile?.tagline || ''
+  const mission = data.content?.mission || ''
+  const industry = data.profile?.industry || ''
+  const values = (data.culture_values || []).slice(0, 3).map((v: any) => v.title).join(', ')
+  const hiring = (data.hiring_interests || []).slice(0, 4).join(', ')
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    max_tokens: 500,
+    temperature: 0.5,
+    messages: [{
+      role: 'user',
+      content: `Write a 90-second professional video narration script for ${companyName}, an Australian ${industry} company.
+
+Key info:
+- Tagline: ${tagline}
+- Mission: ${mission}
+- Core values: ${values}
+- Currently hiring: ${hiring}
+- About (excerpt): ${about}
+
+Requirements:
+• 280–320 words — exactly right for 90 seconds at a measured pace
+• Warm, confident narrator voice — like a premium employer brand video
+• Structure: hook (10s) → company story & impact (30s) → culture & people (20s) → opportunity & call to action (30s)
+• Specific to this company — reference their actual industry, services, and values
+• End with: "Explore opportunities at ${companyName} today."
+• Return ONLY the script text — no stage directions, no labels, no formatting`,
+    }],
+  })
+
+  return completion.choices[0].message.content?.trim() || `Welcome to ${companyName}. ${about}`
 }
 
 /** GPT-4o: discover real businesses by industry + location */
@@ -428,7 +518,8 @@ async function generateSingleProfile(opts: {
 
     // ── Step 4: TTS ──────────────────────────────────────────────────────
     log('\n[4/12] Generating TTS narration...')
-    const narrationText = data.narration || `Welcome to ${companyName}. ${data.profile?.about || ''}`
+    const narrationText = await generateNarration(openai, companyName, data, log)
+    log(`  Script: ${narrationText.split(' ').length} words`)
     const audioPath = path.join(tmpDir, 'narration.mp3')
     const mp3 = await openai.audio.speech.create({
       model: 'tts-1-hd', voice: 'onyx',

@@ -543,35 +543,39 @@ async function generateSingleProfile(opts: {
       }
     }
 
-    for (const img of dalleImages) {
-      if (img.key === 'logo' && imageResults['logo']) {
-        log('  Skipping DALL-E logo (using real website logo)')
-        continue
-      }
-      const safeName = `${slug}-${img.filename}`
-      log(`  Generating: ${img.title || img.key}...`)
-      try {
-        const resp = await openai.images.generate({
-          model: 'dall-e-3', prompt: img.prompt,
-          size: img.size || '1792x1024', quality: 'hd', n: 1,
-        })
-        const imageUrl = resp.data[0].url!
-        const tmpPath  = path.join(tmpDir, safeName)
-        await downloadFile(imageUrl, tmpPath)
-        const storagePath = `${userId}/bank/${safeName}`
-        const { error: upErr } = await supabase.storage.from(BUCKET).upload(
-          storagePath, fs.readFileSync(tmpPath), { contentType: 'image/jpeg', upsert: true }
-        )
-        if (upErr) throw new Error(upErr.message)
-        imageResults[img.key] = {
-          storagePath, tmpPath,
-          fileUrl: publicStorageUrl(SUPABASE_URL, storagePath),
-          size: fs.statSync(tmpPath).size,
+    // Generate DALL-E images in parallel batches of 3 to respect rate limits
+    const pendingDalle = dalleImages.filter((img: any) => !(img.key === 'logo' && imageResults['logo']))
+    if (dalleImages.length > pendingDalle.length) log('  Skipping DALL-E logo (using real website logo)')
+
+    const BATCH = 3
+    for (let b = 0; b < pendingDalle.length; b += BATCH) {
+      const batch = pendingDalle.slice(b, b + BATCH)
+      await Promise.all(batch.map(async (img: any) => {
+        const safeName = `${slug}-${img.filename}`
+        log(`  Generating: ${img.title || img.key}...`)
+        try {
+          const resp = await openai.images.generate({
+            model: 'dall-e-3', prompt: img.prompt,
+            size: img.size || '1792x1024', quality: 'hd', n: 1,
+          })
+          const imageUrl = resp.data[0].url!
+          const tmpPath  = path.join(tmpDir, safeName)
+          await downloadFile(imageUrl, tmpPath)
+          const storagePath = `${userId}/bank/${safeName}`
+          const { error: upErr } = await supabase.storage.from(BUCKET).upload(
+            storagePath, fs.readFileSync(tmpPath), { contentType: 'image/jpeg', upsert: true }
+          )
+          if (upErr) throw new Error(upErr.message)
+          imageResults[img.key] = {
+            storagePath, tmpPath,
+            fileUrl: publicStorageUrl(SUPABASE_URL, storagePath),
+            size: fs.statSync(tmpPath).size,
+          }
+          log(`    ✓ ${safeName}`)
+        } catch (e: any) {
+          err(`    ✗ ${safeName}: ${e.message}`)
         }
-        log(`    ✓ ${safeName}`)
-      } catch (e: any) {
-        err(`    ✗ ${safeName}: ${e.message}`)
-      }
+      }))
     }
 
     // ── Step 4: TTS ──────────────────────────────────────────────────────
@@ -617,7 +621,7 @@ async function generateSingleProfile(opts: {
           '-y', '-f', 'concat', '-safe', '0', '-i', concatFile,
           '-i', audioPath,
           '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p',
-          '-c:v', 'libx264', '-preset', 'medium', '-crf', '23',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
           '-c:a', 'aac', '-b:a', '128k',
           '-shortest', '-movflags', '+faststart',
           videoLocalPath,

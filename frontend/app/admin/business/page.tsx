@@ -174,6 +174,7 @@ export default function AdminBusinessPage() {
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      let receivedDone = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -190,6 +191,7 @@ export default function AdminBusinessPage() {
               setGenLogs(prev => [...prev, { text: msg.log, isError: msg.isError }])
             }
             if (msg.done) {
+              receivedDone = true
               setGenDone(true)
               loadBusiness(user.id)
             }
@@ -198,6 +200,10 @@ export default function AdminBusinessPage() {
             }
           } catch (_) {}
         }
+      }
+
+      if (!receivedDone) {
+        setGenError('Stream closed before completion — Vercel function likely timed out (5 min limit). For bulk mode use 1–2 businesses max. Check the business list — partial profiles may have been created.')
       }
     } catch (e: any) {
       setGenError(e.message || 'Unknown error')
@@ -506,13 +512,13 @@ export default function AdminBusinessPage() {
                         style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">Number of businesses <span className="text-gray-500">(1–10)</span></label>
-                      <input type="number" min={1} max={10} title="Number of businesses to generate" placeholder="5" value={genMaxResults} onChange={e => setGenMaxResults(Math.min(10, Math.max(1, parseInt(e.target.value) || 5)))}
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Number of businesses <span className="text-gray-500">(1–2)</span></label>
+                      <input type="number" min={1} max={2} title="Number of businesses to generate" placeholder="2" value={genMaxResults} onChange={e => setGenMaxResults(Math.min(2, Math.max(1, parseInt(e.target.value) || 1)))}
                         className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                         style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
                     </div>
                     <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 text-sm text-amber-300">
-                      Bulk mode discovers {genMaxResults} real businesses via GPT-4o, then generates a full profile for each. Estimated time: <strong>{genMaxResults * 4}–{genMaxResults * 6} minutes</strong>. Max Vercel timeout is 5 min — keep to 1–2 businesses per run.
+                      Discovers {genMaxResults} business{genMaxResults > 1 ? 'es' : ''} via GPT-4o then generates a full profile for each. Estimated time: <strong>{genMaxResults * 4}–{genMaxResults * 5} minutes</strong>. Limited to 2 max due to Vercel's 5-min timeout.
                     </div>
                   </>
                 )}

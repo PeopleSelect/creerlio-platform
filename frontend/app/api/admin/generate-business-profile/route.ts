@@ -72,22 +72,23 @@ async function fetchWebsiteText(url: string): Promise<string> {
     let body = ''
     const req = proto.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } } as any, (r) => {
       r.setEncoding('utf8')
-      r.on('data', (d: string) => { body += d; if (body.length > 80000) (req as any).destroy() })
-      r.on('end', () => resolve(body.slice(0, 80000)))
+      r.on('data', (d: string) => { body += d; if (body.length > 40000) (req as any).destroy() })
+      r.on('end', () => resolve(body.slice(0, 40000)))
     })
     ;(req as any).on('error', () => resolve(''))
-    ;(req as any).setTimeout(10000, () => { (req as any).destroy(); resolve(body) })
+    ;(req as any).setTimeout(5000, () => { (req as any).destroy(); resolve(body) })
   })
 }
 
-/** Scrape homepage + key subpages and combine content for richer GPT input */
+/** Scrape homepage + 3 key subpages — capped at 5s each to stay within lambda budget */
 async function fetchMultiplePages(websiteUrl: string): Promise<string> {
   const base = new URL(websiteUrl)
+  // Only fetch highest-value pages — homepage + about + careers
   const urls = [
     websiteUrl,
-    `${base.origin}/about`, `${base.origin}/about-us`, `${base.origin}/who-we-are`,
-    `${base.origin}/services`, `${base.origin}/what-we-do`, `${base.origin}/solutions`,
-    `${base.origin}/careers`, `${base.origin}/jobs`, `${base.origin}/contact`,
+    `${base.origin}/about`,
+    `${base.origin}/about-us`,
+    `${base.origin}/careers`,
   ]
   const parts: string[] = []
   const seen = new Set<string>()
@@ -96,11 +97,11 @@ async function fetchMultiplePages(websiteUrl: string): Promise<string> {
     seen.add(url)
     try {
       const text = await fetchWebsiteText(url)
-      if (text.length > 300) parts.push(`=== ${url} ===\n${text.slice(0, 12000)}`)
+      if (text.length > 300) parts.push(`=== ${url} ===\n${text.slice(0, 10000)}`)
     } catch (_) {}
-    if (parts.join('').length > 70000) break
+    if (parts.join('').length > 35000) break
   }
-  return parts.join('\n\n').slice(0, 80000)
+  return parts.join('\n\n').slice(0, 40000)
 }
 
 // ── HTML parsers ──────────────────────────────────────────────────────────────
@@ -784,7 +785,7 @@ export async function POST(req: NextRequest) {
       try {
         if (mode === 'bulk') {
           if (!industry || !location) throw new Error('industry and location are required for bulk mode')
-          const cap = Math.min(Math.max(1, parseInt(String(maxResults)) || 5), 10)
+          const cap = Math.min(Math.max(1, parseInt(String(maxResults)) || 2), 2)
 
           log('\n╔══════════════════════════════════════════════════════════════╗')
           log('║   CREERLIO BULK PROFILE GENERATOR                           ║')

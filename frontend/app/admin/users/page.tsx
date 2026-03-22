@@ -212,6 +212,32 @@ export default function AdminUsersPage() {
     checkAdminApi()
   }, [isAdmin])
 
+  async function toggleUserActive(usr: any) {
+    const newState = !usr.is_active
+    const action = newState ? 'activate' : 'deactivate'
+    if (!confirm(`Are you sure you want to ${action} this user? ${newState ? 'Their profile will become visible again.' : 'Their profile will be hidden from all users.'}`)) return
+
+    try {
+      const updates: Promise<any>[] = []
+      if (usr.type === 'talent' || usr.type === 'registered') {
+        updates.push(supabase.from('talent_profiles').update({ is_active: newState }).eq('user_id', usr.user_id))
+      }
+      if (usr.type === 'business' || usr.type === 'registered') {
+        updates.push(supabase.from('business_profiles').update({ is_active: newState }).eq('user_id', usr.user_id))
+      }
+      // Also update users table if it exists
+      updates.push(supabase.from('users').update({ is_active: newState }).eq('id', usr.user_id))
+
+      await Promise.allSettled(updates)
+
+      // Update local state immediately
+      setUsersList(prev => prev.map(u => u.user_id === usr.user_id ? { ...u, is_active: newState } : u))
+    } catch (error: any) {
+      console.error('Error toggling user status:', error)
+      alert(`Failed to ${action} user: ${error?.message || 'Unknown error'}`)
+    }
+  }
+
   async function deleteUser(userId: string) {
     if (!user) return
     if (!confirm('Are you sure you want to delete this user? This action cannot be undone. This will delete the auth user and all associated profiles.')) {
@@ -443,6 +469,16 @@ export default function AdminUsersPage() {
                           className="px-3 py-1 rounded text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/50 hover:bg-blue-500/30 transition-colors"
                         >
                           View
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleUserActive(usr) }}
+                          className={`px-3 py-1 rounded text-xs font-semibold border transition-colors ${
+                            usr.is_active
+                              ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 hover:bg-amber-500/30'
+                              : 'bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500/30'
+                          }`}
+                        >
+                          {usr.is_active ? 'Deactivate' : 'Activate'}
                         </button>
                         <button
                           onClick={(e) => {

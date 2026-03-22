@@ -51,12 +51,82 @@ async function downloadFile(url: string, dest: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest)
     const proto = url.startsWith('https') ? https : http
-    proto.get(url, (res) => {
+    const req = proto.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } } as any, (res: any) => {
+      // Follow redirects
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        file.close()
+        fs.unlinkSync(dest)
+        downloadFile(res.headers.location, dest).then(resolve).catch(reject)
+        return
+      }
       if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return }
       res.pipe(file)
       file.on('finish', () => { file.close(); resolve() })
-    }).on('error', reject)
+    })
+    ;(req as any).on('error', reject)
   })
+}
+
+/** Extract social media links from raw HTML */
+function extractSocialLinks(html: string, baseUrl: string): Record<string, string> {
+  const base = new URL(baseUrl)
+  const result: Record<string, string> = {}
+
+  const patterns: [string, RegExp][] = [
+    ['linkedin',  /https?:\/\/(?:www\.)?linkedin\.com\/company\/[^"'\s>]+/gi],
+    ['facebook',  /https?:\/\/(?:www\.)?facebook\.com\/[^"'\s>]+/gi],
+    ['instagram', /https?:\/\/(?:www\.)?instagram\.com\/[^"'\s>]+/gi],
+    ['twitter',   /https?:\/\/(?:www\.)?(?:twitter|x)\.com\/[^"'\s>]+/gi],
+    ['youtube',   /https?:\/\/(?:www\.)?youtube\.com\/(?:@|channel\/|user\/)[^"'\s>]+/gi],
+  ]
+
+  for (const [key, pattern] of patterns) {
+    const matches = html.match(pattern)
+    if (matches && matches.length > 0) {
+      // Prefer company/org URLs, dedupe
+      const clean = matches[0].replace(/['">\s]+$/, '')
+      result[key] = clean
+    }
+  }
+
+  return result
+}
+
+/** Extract the best logo/brand image from website HTML */
+function extractLogoFromHtml(html: string, baseUrl: string): string | null {
+  const base = new URL(baseUrl)
+
+  const candidates: string[] = []
+
+  // 1. Open Graph image (usually hero/brand image)
+  const ogImage = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+                 || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+  if (ogImage?.[1]) candidates.push(ogImage[1])
+
+  // 2. Twitter card image
+  const twImage = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
+                 || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i)
+  if (twImage?.[1]) candidates.push(twImage[1])
+
+  // 3. Apple touch icon (high-res favicon, usually 180x180)
+  const apple = html.match(/<link[^>]+rel=["']apple-touch-icon["'][^>]+href=["']([^"']+)["']/i)
+               || html.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["']apple-touch-icon["']/i)
+  if (apple?.[1]) candidates.push(apple[1])
+
+  // 4. Shortcut icon / favicon (PNG preferred)
+  const icons = [...html.matchAll(/<link[^>]+rel=["'](?:shortcut icon|icon)["'][^>]+href=["']([^"']+\.(?:png|svg|ico))["']/gi)]
+  for (const m of icons) { if (m[1]) candidates.push(m[1]) }
+
+  for (const c of candidates) {
+    if (!c || c.length < 4) continue
+    try {
+      const url = c.startsWith('http') ? c : new URL(c, base.origin).href
+      return url
+    } catch (_) {}
+  }
+
+  // Fallback: try /favicon.ico
+  return `${base.origin}/favicon.ico`
 }
 
 async function fetchWebsiteText(url: string): Promise<string> {
@@ -80,6 +150,7 @@ async function researchCompany(
   websiteUrl: string,
   linkedinUrl: string,
   youtubeUrl: string,
+  socialLinks: Record<string, string>,
   log: (msg: string) => void
 ): Promise<any> {
   log('  Fetching website content...')
@@ -112,9 +183,18 @@ MANDATORY COUNTS:
 
 IMPORTANT: Return ONLY valid JSON. No markdown, no explanation, no code fences.`
 
+  const detectedLinkedin = socialLinks.linkedin || linkedinUrl || 'not provided'
+  const detectedFacebook = socialLinks.facebook || 'not provided'
+  const detectedInstagram = socialLinks.instagram || 'not provided'
+  const detectedTwitter = socialLinks.twitter || 'not provided'
+  const detectedYoutube = socialLinks.youtube || youtubeUrl || 'not provided'
+
   const userPrompt = `Company Website URL: ${websiteUrl}
-LinkedIn URL: ${linkedinUrl || 'not provided'}
-YouTube URL: ${youtubeUrl || 'not provided'}
+LinkedIn URL: ${detectedLinkedin}
+YouTube URL: ${detectedYoutube}
+Facebook URL: ${detectedFacebook}
+Instagram URL: ${detectedInstagram}
+Twitter/X URL: ${detectedTwitter}
 
 Website Content (first 60,000 chars):
 ${websiteText.slice(0, 60000)}
@@ -209,9 +289,19 @@ export async function POST(req: NextRequest) {
         log('╚══════════════════════════════════════════════════════════════╝')
         log(`  Website:  ${websiteUrl}`)
 
-        // ── Step 1: Research ─────────────────────────────────────────────────
+        // ── Step 1: Research + detect social links & logo ────────────────────
         log('\n[1/12] Researching company...')
-        const data = await researchCompany(openai, websiteUrl, linkedinUrl, youtubeUrl, log)
+        log('  Scanning website for social links and logo...')
+        const websiteHtml = await fetchWebsiteText(websiteUrl)
+        const detectedSocial = extractSocialLinks(websiteHtml, websiteUrl)
+        const detectedLogoUrl = extractLogoFromHtml(websiteHtml, websiteUrl)
+
+        if (Object.keys(detectedSocial).length > 0) {
+          log(`  ✓ Found social links: ${Object.keys(detectedSocial).join(', ')}`)
+        }
+        if (detectedLogoUrl) log(`  ✓ Found logo/brand image`)
+
+        const data = await researchCompany(openai, websiteUrl, linkedinUrl, youtubeUrl, detectedSocial, log)
 
         const companyName = data.business?.name || 'Company'
         const slug        = customSlug || slugify(companyName)
@@ -240,12 +330,54 @@ export async function POST(req: NextRequest) {
           log('  Created user: ' + userId)
         }
 
-        // ── Step 3: DALL-E images ────────────────────────────────────────────
-        log('\n[3/12] Generating DALL-E images...')
+        // ── Step 3: Logo (real) + DALL-E images ─────────────────────────────
+        log('\n[3/12] Fetching logo and generating DALL-E images...')
         const dalleImages = data.dal_le_images || []
         const imageResults: Record<string, { storagePath: string; fileUrl: string; tmpPath: string; size: number }> = {}
 
+        // Try to use the real website logo/OG image instead of DALL-E
+        const realLogoUrl = detectedLogoUrl
+        if (realLogoUrl) {
+          log(`  Downloading real logo from website...`)
+          try {
+            const logoFilename = `${slug}-logo.jpg`
+            const logoTmpPath  = path.join(tmpDir, logoFilename)
+            await downloadFile(realLogoUrl, logoTmpPath)
+            // Verify file has content
+            const logoSize = fs.statSync(logoTmpPath).size
+            if (logoSize > 500) {
+              const storagePath = `${userId}/bank/${logoFilename}`
+              const contentType = realLogoUrl.endsWith('.png') ? 'image/png'
+                : realLogoUrl.endsWith('.svg') ? 'image/svg+xml'
+                : realLogoUrl.endsWith('.ico') ? 'image/x-icon'
+                : 'image/jpeg'
+              const { error: upErr } = await supabase.storage.from(BUCKET).upload(
+                storagePath, fs.readFileSync(logoTmpPath), { contentType, upsert: true }
+              )
+              if (!upErr) {
+                imageResults['logo'] = {
+                  storagePath, tmpPath: logoTmpPath,
+                  fileUrl: publicStorageUrl(SUPABASE_URL, storagePath),
+                  size: logoSize,
+                }
+                log(`  ✓ Real logo downloaded (${(logoSize/1024).toFixed(0)} KB)`)
+              } else {
+                err(`  ✗ Logo upload: ${upErr.message} — will generate with DALL-E`)
+              }
+            } else {
+              log(`  Logo too small (${logoSize}B) — will generate with DALL-E`)
+            }
+          } catch (e: any) {
+            err(`  ✗ Logo download failed: ${e.message} — will generate with DALL-E`)
+          }
+        }
+
+        // Generate remaining images with DALL-E (skip logo if we got a real one)
         for (const img of dalleImages) {
+          if (img.key === 'logo' && imageResults['logo']) {
+            log(`  Skipping DALL-E logo (using real website logo)`)
+            continue
+          }
           const safeName = `${slug}-${img.filename}`
           log(`  Generating: ${img.title || img.key}...`)
           try {
@@ -365,10 +497,20 @@ export async function POST(req: NextRequest) {
           else { bankItems.push({ key: 'video', id: vidItem.id }); log(`  ✓ video → id ${vidItem.id}`) }
         }
 
+        // Merge detected social links with any explicitly provided URLs
+        const mergedLinkedin  = linkedinUrl  || detectedSocial.linkedin  || null
+        const mergedYoutube   = youtubeUrl   || detectedSocial.youtube   || null
+        const mergedFacebook  = detectedSocial.facebook  || null
+        const mergedInstagram = detectedSocial.instagram || null
+        const mergedTwitter   = detectedSocial.twitter   || null
+
         const linkDefs = [
-          { title: `${companyName} Website`, url: websiteUrl },
-          linkedinUrl ? { title: `${companyName} LinkedIn`, url: linkedinUrl } : null,
-          youtubeUrl  ? { title: `${companyName} YouTube`,  url: youtubeUrl  } : null,
+          { title: `${companyName} Website`,   url: websiteUrl },
+          mergedLinkedin  ? { title: `${companyName} LinkedIn`,  url: mergedLinkedin  } : null,
+          mergedYoutube   ? { title: `${companyName} YouTube`,   url: mergedYoutube   } : null,
+          mergedFacebook  ? { title: `${companyName} Facebook`,  url: mergedFacebook  } : null,
+          mergedInstagram ? { title: `${companyName} Instagram`, url: mergedInstagram } : null,
+          mergedTwitter   ? { title: `${companyName} Twitter/X`, url: mergedTwitter   } : null,
           data.business?.careers_url ? { title: `${companyName} Careers`, url: data.business.careers_url } : null,
         ].filter(Boolean) as { title: string; url: string }[]
 
@@ -393,7 +535,15 @@ export async function POST(req: NextRequest) {
           logoId: logoItem?.id || null, heroImageId: heroItem?.id || null,
           introVideoId: videoItem?.id || null, introVideoUrl: videoPublicUrl,
           attachmentIds, skills: data.skills || [],
-          socialLinks: { website: websiteUrl, linkedin: linkedinUrl || null, youtube: youtubeUrl || null, careers: data.business?.careers_url || null },
+          socialLinks: {
+            website: websiteUrl,
+            linkedin: mergedLinkedin,
+            youtube: mergedYoutube,
+            facebook: mergedFacebook,
+            instagram: mergedInstagram,
+            twitter: mergedTwitter,
+            careers: data.business?.careers_url || null,
+          },
         }
 
         const { data: metaItem, error: metaErr } = await supabase.from('business_bank_items').insert({
@@ -444,6 +594,8 @@ export async function POST(req: NextRequest) {
           portfolio_intake_enabled: true, hiring_interests: data.hiring_interests || [],
           industries_served: data.industries_served || [],
           contact_email: data.business?.email || '', website_url: websiteUrl,
+          linkedin_url: mergedLinkedin, youtube_url: mergedYoutube,
+          facebook_url: mergedFacebook, instagram_url: mergedInstagram, twitter_url: mergedTwitter,
           enquiry_enabled: true,
           media_assets: { intro_video_url: videoPublicUrl, logo_url: logoUrl, hero_image_url: heroUrl },
           badges: data.badges || [],

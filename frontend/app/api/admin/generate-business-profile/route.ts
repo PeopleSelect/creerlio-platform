@@ -66,8 +66,16 @@ async function downloadFile(url: string, dest: string): Promise<void> {
   })
 }
 
+/** Hard timeout wrapper — resolves with fallback after ms regardless of DNS/connect hangs */
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ])
+}
+
 async function fetchWebsiteText(url: string): Promise<string> {
-  return new Promise((resolve) => {
+  const inner = new Promise<string>((resolve) => {
     const proto = url.startsWith('https') ? https : http
     let body = ''
     const req = proto.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } } as any, (r) => {
@@ -76,11 +84,14 @@ async function fetchWebsiteText(url: string): Promise<string> {
       r.on('end', () => resolve(body.slice(0, 40000)))
     })
     ;(req as any).on('error', () => resolve(''))
-    ;(req as any).setTimeout(5000, () => { (req as any).destroy(); resolve(body) })
+    // Socket-level timeout (fires after connect)
+    ;(req as any).setTimeout(4000, () => { (req as any).destroy(); resolve(body) })
   })
+  // Hard timeout including DNS + connect time — guarantees this never hangs
+  return withTimeout(inner, 5000, '')
 }
 
-/** Scrape homepage + key subpages — all in parallel, capped at 5s each */
+/** Scrape homepage + key subpages — all in parallel, hard 8s total cap */
 async function fetchMultiplePages(websiteUrl: string, targetLocation?: string): Promise<string> {
   const base = new URL(websiteUrl)
   // Always scrape the actual homepage (origin), not a deep-link or search results page
@@ -92,22 +103,19 @@ async function fetchMultiplePages(websiteUrl: string, targetLocation?: string): 
     `${homepage}/careers`,
   ]
 
-  // If a target location/suburb is provided, also try location-specific pages
+  // If a target location/suburb is provided, try the most likely location-specific page only
   if (targetLocation) {
     const suburb = targetLocation.split(/[,\s]+/)[0].toLowerCase().replace(/\s+/g, '-')
-    urls.push(
-      `${homepage}/locations/${suburb}`,
-      `${homepage}/offices/${suburb}`,
-      `${homepage}/find-an-agent/${suburb}`,
-      `${homepage}/contact`,
-    )
+    urls.push(`${homepage}/locations/${suburb}`)
   }
 
   const seen = new Set<string>()
   const uniqueUrls = urls.filter(url => { if (seen.has(url)) return false; seen.add(url); return true })
 
-  // Fetch all pages in parallel — max ~5s total instead of up to 20s sequential
-  const results = await Promise.allSettled(uniqueUrls.map(url => fetchWebsiteText(url)))
+  // Fetch all pages in parallel with a hard 8s wall-clock cap on the entire batch
+  const batchPromise = Promise.allSettled(uniqueUrls.map(url => fetchWebsiteText(url)))
+  const results = await withTimeout(batchPromise, 8000, uniqueUrls.map(() => ({ status: 'fulfilled' as const, value: '' })))
+
   const parts: string[] = []
   for (let i = 0; i < uniqueUrls.length; i++) {
     const r = results[i]

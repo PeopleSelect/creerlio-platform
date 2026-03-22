@@ -15,6 +15,17 @@ export default function AdminBusinessPage() {
   const [totalCount, setTotalCount] = useState(0)
   const [isAdmin, setIsAdmin] = useState(false)
 
+  // AI Generator modal state
+  const [showGenerator, setShowGenerator] = useState(false)
+  const [genWebsite, setGenWebsite]       = useState('')
+  const [genLinkedin, setGenLinkedin]     = useState('')
+  const [genYoutube, setGenYoutube]       = useState('')
+  const [genSlug, setGenSlug]             = useState('')
+  const [genRunning, setGenRunning]       = useState(false)
+  const [genLogs, setGenLogs]             = useState<{ text: string; isError?: boolean }[]>([])
+  const [genDone, setGenDone]             = useState(false)
+  const [genError, setGenError]           = useState('')
+
   useEffect(() => {
     async function checkAdmin() {
       try {
@@ -128,6 +139,81 @@ export default function AdminBusinessPage() {
     }
   }, [page, searchQuery, isAdmin, user])
 
+  async function runGenerator() {
+    if (!genWebsite.trim()) return
+    setGenRunning(true)
+    setGenLogs([])
+    setGenDone(false)
+    setGenError('')
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No session token')
+
+      const res = await fetch('/api/admin/generate-business-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          websiteUrl:  genWebsite.trim(),
+          linkedinUrl: genLinkedin.trim() || undefined,
+          youtubeUrl:  genYoutube.trim()  || undefined,
+          slug:        genSlug.trim()     || undefined,
+        }),
+      })
+
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({ error: 'Failed to start generator' }))
+        throw new Error(err.error || 'Failed to start generator')
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+        for (const part of parts) {
+          const line = part.replace(/^data: /, '').trim()
+          if (!line) continue
+          try {
+            const msg = JSON.parse(line)
+            if (msg.log !== undefined) {
+              setGenLogs(prev => [...prev, { text: msg.log, isError: msg.isError }])
+            }
+            if (msg.done) {
+              setGenDone(true)
+              loadBusiness(user.id)
+            }
+            if (msg.error) {
+              setGenError(msg.error)
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (e: any) {
+      setGenError(e.message || 'Unknown error')
+    } finally {
+      setGenRunning(false)
+    }
+  }
+
+  function openGenerator() {
+    setShowGenerator(true)
+    setGenWebsite('')
+    setGenLinkedin('')
+    setGenYoutube('')
+    setGenSlug('')
+    setGenLogs([])
+    setGenDone(false)
+    setGenError('')
+    setGenRunning(false)
+  }
+
   async function toggleActive(businessId: string, currentStatus: boolean) {
     if (!user) return
     
@@ -201,6 +287,13 @@ export default function AdminBusinessPage() {
               className="px-4 py-2 bg-slate-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/40"
               style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
             />
+            <button
+              type="button"
+              onClick={openGenerator}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold text-sm flex items-center gap-2 transition-colors"
+            >
+              <span>✨</span> Generate AI Profile
+            </button>
           </div>
         </div>
 
@@ -317,6 +410,160 @@ export default function AdminBusinessPage() {
           )}
         </div>
       </div>
+
+      {/* AI Generator Modal */}
+      {showGenerator && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+              <div>
+                <h2 className="text-lg font-bold text-white">✨ Generate AI Business Profile</h2>
+                <p className="text-sm text-gray-400 mt-0.5">Researches the company and builds a complete profile automatically</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGenerator(false)}
+                className="text-gray-500 hover:text-white transition-colors text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Form */}
+            {!genRunning && !genDone && (
+              <div className="px-6 py-5 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Website URL <span className="text-red-400">*</span></label>
+                  <input
+                    type="url"
+                    placeholder="https://www.example.com.au"
+                    value={genWebsite}
+                    onChange={e => setGenWebsite(e.target.value)}
+                    className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">LinkedIn URL <span className="text-gray-500">(optional)</span></label>
+                    <input
+                      type="url"
+                      placeholder="https://linkedin.com/company/..."
+                      value={genLinkedin}
+                      onChange={e => setGenLinkedin(e.target.value)}
+                      className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                      style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">YouTube URL <span className="text-gray-500">(optional)</span></label>
+                    <input
+                      type="url"
+                      placeholder="https://youtube.com/@..."
+                      value={genYoutube}
+                      onChange={e => setGenYoutube(e.target.value)}
+                      className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                      style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Slug <span className="text-gray-500">(optional — auto-generated if blank)</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. ray-white"
+                    value={genSlug}
+                    onChange={e => setGenSlug(e.target.value)}
+                    className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                  />
+                </div>
+                <div className="bg-slate-800/50 rounded-lg px-4 py-3 text-sm text-gray-400">
+                  This will generate <strong className="text-gray-200">10 DALL-E images</strong>, a <strong className="text-gray-200">TTS narration video</strong>, <strong className="text-gray-200">4 jobs</strong>, and <strong className="text-gray-200">5 services</strong> using AI. Takes ~3–5 minutes.
+                </div>
+                {genError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400">
+                    {genError}
+                  </div>
+                )}
+                <div className="flex justify-end gap-3 pt-1">
+                  <button type="button" onClick={() => setShowGenerator(false)} className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm transition-colors">
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={runGenerator}
+                    disabled={!genWebsite.trim()}
+                    className="px-6 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
+                  >
+                    Generate Profile
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Live log output */}
+            {(genRunning || (genLogs.length > 0 && !genDone)) && (
+              <div className="px-6 py-4 flex flex-col gap-3 overflow-hidden">
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                  Generating profile — this takes 3–5 minutes...
+                </div>
+                <div className="bg-black/50 rounded-lg p-4 font-mono text-xs text-green-400 overflow-y-auto h-72 flex flex-col gap-0.5">
+                  {genLogs.map((l, i) => (
+                    <div key={i} className={l.isError ? 'text-red-400' : 'text-green-300'}>{l.text}</div>
+                  ))}
+                  {genRunning && <div className="text-gray-500 animate-pulse">▌</div>}
+                </div>
+              </div>
+            )}
+
+            {/* Success state */}
+            {genDone && (
+              <div className="px-6 py-6 flex flex-col items-center gap-4 text-center">
+                <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center text-3xl">✅</div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Profile Created Successfully!</h3>
+                  <p className="text-gray-400 text-sm mt-1">The business profile has been added to the platform and is now visible in the list below.</p>
+                </div>
+                <div className="bg-slate-800 rounded-lg px-6 py-3 text-left w-full max-w-sm">
+                  <p className="text-xs text-gray-500 mb-1">Login credentials saved to profile</p>
+                  {genLogs.filter(l => l.text.includes('Login Email') || l.text.includes('Password')).map((l, i) => (
+                    <p key={i} className="text-sm font-mono text-gray-200">{l.text.trim()}</p>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowGenerator(false)}
+                  className="px-6 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+
+            {/* Error state */}
+            {!genRunning && genError && genLogs.length > 0 && (
+              <div className="px-6 py-4 flex flex-col gap-3">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400">
+                  {genError}
+                </div>
+                <div className="bg-black/50 rounded-lg p-4 font-mono text-xs text-green-300 overflow-y-auto h-48 flex flex-col gap-0.5">
+                  {genLogs.map((l, i) => (
+                    <div key={i} className={l.isError ? 'text-red-400' : 'text-green-300'}>{l.text}</div>
+                  ))}
+                </div>
+                <div className="flex justify-end">
+                  <button type="button" onClick={() => setShowGenerator(false)} className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm transition-colors">
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

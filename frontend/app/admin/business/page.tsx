@@ -504,7 +504,7 @@ export default function AdminBusinessPage() {
             )}
 
             {/* Live log output */}
-            {(genRunning || (genLogs.length > 0 && !genDone)) && (
+            {(genRunning || (genLogs.length > 0 && !genDone && !genError)) && (
               <div className="px-6 py-4 flex flex-col gap-3 overflow-hidden">
                 <div className="flex items-center gap-2 text-sm text-gray-400">
                   <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
@@ -544,17 +544,26 @@ export default function AdminBusinessPage() {
             )}
 
             {/* Error state */}
-            {!genRunning && genError && genLogs.length > 0 && (
+            {!genRunning && genError && (
               <div className="px-6 py-4 flex flex-col gap-3">
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400 font-semibold">
                   {genError}
                 </div>
-                <div className="bg-black/50 rounded-lg p-4 font-mono text-xs text-green-300 overflow-y-auto h-48 flex flex-col gap-0.5">
-                  {genLogs.map((l, i) => (
-                    <div key={i} className={l.isError ? 'text-red-400' : 'text-green-300'}>{l.text}</div>
-                  ))}
-                </div>
-                <div className="flex justify-end">
+                {genLogs.length > 0 ? (
+                  <div className="bg-black/50 rounded-lg p-4 font-mono text-xs overflow-y-auto h-48 flex flex-col gap-0.5">
+                    {genLogs.map((l, i) => (
+                      <div key={i} className={l.isError ? 'text-red-400' : 'text-green-300'}>{l.text}</div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-black/50 rounded-lg p-4 text-xs text-gray-500 italic">
+                    No output — the process may have failed to start. Check that the Vercel deployment is complete and all environment variables (OPENAI_API_KEY, SUPABASE_SERVICE_ROLE_KEY) are set.
+                  </div>
+                )}
+                <div className="flex justify-between items-center">
+                  <button type="button" onClick={() => { setGenError(''); setGenLogs([]); }} className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-gray-300 text-sm transition-colors">
+                    Try Again
+                  </button>
                   <button type="button" onClick={() => setShowGenerator(false)} className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm transition-colors">
                     Close
                   </button>

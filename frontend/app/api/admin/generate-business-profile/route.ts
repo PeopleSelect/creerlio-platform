@@ -80,8 +80,8 @@ async function fetchWebsiteText(url: string): Promise<string> {
   })
 }
 
-/** Scrape homepage + 3 key subpages — all in parallel, capped at 5s each */
-async function fetchMultiplePages(websiteUrl: string): Promise<string> {
+/** Scrape homepage + key subpages — all in parallel, capped at 5s each */
+async function fetchMultiplePages(websiteUrl: string, targetLocation?: string): Promise<string> {
   const base = new URL(websiteUrl)
   // Always scrape the actual homepage (origin), not a deep-link or search results page
   const homepage = base.origin
@@ -91,6 +91,18 @@ async function fetchMultiplePages(websiteUrl: string): Promise<string> {
     `${homepage}/about-us`,
     `${homepage}/careers`,
   ]
+
+  // If a target location/suburb is provided, also try location-specific pages
+  if (targetLocation) {
+    const suburb = targetLocation.split(/[,\s]+/)[0].toLowerCase().replace(/\s+/g, '-')
+    urls.push(
+      `${homepage}/locations/${suburb}`,
+      `${homepage}/offices/${suburb}`,
+      `${homepage}/find-an-agent/${suburb}`,
+      `${homepage}/contact`,
+    )
+  }
+
   const seen = new Set<string>()
   const uniqueUrls = urls.filter(url => { if (seen.has(url)) return false; seen.add(url); return true })
 
@@ -154,13 +166,43 @@ async function researchCompany(
   youtubeUrl: string,
   socialLinks: Record<string, string>,
   websiteContent: string,
+  targetLocation: string,
   log: (msg: string) => void
 ): Promise<any> {
   log(`  Got ${websiteContent.length} chars from website (multi-page scan)`)
 
+  const branchInstructions = targetLocation ? `
+═══ BRANCH RESOLUTION (MANDATORY) ═══
+
+A specific location has been requested: "${targetLocation}"
+
+You MUST profile the LOCAL BRANCH at this location, NOT the corporate head office.
+
+PRIORITY ORDER for website selection:
+1. Branch-specific website (e.g. lanecove.ljhooker.com.au) — highest priority
+2. Location-specific page on main domain (e.g. /offices/lane-cove)
+3. General company homepage — fallback only
+
+YOU MUST:
+• Identify the exact branch/office serving ${targetLocation}
+• Extract LOCAL details: branch address, local phone number, local team members
+• Name the business as: "{Brand Name} — {Suburb}" (e.g. "LJ Hooker — Lane Cove")
+• Use business.name in that exact format
+• Set hq_city and hq_address to the LOCAL branch address, not head office
+• Set jobs city/state to match the target suburb/state
+• Extract local services if they differ from national offerings
+• If branch-specific data is not available on the website, use your training knowledge to provide accurate local branch details — label inferred address/phone as "location-specific (estimated)"
+
+DO NOT:
+• Default to corporate HQ address or national phone numbers
+• Use generic brand-wide content without localising to ${targetLocation}
+• Merge multiple branches — profile only the ${targetLocation} branch
+` : ''
+
   const systemPrompt = `You are a senior employer branding strategist and business analyst building a complete, production-ready business profile for the Creerlio talent platform.
 
 CRITICAL INSTRUCTION: You must produce genuinely rich, specific, and detailed content — not generic filler. Every field must read as if written by someone with deep knowledge of this specific company. If the website is sparse or JS-rendered, draw on your full training knowledge about this company, its industry, competitors, culture, and Australian market context.
+${branchInstructions}
 
 ═══ FIELD-BY-FIELD REQUIREMENTS ═══
 
@@ -238,8 +280,10 @@ RETURN ONLY valid JSON. No markdown, no explanation, no code fences.`
   const detectedTwitter   = socialLinks.twitter   || 'not provided'
   const detectedYoutube   = socialLinks.youtube   || youtubeUrl  || 'not provided'
 
+  const locationLine = targetLocation ? `Target Location (LOCAL BRANCH): ${targetLocation}\n` : ''
+
   const userPrompt = `Company Website: ${websiteUrl}
-LinkedIn: ${detectedLinkedin}
+${locationLine}LinkedIn: ${detectedLinkedin}
 YouTube: ${detectedYoutube}
 Facebook: ${detectedFacebook}
 Instagram: ${detectedInstagram}
@@ -249,6 +293,7 @@ Website Content (scraped):
 ${websiteContent.slice(0, 30000)}
 
 ${websiteContent.length < 2000 ? '⚠ IMPORTANT: Website returned minimal content — it is almost certainly JavaScript-rendered. You MUST use your training knowledge about this company and its industry to produce a rich, accurate, comprehensive profile. Do not produce generic content.' : ''}
+${targetLocation ? `⚠ BRANCH REMINDER: Profile the LOCAL branch in "${targetLocation}" specifically. Business name must follow format: "{Brand} — {Suburb}". Use local address and phone, not head office defaults.` : ''}
 
 Generate the complete Creerlio Business Profile JSON:
 
@@ -396,22 +441,25 @@ async function generateSingleProfile(opts: {
   linkedinUrl?: string
   youtubeUrl?: string
   customSlug?: string
+  targetLocation?: string
   log: (msg: string) => void
   err: (msg: string) => void
 }): Promise<ProfileResult> {
   const { supabase, openai, SUPABASE_URL, log, err } = opts
-  const websiteUrl  = opts.websiteUrl
-  const linkedinUrl = opts.linkedinUrl || ''
-  const youtubeUrl  = opts.youtubeUrl  || ''
-  const customSlug  = opts.customSlug  || ''
+  const websiteUrl     = opts.websiteUrl
+  const linkedinUrl    = opts.linkedinUrl    || ''
+  const youtubeUrl     = opts.youtubeUrl     || ''
+  const customSlug     = opts.customSlug     || ''
+  const targetLocation = opts.targetLocation || ''
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'creerlio-biz-'))
 
   try {
     // ── Step 1: Research ─────────────────────────────────────────────────
     log('\n[1/12] Researching company...')
+    if (targetLocation) log(`  Target location: ${targetLocation}`)
     log('  Scanning website for social links and logo...')
-    const websiteHtml = await fetchMultiplePages(websiteUrl)
+    const websiteHtml = await fetchMultiplePages(websiteUrl, targetLocation)
     const detectedSocial   = extractSocialLinks(websiteHtml)
     const detectedLogoUrl  = extractLogoFromHtml(websiteHtml, websiteUrl)
 
@@ -420,7 +468,7 @@ async function generateSingleProfile(opts: {
     }
     if (detectedLogoUrl) log('  ✓ Found logo/brand image')
 
-    const data = await researchCompany(openai, websiteUrl, linkedinUrl, youtubeUrl, detectedSocial, websiteHtml, log)
+    const data = await researchCompany(openai, websiteUrl, linkedinUrl, youtubeUrl, detectedSocial, websiteHtml, targetLocation, log)
 
     const companyName = data.business?.name || 'Company'
     const slug        = customSlug || slugify(companyName)
@@ -915,6 +963,7 @@ export async function POST(req: NextRequest) {
                 supabase, openai, SUPABASE_URL,
                 websiteUrl: biz.websiteUrl,
                 linkedinUrl: biz.linkedinUrl || '',
+                targetLocation: location,
                 log, err,
               })
               results.push({ name: result.companyName, email: result.demoEmail, success: true })
@@ -943,6 +992,7 @@ export async function POST(req: NextRequest) {
           const result = await generateSingleProfile({
             supabase, openai, SUPABASE_URL,
             websiteUrl, linkedinUrl, youtubeUrl, customSlug,
+            targetLocation: location,
             log, err,
           })
 

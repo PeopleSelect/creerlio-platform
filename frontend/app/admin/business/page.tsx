@@ -158,7 +158,7 @@ export default function AdminBusinessPage() {
 
       const body = genMode === 'bulk'
         ? { mode: 'bulk', industry: genIndustry.trim(), location: genLocation.trim(), maxResults: genMaxResults }
-        : { mode: 'single', websiteUrl: genWebsite.trim(), linkedinUrl: genLinkedin.trim() || undefined, youtubeUrl: genYoutube.trim() || undefined, slug: genSlug.trim() || undefined }
+        : { mode: 'single', websiteUrl: genWebsite.trim(), linkedinUrl: genLinkedin.trim() || undefined, youtubeUrl: genYoutube.trim() || undefined, slug: genSlug.trim() || undefined, location: genLocation.trim() || undefined }
 
       const res = await fetch('/api/admin/generate-business-profile', {
         method: 'POST',
@@ -487,14 +487,22 @@ export default function AdminBusinessPage() {
                           style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">Slug <span className="text-gray-500">(optional)</span></label>
-                      <input type="text" placeholder="e.g. ray-white (auto-generated if blank)" value={genSlug} onChange={e => setGenSlug(e.target.value)}
-                        className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                        style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Target Location / Branch <span className="text-gray-500">(optional)</span></label>
+                        <input type="text" placeholder="e.g. Lane Cove NSW, Newtown, Melbourne CBD" value={genLocation} onChange={e => setGenLocation(e.target.value)}
+                          className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                          style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Slug <span className="text-gray-500">(optional)</span></label>
+                        <input type="text" placeholder="e.g. ray-white (auto-generated if blank)" value={genSlug} onChange={e => setGenSlug(e.target.value)}
+                          className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                          style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
+                      </div>
                     </div>
                     <div className="bg-slate-800/50 rounded-lg px-4 py-3 text-sm text-gray-400">
-                      Generates <strong className="text-gray-200">10 DALL-E images</strong>, <strong className="text-gray-200">TTS intro video</strong>, <strong className="text-gray-200">4 jobs</strong>, <strong className="text-gray-200">5 services</strong>. Takes ~3–5 minutes.
+                      Generates <strong className="text-gray-200">10 DALL-E images</strong>, <strong className="text-gray-200">TTS intro video</strong>, <strong className="text-gray-200">4 jobs</strong>, <strong className="text-gray-200">5 services</strong>. Takes ~3–5 minutes. Specify a location to profile a local branch.
                     </div>
                   </>
                 ) : (

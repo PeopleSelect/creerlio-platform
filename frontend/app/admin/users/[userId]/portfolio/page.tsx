@@ -66,20 +66,23 @@ export default function AdminPortfolioViewPage() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error } = await supabase
-        .from('talent_bank_items')
-        .select('id, metadata, created_at')
-        .eq('user_id', userId)
-        .eq('item_type', 'portfolio')
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-      if (error) {
-        setError(error.message)
+      const { data: sessionRes } = await supabase.auth.getSession()
+      const token = sessionRes.session?.access_token
+      if (!token) {
+        setError('Not authenticated')
         return
       }
 
-      const saved = (data?.[0]?.metadata ?? null) as any
+      const res = await fetch(`/api/admin/portfolio?userId=${encodeURIComponent(userId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        setError(json?.error || `Error ${res.status}`)
+        return
+      }
+
+      const saved = (json?.row?.metadata ?? null) as any
       if (!saved || typeof saved !== 'object') {
         setMeta(null)
         return

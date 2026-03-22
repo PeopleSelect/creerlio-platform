@@ -29,6 +29,7 @@ export default function AdminPortfolioViewPage() {
   const [projExpanded, setProjExpanded] = useState<Record<number, boolean>>({})
   const [isAdmin, setIsAdmin] = useState(false)
   const [authToken, setAuthToken] = useState<string | null>(null)
+  const [tbItems, setTbItems] = useState<Record<number, any>>({})
 
   async function adminSignUrl(path: string): Promise<string | null> {
     if (!path) return null
@@ -105,6 +106,7 @@ export default function AdminPortfolioViewPage() {
       }
 
       setMeta(saved)
+      setTbItems(json?.tbItems ?? {})
 
       async function signWithToken(path: string): Promise<string | null> {
         if (!path) return null
@@ -554,12 +556,233 @@ export default function AdminPortfolioViewPage() {
               </div>
 
               <aside className="space-y-6">
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
-                  <div className="text-slate-300 text-sm font-semibold">Admin View</div>
-                  <p className="text-slate-400 text-sm mt-2">
-                    You are viewing this portfolio as an administrator.
-                  </p>
+                {/* Admin badge */}
+                <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4">
+                  <div className="text-blue-300 text-sm font-semibold">Admin View</div>
+                  <p className="text-slate-400 text-xs mt-1">Viewing as administrator.</p>
                 </div>
+
+                {/* Social / Connect */}
+                {(() => {
+                  const socialLinks: any[] = Array.isArray(meta?.socialLinks) ? meta.socialLinks : []
+                  const phone = meta?.phone || meta?.basic?.phone
+                  const linkedin = meta?.linkedin || meta?.linkedIn || meta?.social?.linkedin || meta?.socialLinks?.linkedin
+                  const hasSocial = socialLinks.length > 0 || phone || linkedin
+                  if (!hasSocial) return null
+                  const iconMap: Record<string, string> = {
+                    linkedin: '#0a66c2', instagram: '#e1306c', facebook: '#1877f2',
+                    twitter: '#1da1f2', x: '#000', youtube: '#ff0000', tiktok: '#000',
+                    website: '#6366f1', github: '#333',
+                  }
+                  return (
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                      <div className="text-slate-200 font-semibold mb-4">My Social Media</div>
+                      {phone && <div className="text-slate-300 text-sm mb-2">📞 {phone}</div>}
+                      {linkedin && !socialLinks.some((s: any) => String(s.platform).toLowerCase().includes('linkedin')) && (
+                        <a className="text-blue-300 hover:text-blue-200 text-sm break-all block mb-2" href={String(linkedin)} target="_blank" rel="noreferrer">LinkedIn</a>
+                      )}
+                      {socialLinks.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {socialLinks.map((s: any, i: number) => {
+                            const platform = String(s.platform || s.label || '').toLowerCase()
+                            const url = String(s.url || s.href || '')
+                            const label = s.label || s.platform || platform
+                            const color = iconMap[platform] || '#6366f1'
+                            return (
+                              <a key={i} href={url.startsWith('http') ? url : `https://${url}`} target="_blank" rel="noreferrer"
+                                style={{ background: color }}
+                                className="px-3 py-1 rounded-full text-white text-xs font-semibold">
+                                {label}
+                              </a>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {/* Family & Community */}
+                {(() => {
+                  const ids: number[] = Array.isArray(meta?.familyCommunityImageIds)
+                    ? meta.familyCommunityImageIds.map(Number).filter(Number.isFinite)
+                    : []
+                  if (!ids.length) return null
+                  const first = tbItems[ids[0]]
+                  const path = first ? String(first.file_path ?? '') : ''
+                  const url = path ? thumbUrls[path] : (first?.file_url ? String(first.file_url) : null)
+                  if (path && !thumbUrls[path]) ensureSignedUrl(path).catch(() => {})
+                  return (
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                      <div className="text-slate-200 font-semibold mb-4">Family and Community</div>
+                      <div className="rounded-xl overflow-hidden border border-white/10" style={{ height: 220 }}>
+                        {url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={url} alt="Family and Community" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-slate-800/50 text-slate-400 text-sm">
+                            {ids.length} image{ids.length !== 1 ? 's' : ''}
+                          </div>
+                        )}
+                      </div>
+                      {ids.length > 1 && <p className="text-xs text-slate-400 mt-2">+{ids.length - 1} more image{ids.length - 1 !== 1 ? 's' : ''}</p>}
+                    </div>
+                  )
+                })()}
+
+                {/* Projects */}
+                {(() => {
+                  const proj: any[] = Array.isArray(meta?.projects) ? meta.projects : []
+                  if (!proj.length) return null
+                  return (
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                      <div className="text-slate-200 font-semibold mb-4">Projects</div>
+                      <div className="space-y-3">
+                        {proj.map((p: any, idx: number) => (
+                          <div key={idx} className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+                            <div className="font-semibold text-slate-100">{p?.name || 'Project'}</div>
+                            {p?.url && (
+                              <a className="text-blue-300 hover:text-blue-200 text-sm mt-1 inline-block break-all" href={p.url} target="_blank" rel="noreferrer">{p.url}</a>
+                            )}
+                            {p?.description && (
+                              <div className="text-slate-300 whitespace-pre-wrap text-sm mt-2 line-clamp-4">{p.description}</div>
+                            )}
+                            {Array.isArray(p?.attachmentIds) && p.attachmentIds.length > 0 && (
+                              <div className="mt-3">
+                                <div className="text-xs text-slate-400 mb-2">Attached: <span className="text-slate-200 font-semibold">{p.attachmentIds.length}</span></div>
+                                <div className="flex flex-wrap gap-2">
+                                  {p.attachmentIds.slice(0, 4).map((id: any) => {
+                                    const it = tbItems[Number(id)]
+                                    if (!it) return null
+                                    const path = String(it.file_path ?? '')
+                                    const url = path ? thumbUrls[path] : null
+                                    const isImg = String(it.file_type ?? '').startsWith('image') || it.item_type === 'image'
+                                    if (path && isImg && !url) ensureSignedUrl(path).catch(() => {})
+                                    return (
+                                      <button key={id} type="button"
+                                        onClick={() => openPath(path || String(it.file_url ?? ''), it.file_type, String(it.title || 'Item'))}
+                                        className="w-14 h-14 rounded-lg border border-white/10 bg-slate-800/50 overflow-hidden flex items-center justify-center text-xs text-slate-400 hover:border-blue-400 transition-colors">
+                                        {url && isImg ? (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img src={url} alt={it.title} className="w-full h-full object-cover" />
+                                        ) : (
+                                          <span>{String(it.item_type || 'FILE').slice(0, 4).toUpperCase()}</span>
+                                        )}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Top Skills */}
+                {skills.length > 0 && (
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                    <div className="text-slate-200 font-semibold mb-4">Top Skills</div>
+                    <div className="flex flex-wrap gap-2">
+                      {skills.map((s: string, idx: number) => (
+                        <span key={`${s}-${idx}`} className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-slate-200 text-sm">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Personal Documents */}
+                {(() => {
+                  const docs: any[] = Array.isArray(meta?.personalDocuments) ? meta.personalDocuments : []
+                  if (!docs.length) return null
+                  return (
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                      <div className="text-slate-200 font-semibold mb-4">Personal Documents</div>
+                      <div className="space-y-3">
+                        {docs.map((doc: any, idx: number) => (
+                          <div key={idx} className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+                            <div className="font-semibold text-slate-100">{doc.title || `Document ${idx + 1}`}</div>
+                            {doc.description && <div className="text-slate-300 text-sm mt-1 line-clamp-3">{doc.description}</div>}
+                            {Array.isArray(doc.attachmentIds) && doc.attachmentIds.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {doc.attachmentIds.slice(0, 4).map((id: any) => {
+                                  const it = tbItems[Number(id)]
+                                  if (!it) return null
+                                  const path = String(it.file_path ?? '')
+                                  const isImg = String(it.file_type ?? '').startsWith('image') || it.item_type === 'image'
+                                  const url = path ? thumbUrls[path] : null
+                                  if (path && isImg && !url) ensureSignedUrl(path).catch(() => {})
+                                  return (
+                                    <button key={id} type="button"
+                                      onClick={() => openPath(path, it.file_type, String(it.title || 'Document'))}
+                                      className="w-12 h-12 rounded-lg border border-white/10 bg-slate-800/50 overflow-hidden flex items-center justify-center text-xs text-slate-400 hover:border-blue-400 transition-colors">
+                                      {url && isImg ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={url} alt={it.title} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <span>{String(it.item_type || 'FILE').slice(0, 4).toUpperCase()}</span>
+                                      )}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Licences & Accreditations */}
+                {(() => {
+                  const lics: any[] = Array.isArray(meta?.licencesAccreditations) ? meta.licencesAccreditations : []
+                  if (!lics.length) return null
+                  return (
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
+                      <div className="text-slate-200 font-semibold mb-4">Licences and Accreditations</div>
+                      <div className="space-y-3">
+                        {lics.map((lic: any, idx: number) => (
+                          <div key={idx} className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+                            <div className="font-semibold text-slate-100">{lic.title || `Licence ${idx + 1}`}</div>
+                            {(lic.issuer || lic.issueDate || lic.expiryDate) && (
+                              <div className="text-slate-300 text-sm mt-1">
+                                {[lic.issuer, lic.issueDate && `Issued: ${lic.issueDate}`, lic.expiryDate && `Expires: ${lic.expiryDate}`].filter(Boolean).join(' • ')}
+                              </div>
+                            )}
+                            {lic.description && <div className="text-slate-300 text-sm mt-1 line-clamp-3">{lic.description}</div>}
+                            {Array.isArray(lic.attachmentIds) && lic.attachmentIds.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {lic.attachmentIds.slice(0, 4).map((id: any) => {
+                                  const it = tbItems[Number(id)]
+                                  if (!it) return null
+                                  const path = String(it.file_path ?? '')
+                                  const isImg = String(it.file_type ?? '').startsWith('image') || it.item_type === 'image'
+                                  const url = path ? thumbUrls[path] : null
+                                  if (path && isImg && !url) ensureSignedUrl(path).catch(() => {})
+                                  return (
+                                    <button key={id} type="button"
+                                      onClick={() => openPath(path, it.file_type, String(it.title || 'Licence'))}
+                                      className="w-12 h-12 rounded-lg border border-white/10 bg-slate-800/50 overflow-hidden flex items-center justify-center text-xs text-slate-400 hover:border-blue-400 transition-colors">
+                                      {url && isImg ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={url} alt={it.title} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <span>{String(it.item_type || 'FILE').slice(0, 4).toUpperCase()}</span>
+                                      )}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
               </aside>
             </div>
           </div>

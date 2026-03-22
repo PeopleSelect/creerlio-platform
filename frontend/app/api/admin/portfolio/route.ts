@@ -18,13 +18,42 @@ function isAdminUser(user: { email?: string | null; user_metadata?: Record<strin
   return !!email && adminEmails.includes(email)
 }
 
+/** Collect all talent_bank_item IDs referenced anywhere in the portfolio metadata */
+function collectAttachmentIds(meta: any): number[] {
+  const ids = new Set<number>()
+  const add = (v: any) => { const n = Number(v); if (Number.isFinite(n) && n > 0) ids.add(n) }
+
+  // familyCommunityImageIds
+  if (Array.isArray(meta?.familyCommunityImageIds)) meta.familyCommunityImageIds.forEach(add)
+
+  // projects[].attachmentIds
+  if (Array.isArray(meta?.projects)) {
+    meta.projects.forEach((p: any) => { if (Array.isArray(p?.attachmentIds)) p.attachmentIds.forEach(add) })
+  }
+
+  // personalDocuments[].attachmentIds
+  if (Array.isArray(meta?.personalDocuments)) {
+    meta.personalDocuments.forEach((d: any) => { if (Array.isArray(d?.attachmentIds)) d.attachmentIds.forEach(add) })
+  }
+
+  // licencesAccreditations[].attachmentIds
+  if (Array.isArray(meta?.licencesAccreditations)) {
+    meta.licencesAccreditations.forEach((l: any) => { if (Array.isArray(l?.attachmentIds)) l.attachmentIds.forEach(add) })
+  }
+
+  // attachments[] (legacy inline attachments section)
+  if (Array.isArray(meta?.attachments)) {
+    meta.attachments.forEach((a: any) => { if (a?.id) add(a.id) })
+  }
+
+  return Array.from(ids)
+}
+
 export async function GET(req: NextRequest) {
   try {
     const authz = req.headers.get('authorization') || ''
     const token = authz.toLowerCase().startsWith('bearer ') ? authz.slice(7).trim() : ''
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const admin = getAdminClient()
 
@@ -34,9 +63,7 @@ export async function GET(req: NextRequest) {
     }
 
     const userId = req.nextUrl.searchParams.get('userId')
-    if (!userId) {
-      return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
-    }
+    if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
 
     const { data, error } = await admin
       .from('talent_bank_items')
@@ -46,12 +73,25 @@ export async function GET(req: NextRequest) {
       .order('created_at', { ascending: false })
       .limit(1)
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     const row = data?.[0] ?? null
-    return NextResponse.json({ row })
+    if (!row) return NextResponse.json({ row: null, tbItems: {} })
+
+    // Fetch all referenced attachment items using service role (bypass RLS)
+    const ids = collectAttachmentIds(row.metadata)
+    let tbItems: Record<number, any> = {}
+    if (ids.length > 0) {
+      const { data: items } = await admin
+        .from('talent_bank_items')
+        .select('id, item_type, file_path, file_url, file_type, title, metadata')
+        .in('id', ids)
+      if (items) {
+        items.forEach((it: any) => { tbItems[it.id] = it })
+      }
+    }
+
+    return NextResponse.json({ row, tbItems })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Failed' }, { status: 500 })
   }

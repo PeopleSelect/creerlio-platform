@@ -28,6 +28,22 @@ export default function AdminPortfolioViewPage() {
   const [eduExpanded, setEduExpanded] = useState<Record<number, boolean>>({})
   const [projExpanded, setProjExpanded] = useState<Record<number, boolean>>({})
   const [isAdmin, setIsAdmin] = useState(false)
+  const [authToken, setAuthToken] = useState<string | null>(null)
+
+  async function adminSignUrl(path: string): Promise<string | null> {
+    if (!path) return null
+    // Already a full URL — use as-is
+    if (path.startsWith('http://') || path.startsWith('https://')) return path
+    const token = authToken
+    if (!token) return null
+    const res = await fetch('/api/admin/storage/sign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ path }),
+    })
+    const json = await res.json().catch(() => null)
+    return json?.signedUrl ?? null
+  }
 
   useEffect(() => {
     async function checkAdmin() {
@@ -49,7 +65,8 @@ export default function AdminPortfolioViewPage() {
         
         if (hasAdminFlag || isAdminEmail) {
           setIsAdmin(true)
-          loadPortfolio()
+          setAuthToken(sessionRes.session?.access_token ?? null)
+          loadPortfolio(sessionRes.session?.access_token ?? null)
         } else {
           alert('Access denied. Admin privileges required.')
           router.replace('/')
@@ -62,19 +79,18 @@ export default function AdminPortfolioViewPage() {
     checkAdmin()
   }, [router, userId])
 
-  async function loadPortfolio() {
+  async function loadPortfolio(token?: string | null) {
     setLoading(true)
     setError(null)
     try {
-      const { data: sessionRes } = await supabase.auth.getSession()
-      const token = sessionRes.session?.access_token
-      if (!token) {
+      const tok = token ?? authToken
+      if (!tok) {
         setError('Not authenticated')
         return
       }
 
       const res = await fetch(`/api/admin/portfolio?userId=${encodeURIComponent(userId)}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${tok}` },
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) {
@@ -90,15 +106,21 @@ export default function AdminPortfolioViewPage() {
 
       setMeta(saved)
 
+      async function signWithToken(path: string): Promise<string | null> {
+        if (!path) return null
+        if (path.startsWith('http://') || path.startsWith('https://')) return path
+        const r = await fetch('/api/admin/storage/sign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
+          body: JSON.stringify({ path }),
+        })
+        const j = await r.json().catch(() => null)
+        return j?.signedUrl ?? null
+      }
+
       const [b, a] = await Promise.all([
-        saved.banner_path ? (async () => {
-          const { data: bannerData } = await supabase.storage.from('talent-bank').createSignedUrl(saved.banner_path, 60 * 30)
-          return bannerData?.signedUrl ?? null
-        })() : Promise.resolve(null),
-        saved.avatar_path ? (async () => {
-          const { data: avatarData } = await supabase.storage.from('talent-bank').createSignedUrl(saved.avatar_path, 60 * 30)
-          return avatarData?.signedUrl ?? null
-        })() : Promise.resolve(null),
+        saved.banner_path ? signWithToken(saved.banner_path) : Promise.resolve(null),
+        saved.avatar_path ? signWithToken(saved.avatar_path) : Promise.resolve(null),
       ])
       setBannerUrl(b)
       setAvatarUrl(a)
@@ -128,14 +150,13 @@ export default function AdminPortfolioViewPage() {
   async function ensureSignedUrl(path: string) {
     if (!path) return
     if (thumbUrls[path]) return
-    const { data } = await supabase.storage.from('talent-bank').createSignedUrl(path, 60 * 30)
-    if (data?.signedUrl) setThumbUrls((prev) => ({ ...prev, [path]: data.signedUrl }))
+    const url = await adminSignUrl(path)
+    if (url) setThumbUrls((prev) => ({ ...prev, [path]: url }))
   }
 
   async function openPath(path: string, fileType: string | null | undefined, title: string) {
     if (!path) return
-    const { data } = await supabase.storage.from('talent-bank').createSignedUrl(path, 60 * 30)
-    const url = data?.signedUrl
+    const url = await adminSignUrl(path)
     if (!url) return
     const ft = (fileType || '').toLowerCase()
     if (ft.includes('pdf')) {

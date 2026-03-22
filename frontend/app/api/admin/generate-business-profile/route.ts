@@ -235,11 +235,11 @@ Generate the complete Creerlio Business Profile JSON using this EXACT structure:
   "credentials": { "email": "", "password": "" }
 }`
 
-  log('\n  Calling GPT-4o to generate profile...')
+  log('\n  Calling GPT-4o to generate profile (this takes ~30s)...')
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o',
     temperature: 0.3,
-    max_tokens: 16000,
+    max_tokens: 8000,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user',   content: userPrompt },
@@ -782,6 +782,11 @@ export async function POST(req: NextRequest) {
       const log = (msg: string) => send({ log: msg })
       const err = (msg: string) => send({ log: msg, isError: true })
 
+      // Heartbeat: send a dot every 20s so the connection doesn't look dead
+      const heartbeat = setInterval(() => {
+        try { controller.enqueue(encoder.encode(': heartbeat\n\n')) } catch (_) {}
+      }, 20000)
+
       try {
         if (mode === 'bulk') {
           if (!industry || !location) throw new Error('industry and location are required for bulk mode')
@@ -864,6 +869,7 @@ export async function POST(req: NextRequest) {
         err('\n❌  FATAL: ' + (e?.message || String(e)))
         send({ error: e?.message || 'Generation failed' })
       } finally {
+        clearInterval(heartbeat)
         try { controller.close() } catch (_) {}
       }
     },

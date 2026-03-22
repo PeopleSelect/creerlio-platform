@@ -24,7 +24,7 @@ export default function AdminBusinessPage() {
   const [genSlug, setGenSlug]             = useState('')
   const [genIndustry, setGenIndustry]     = useState('')
   const [genLocation, setGenLocation]     = useState('')
-  const [genMaxResults, setGenMaxResults] = useState(5)
+  const [genMaxResults, setGenMaxResults] = useState(2)
   const [genRunning, setGenRunning]       = useState(false)
   const [genLogs, setGenLogs]             = useState<{ text: string; isError?: boolean }[]>([])
   const [genDone, setGenDone]             = useState(false)
@@ -221,7 +221,7 @@ export default function AdminBusinessPage() {
     setGenSlug('')
     setGenIndustry('')
     setGenLocation('')
-    setGenMaxResults(5)
+    setGenMaxResults(2)
     setGenLogs([])
     setGenDone(false)
     setGenError('')
@@ -444,8 +444,8 @@ export default function AdminBusinessPage() {
               </button>
             </div>
 
-            {/* Form */}
-            {!genRunning && !genDone && (
+            {/* Form — hidden while running, done, or showing error panel */}
+            {!genRunning && !genDone && !genError && (
               <div className="px-6 py-5 space-y-4">
                 {/* Mode toggle */}
                 <div className="flex rounded-lg overflow-hidden border border-white/10">
@@ -523,11 +523,6 @@ export default function AdminBusinessPage() {
                   </>
                 )}
 
-                {genError && (
-                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400">
-                    {genError}
-                  </div>
-                )}
                 <div className="flex justify-end gap-3 pt-1">
                   <button type="button" onClick={() => setShowGenerator(false)} className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm transition-colors">
                     Cancel

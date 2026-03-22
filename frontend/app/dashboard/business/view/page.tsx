@@ -3161,18 +3161,24 @@ function BusinessProfileViewPageInner() {
                           )}
                           {job.description && (
                             <div className="mt-3">
-                              <div className="text-slate-300 whitespace-pre-wrap text-sm" style={projExpanded[job.id] ? undefined : clampStyle(3)}>
-                                {normalizeDisplayText(String(job.description))}
-                              </div>
-                              {String(job.description).split('\n').length > 3 && (
-                                <button
-                                  type="button"
-                                  className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
-                                  onClick={() => setProjExpanded((q) => ({ ...q, [job.id]: !q[job.id] }))}
-                                >
-                                  {projExpanded[job.id] ? 'Show less' : 'Show more'}
-                                </button>
+                              {/<[a-z][\s\S]*>/i.test(String(job.description)) ? (
+                                <div
+                                  className="text-slate-300 text-sm prose prose-sm prose-invert max-w-none leading-relaxed [&_p]:mb-2 [&_ul]:mb-2 [&_ul]:pl-4 [&_ul]:list-disc [&_ol]:mb-2 [&_ol]:pl-4 [&_ol]:list-decimal [&_li]:mb-0.5 [&_strong]:font-semibold [&_strong]:text-slate-200"
+                                  style={projExpanded[job.id] ? undefined : clampStyle(3)}
+                                  dangerouslySetInnerHTML={{ __html: String(job.description) }}
+                                />
+                              ) : (
+                                <div className="text-slate-300 whitespace-pre-wrap text-sm" style={projExpanded[job.id] ? undefined : clampStyle(3)}>
+                                  {normalizeDisplayText(String(job.description))}
+                                </div>
                               )}
+                              <button
+                                type="button"
+                                className="mt-2 text-blue-300 hover:text-blue-200 text-sm font-medium"
+                                onClick={() => setProjExpanded((q) => ({ ...q, [job.id]: !q[job.id] }))}
+                              >
+                                {projExpanded[job.id] ? 'Show less' : 'Show more'}
+                              </button>
                             </div>
                           )}
                           <div className="mt-3 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>

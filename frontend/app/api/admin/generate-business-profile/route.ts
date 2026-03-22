@@ -80,26 +80,28 @@ async function fetchWebsiteText(url: string): Promise<string> {
   })
 }
 
-/** Scrape homepage + 3 key subpages — capped at 5s each to stay within lambda budget */
+/** Scrape homepage + 3 key subpages — all in parallel, capped at 5s each */
 async function fetchMultiplePages(websiteUrl: string): Promise<string> {
   const base = new URL(websiteUrl)
-  // Only fetch highest-value pages — homepage + about + careers
+  // Always scrape the actual homepage (origin), not a deep-link or search results page
+  const homepage = base.origin
   const urls = [
-    websiteUrl,
-    `${base.origin}/about`,
-    `${base.origin}/about-us`,
-    `${base.origin}/careers`,
+    homepage,
+    `${homepage}/about`,
+    `${homepage}/about-us`,
+    `${homepage}/careers`,
   ]
-  const parts: string[] = []
   const seen = new Set<string>()
-  for (const url of urls) {
-    if (seen.has(url)) continue
-    seen.add(url)
-    try {
-      const text = await fetchWebsiteText(url)
-      if (text.length > 300) parts.push(`=== ${url} ===\n${text.slice(0, 10000)}`)
-    } catch (_) {}
-    if (parts.join('').length > 35000) break
+  const uniqueUrls = urls.filter(url => { if (seen.has(url)) return false; seen.add(url); return true })
+
+  // Fetch all pages in parallel — max ~5s total instead of up to 20s sequential
+  const results = await Promise.allSettled(uniqueUrls.map(url => fetchWebsiteText(url)))
+  const parts: string[] = []
+  for (let i = 0; i < uniqueUrls.length; i++) {
+    const r = results[i]
+    if (r.status === 'fulfilled' && r.value.length > 300) {
+      parts.push(`=== ${uniqueUrls[i]} ===\n${r.value.slice(0, 10000)}`)
+    }
   }
   return parts.join('\n\n').slice(0, 40000)
 }

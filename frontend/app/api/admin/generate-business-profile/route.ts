@@ -1,9 +1,21 @@
+/**
+ * Admin API — Generate Business Profile (inline, no child process)
+ * Streams SSE progress while running all generator steps server-side.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { spawn } from 'child_process'
+import OpenAI from 'openai'
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
+import https from 'https'
+import http from 'http'
+import { execFileSync } from 'child_process'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
+
+// ── Clients ───────────────────────────────────────────────────────────────────
 
 function getAdminClient() {
   return createClient(
@@ -22,66 +34,570 @@ function isAdminUser(user: { email?: string | null; user_metadata?: Record<strin
   return !!email && adminEmails.includes(email)
 }
 
+const BUCKET = 'business-bank'
+
+function publicStorageUrl(supabaseUrl: string, storagePath: string) {
+  const encoded = storagePath.split('/').map(encodeURIComponent).join('/')
+  return `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${encoded}`
+}
+
+function slugify(str: string) {
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function downloadFile(url: string, dest: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest)
+    const proto = url.startsWith('https') ? https : http
+    proto.get(url, (res) => {
+      if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return }
+      res.pipe(file)
+      file.on('finish', () => { file.close(); resolve() })
+    }).on('error', reject)
+  })
+}
+
+async function fetchWebsiteText(url: string): Promise<string> {
+  return new Promise((resolve) => {
+    const proto = url.startsWith('https') ? https : http
+    let body = ''
+    const req = proto.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } } as any, (r) => {
+      r.setEncoding('utf8')
+      r.on('data', (d: string) => { body += d; if (body.length > 80000) (req as any).destroy() })
+      r.on('end', () => resolve(body.slice(0, 80000)))
+    })
+    ;(req as any).on('error', () => resolve(''))
+    ;(req as any).setTimeout(10000, () => { (req as any).destroy(); resolve(body) })
+  })
+}
+
+// ── GPT-4o Research ───────────────────────────────────────────────────────────
+
+async function researchCompany(
+  openai: OpenAI,
+  websiteUrl: string,
+  linkedinUrl: string,
+  youtubeUrl: string,
+  log: (msg: string) => void
+): Promise<any> {
+  log('  Fetching website content...')
+  const websiteText = await fetchWebsiteText(websiteUrl)
+  log(`  Got ${websiteText.length} chars from website`)
+
+  const systemPrompt = `You are a Chief Information Officer building a complete, production-ready business profile for the Creerlio platform.
+
+Your task: analyse the provided company information and return a STRICT JSON object with ALL fields populated — no empty strings, no null values, no placeholders. If the website content is sparse or the site is JavaScript-rendered, use your own extensive training knowledge about this company to fill in all details accurately and professionally.
+
+CONTENT RULES:
+- Professional, brand-aligned tone throughout
+- Do NOT fabricate specific client names or deal values
+- Write structured paragraphs, not bullet-point fragments
+- All descriptions must be complete, polished, and ready to display on a live platform
+- The "about" section must be 4–6 paragraphs
+- All array fields must have at least 3–6 items
+- social_proof items must be plausible testimonials (label source as "Client — [sector]" if fabricated)
+- The credentials username must be: demo.[slugified-company-name]@creerlio.com
+- The credentials password must be: Demo[CompanyName]2025! (capitalised, no spaces)
+
+MANDATORY COUNTS:
+- "jobs": exactly 4 realistic job vacancies
+- "services": exactly 5 distinct service offerings
+- "impact_stats": exactly 5 stats
+- "culture_values": exactly 5 values
+- "benefits": exactly 5 benefits
+- "hiring_interests": exactly 6 items
+- "skills": exactly 6 items
+
+IMPORTANT: Return ONLY valid JSON. No markdown, no explanation, no code fences.`
+
+  const userPrompt = `Company Website URL: ${websiteUrl}
+LinkedIn URL: ${linkedinUrl || 'not provided'}
+YouTube URL: ${youtubeUrl || 'not provided'}
+
+Website Content (first 60,000 chars):
+${websiteText.slice(0, 60000)}
+
+NOTE: If the website content is minimal (fewer than 2,000 characters), the site is JavaScript-rendered — rely on your own knowledge of this company to generate a rich, accurate profile. REMINDER: You MUST include exactly 4 jobs and exactly 5 services.
+
+Generate the complete Creerlio Business Profile JSON using this EXACT structure:
+
+{
+  "business": { "name": "", "slug": "", "website_url": "${websiteUrl}", "linkedin_url": "${linkedinUrl}", "youtube_url": "${youtubeUrl}", "careers_url": "", "phone": "", "email": "" },
+  "profile": { "tagline": "", "about": "", "industry": "", "business_type": "", "hq_city": "", "hq_state": "", "hq_country": "", "hq_address": "", "latitude": 0, "longitude": 0, "company_size": "", "founded_year": 0, "ownership_type": "" },
+  "content": { "mission": "", "value_prop_headline": "", "value_prop_body": "", "acknowledgement_of_country": "" },
+  "impact_stats": [{ "label": "", "value": "" }],
+  "culture_values": [{ "title": "", "description": "" }],
+  "business_areas": [{ "name": "", "description": "" }],
+  "benefits": [{ "title": "", "description": "" }],
+  "programs": [{ "name": "", "description": "", "url": "" }],
+  "social_proof": [{ "quote": "", "source": "" }],
+  "hiring_interests": [],
+  "industries_served": [],
+  "specialisations": [],
+  "skills": [],
+  "badges": [],
+  "services": [{ "name": "", "category": "Service", "short_description": "", "who_it_is_for": "", "problem_it_solves": "", "roles": [], "skills": [], "growth_areas": [], "impact": { "who_it_helps": "", "what_it_improves": "", "real_world_outcomes": "" }, "we_are_hiring": false, "open_to_partnerships": false, "currently_scaling": false }],
+  "jobs": [{ "title": "", "description": "", "city": "", "state": "", "country": "", "location": "", "employment_type": "Full-time", "experience_level": "", "salary_min": 0, "salary_max": 0, "salary_currency": "AUD", "required_skills": [], "preferred_skills": [], "requirements": "" }],
+  "dal_le_images": [
+    { "key": "logo",        "filename": "logo.jpg",        "bank_type": "logo",     "title": "", "prompt": "", "size": "1024x1024" },
+    { "key": "hero",        "filename": "hero.jpg",        "bank_type": "image",    "title": "", "prompt": "", "size": "1792x1024" },
+    { "key": "office",      "filename": "office.jpg",      "bank_type": "image",    "title": "", "prompt": "", "size": "1792x1024" },
+    { "key": "team",        "filename": "team.jpg",        "bank_type": "image",    "title": "", "prompt": "", "size": "1792x1024" },
+    { "key": "culture",     "filename": "culture.jpg",     "bank_type": "image",    "title": "", "prompt": "", "size": "1792x1024" },
+    { "key": "awards",      "filename": "awards.jpg",      "bank_type": "image",    "title": "", "prompt": "", "size": "1792x1024" },
+    { "key": "work",        "filename": "work.jpg",        "bank_type": "image",    "title": "", "prompt": "", "size": "1792x1024" },
+    { "key": "community",   "filename": "community.jpg",   "bank_type": "image",    "title": "", "prompt": "", "size": "1792x1024" },
+    { "key": "credential1", "filename": "credential1.jpg", "bank_type": "document", "title": "", "prompt": "", "size": "1024x1024" },
+    { "key": "credential2", "filename": "credential2.jpg", "bank_type": "document", "title": "", "prompt": "", "size": "1024x1024" }
+  ],
+  "narration": "",
+  "credentials": { "email": "", "password": "" }
+}`
+
+  log('\n  Calling GPT-4o to generate profile...')
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    temperature: 0.3,
+    max_tokens: 16000,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user',   content: userPrompt },
+    ],
+  })
+
+  const raw = completion.choices[0].message.content || ''
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+  return JSON.parse(cleaned)
+}
+
+// ── Main POST handler ─────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
-  // Validate admin
+  // Auth
   const authz = req.headers.get('authorization') || ''
   const token = authz.toLowerCase().startsWith('bearer ') ? authz.slice(7).trim() : ''
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const admin = getAdminClient()
-  const { data: { user: authedUser } } = await admin.auth.getUser(token)
+  const supabase = getAdminClient()
+  const { data: { user: authedUser } } = await supabase.auth.getUser(token)
   if (!authedUser?.id || !isAdminUser(authedUser)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { websiteUrl, linkedinUrl, youtubeUrl, slug } = await req.json()
+  const { websiteUrl, linkedinUrl = '', youtubeUrl = '', slug: customSlug = '' } = await req.json()
   if (!websiteUrl) return NextResponse.json({ error: 'websiteUrl is required' }, { status: 400 })
 
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! })
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
       const send = (data: object) => {
-        try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
-        } catch (_) {}
+        try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`)) } catch (_) {}
       }
+      const log = (msg: string) => send({ log: msg })
+      const err = (msg: string) => send({ log: msg, isError: true })
 
-      const args = ['scripts/create-business-profile.js', '--website', websiteUrl]
-      if (linkedinUrl) args.push('--linkedin', linkedinUrl)
-      if (youtubeUrl)  args.push('--youtube',  youtubeUrl)
-      if (slug)        args.push('--slug',      slug)
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'creerlio-biz-'))
 
-      const proc = spawn('node', args, {
-        cwd: process.cwd(),
-        env: { ...process.env },
-      })
+      try {
+        log('\n╔══════════════════════════════════════════════════════════════╗')
+        log('║   CREERLIO AUTO BUSINESS PROFILE GENERATOR                  ║')
+        log('╚══════════════════════════════════════════════════════════════╝')
+        log(`  Website:  ${websiteUrl}`)
 
-      proc.stdout.on('data', (chunk: Buffer) => {
-        const lines = chunk.toString().split('\n')
-        lines.forEach(line => {
-          if (line.trim()) send({ log: line })
-        })
-      })
+        // ── Step 1: Research ─────────────────────────────────────────────────
+        log('\n[1/12] Researching company...')
+        const data = await researchCompany(openai, websiteUrl, linkedinUrl, youtubeUrl, log)
 
-      proc.stderr.on('data', (chunk: Buffer) => {
-        const line = chunk.toString().trim()
-        if (line) send({ log: line, isError: true })
-      })
+        const companyName = data.business?.name || 'Company'
+        const slug        = customSlug || slugify(companyName)
+        const demoEmail   = data.credentials?.email || `demo.${slug}@creerlio.com`
+        const demoPass    = data.credentials?.password || `Demo${companyName.replace(/\s/g, '')}2025!`
 
-      proc.on('close', (code) => {
-        if (code === 0) {
-          send({ done: true })
+        log(`\n  ✓ Company: ${companyName}`)
+        log(`  ✓ Slug:    ${slug}`)
+        log(`  ✓ Email:   ${demoEmail}`)
+
+        // ── Step 2: Auth user ────────────────────────────────────────────────
+        log('\n[2/12] Creating auth user...')
+        let userId: string
+        const { data: existing } = await supabase.auth.admin.listUsers()
+        const existingUser = existing?.users?.find((u: any) => u.email === demoEmail)
+        if (existingUser) {
+          userId = existingUser.id
+          log('  User already exists: ' + userId)
         } else {
-          send({ error: `Process exited with code ${code}` })
+          const { data: newUser, error: userErr } = await supabase.auth.admin.createUser({
+            email: demoEmail, password: demoPass, email_confirm: true,
+            user_metadata: { full_name: companyName, user_type: 'business' },
+          })
+          if (userErr) throw new Error('Create user: ' + userErr.message)
+          userId = newUser.user.id
+          log('  Created user: ' + userId)
         }
-        try { controller.close() } catch (_) {}
-      })
 
-      proc.on('error', (err) => {
-        send({ error: err.message })
+        // ── Step 3: DALL-E images ────────────────────────────────────────────
+        log('\n[3/12] Generating DALL-E images...')
+        const dalleImages = data.dal_le_images || []
+        const imageResults: Record<string, { storagePath: string; fileUrl: string; tmpPath: string; size: number }> = {}
+
+        for (const img of dalleImages) {
+          const safeName = `${slug}-${img.filename}`
+          log(`  Generating: ${img.title || img.key}...`)
+          try {
+            const resp = await openai.images.generate({
+              model: 'dall-e-3', prompt: img.prompt,
+              size: img.size || '1792x1024', quality: 'hd', n: 1,
+            })
+            const imageUrl = resp.data[0].url!
+            const tmpPath  = path.join(tmpDir, safeName)
+            await downloadFile(imageUrl, tmpPath)
+            const storagePath = `${userId}/bank/${safeName}`
+            const { error: upErr } = await supabase.storage.from(BUCKET).upload(
+              storagePath, fs.readFileSync(tmpPath), { contentType: 'image/jpeg', upsert: true }
+            )
+            if (upErr) throw new Error(upErr.message)
+            imageResults[img.key] = {
+              storagePath, tmpPath,
+              fileUrl: publicStorageUrl(SUPABASE_URL, storagePath),
+              size: fs.statSync(tmpPath).size,
+            }
+            log(`    ✓ ${safeName}`)
+          } catch (e: any) {
+            err(`    ✗ ${safeName}: ${e.message}`)
+          }
+        }
+
+        // ── Step 4: TTS narration ────────────────────────────────────────────
+        log('\n[4/12] Generating TTS narration...')
+        const narrationText = data.narration || `Welcome to ${companyName}. ${data.profile?.about || ''}`
+        const audioPath = path.join(tmpDir, 'narration.mp3')
+        const mp3 = await openai.audio.speech.create({
+          model: 'tts-1-hd', voice: 'onyx',
+          input: narrationText.slice(0, 4096), speed: 0.9,
+        })
+        fs.writeFileSync(audioPath, Buffer.from(await mp3.arrayBuffer()))
+        log('  ✓ TTS generated')
+
+        // ── Step 5: Video ────────────────────────────────────────────────────
+        log('\n[5/12] Encoding intro video...')
+        let videoPublicUrl: string | null = null
+        let videoSize = 0
+        let audioDur = 60
+
+        try {
+          // Try to probe audio duration
+          try {
+            execFileSync(require('ffmpeg-static'), ['-i', audioPath, '-f', 'null', '-'], { stdio: ['pipe','pipe','pipe'] })
+          } catch (e: any) {
+            const m = ((e.stderr || Buffer.alloc(0)) as Buffer).toString().match(/Duration:\s*(\d+):(\d+):([\d.]+)/)
+            if (m) audioDur = parseInt(m[1])*3600 + parseInt(m[2])*60 + parseFloat(m[3])
+          }
+          log(`  Duration: ${audioDur.toFixed(1)}s`)
+
+          const slideKeys = ['hero','office','team','culture','awards','work','community']
+          const slideImages = slideKeys.map(k => imageResults[k]?.tmpPath).filter(Boolean) as string[]
+
+          if (slideImages.length > 0) {
+            const spi = audioDur / slideImages.length
+            const concatLines = slideImages.map(p => `file '${p.replace(/\\/g,'/')}'\nduration ${spi.toFixed(3)}`).join('\n')
+            const concatFile = path.join(tmpDir, 'concat.txt')
+            fs.writeFileSync(concatFile, concatLines + `\nfile '${slideImages[slideImages.length-1].replace(/\\/g,'/')}'`)
+
+            const videoFilename  = `${slug}-intro-video.mp4`
+            const videoLocalPath = path.join(tmpDir, videoFilename)
+
+            execFileSync(require('ffmpeg-static'), [
+              '-y', '-f', 'concat', '-safe', '0', '-i', concatFile,
+              '-i', audioPath,
+              '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p',
+              '-c:v', 'libx264', '-preset', 'medium', '-crf', '23',
+              '-c:a', 'aac', '-b:a', '128k',
+              '-shortest', '-movflags', '+faststart',
+              videoLocalPath,
+            ], { stdio: 'pipe', timeout: 240000 })
+
+            videoSize = fs.statSync(videoLocalPath).size
+            const videoStoragePath = `${userId}/bank/${videoFilename}`
+            await supabase.storage.from(BUCKET).remove([videoStoragePath])
+            const { error: vidUpErr } = await supabase.storage.from(BUCKET).upload(
+              videoStoragePath, fs.readFileSync(videoLocalPath), { contentType: 'video/mp4', upsert: true }
+            )
+            if (vidUpErr) throw new Error('Video upload: ' + vidUpErr.message)
+            videoPublicUrl = publicStorageUrl(SUPABASE_URL, videoStoragePath)
+            log(`  ✓ Video: ${(videoSize/1e6).toFixed(2)} MB`)
+          } else {
+            log('  No slide images — skipping video')
+          }
+        } catch (e: any) {
+          err('  ✗ Video skipped: ' + e.message)
+        }
+
+        // ── Step 6: Bank items ───────────────────────────────────────────────
+        log('\n[6/12] Inserting business bank items...')
+        const bankItems: { key: string; id: number }[] = []
+
+        for (const img of dalleImages) {
+          const r = imageResults[img.key]
+          if (!r) continue
+          const { data: bi, error: biErr } = await supabase.from('business_bank_items').insert({
+            user_id: userId, item_type: img.bank_type || 'image',
+            title: img.title || img.key, file_path: r.storagePath,
+            file_url: r.fileUrl, file_type: 'image/jpeg', file_size: r.size,
+            metadata: {}, is_active: true,
+          }).select('id').single()
+          if (biErr) err(`  ✗ Bank item ${img.key}: ${biErr.message}`)
+          else { bankItems.push({ key: img.key, id: bi.id }); log(`  ✓ ${img.key} → id ${bi.id}`) }
+        }
+
+        if (videoPublicUrl) {
+          const { data: vidItem, error: vidErr } = await supabase.from('business_bank_items').insert({
+            user_id: userId, item_type: 'business_introduction',
+            title: `${companyName} — Introduction Video`,
+            file_url: videoPublicUrl, file_type: 'video/mp4', file_size: videoSize,
+            metadata: { duration: Math.round(audioDur) }, is_active: true,
+          }).select('id').single()
+          if (vidErr) err('  ✗ Video bank item: ' + vidErr.message)
+          else { bankItems.push({ key: 'video', id: vidItem.id }); log(`  ✓ video → id ${vidItem.id}`) }
+        }
+
+        const linkDefs = [
+          { title: `${companyName} Website`, url: websiteUrl },
+          linkedinUrl ? { title: `${companyName} LinkedIn`, url: linkedinUrl } : null,
+          youtubeUrl  ? { title: `${companyName} YouTube`,  url: youtubeUrl  } : null,
+          data.business?.careers_url ? { title: `${companyName} Careers`, url: data.business.careers_url } : null,
+        ].filter(Boolean) as { title: string; url: string }[]
+
+        for (const lnk of linkDefs) {
+          const { data: li, error: liErr } = await supabase.from('business_bank_items').insert({
+            user_id: userId, item_type: 'link', title: lnk.title, file_url: lnk.url, is_active: true,
+          }).select('id').single()
+          if (liErr) err(`  ✗ Link "${lnk.title}": ${liErr.message}`)
+          else { bankItems.push({ key: `link_${lnk.title.slice(0,15)}`, id: li.id }); log(`  ✓ link → ${lnk.title}`) }
+        }
+
+        const logoItem  = bankItems.find(b => b.key === 'logo')
+        const heroItem  = bankItems.find(b => b.key === 'hero')
+        const videoItem = bankItems.find(b => b.key === 'video')
+        const attachmentIds = bankItems.filter(b => b.key !== 'logo' && !b.key.startsWith('link_')).map(b => b.id)
+
+        const profileMetadata = {
+          bio: data.profile?.about || '', tagline: data.profile?.tagline || '',
+          businessType: data.profile?.business_type || '', industry: data.profile?.industry || '',
+          specialisations: data.specialisations || [], founded: data.profile?.founded_year || null,
+          size: data.profile?.company_size || '', website: websiteUrl,
+          logoId: logoItem?.id || null, heroImageId: heroItem?.id || null,
+          introVideoId: videoItem?.id || null, introVideoUrl: videoPublicUrl,
+          attachmentIds, skills: data.skills || [],
+          socialLinks: { website: websiteUrl, linkedin: linkedinUrl || null, youtube: youtubeUrl || null, careers: data.business?.careers_url || null },
+        }
+
+        const { data: metaItem, error: metaErr } = await supabase.from('business_bank_items').insert({
+          user_id: userId, item_type: 'profile',
+          title: `${companyName} — Business Profile`, metadata: profileMetadata, is_active: true,
+        }).select('id').single()
+        if (metaErr) err('  ✗ Profile metadata: ' + metaErr.message)
+        else log(`  ✓ Profile metadata → id ${metaItem.id}`)
+
+        // ── Step 7: businesses ───────────────────────────────────────────────
+        log('\n[7/12] Creating business records...')
+        const { error: bizErr } = await supabase.from('businesses').upsert({
+          id: userId, name: companyName, industry: data.profile?.industry || '',
+        }, { onConflict: 'id' })
+        if (bizErr) err('  businesses: ' + bizErr.message)
+        else log('  ✓ businesses')
+
+        const { error: bpErr } = await supabase.from('business_profiles').upsert({
+          id: userId, user_id: userId, business_id: userId,
+          name: companyName, business_name: companyName,
+          description: (data.profile?.about || '').slice(0, 500),
+          slug, industry: data.profile?.industry || '',
+          size: data.profile?.company_size || '',
+          location: `${data.profile?.hq_city || ''}, ${data.profile?.hq_state || ''}, ${data.profile?.hq_country || 'Australia'}`.replace(/^,\s*,\s*/, '').trim(),
+          city: data.profile?.hq_city || '', state: data.profile?.hq_state || '',
+          country: data.profile?.hq_country || 'Australia',
+          latitude: data.profile?.latitude || null, longitude: data.profile?.longitude || null,
+          website: websiteUrl, email: data.business?.email || '',
+          is_active: true, talent_community_enabled: true,
+        }, { onConflict: 'id' })
+        if (bpErr) err('  business_profiles: ' + bpErr.message)
+        else log('  ✓ business_profiles')
+
+        // ── Step 8: business_profile_pages ───────────────────────────────────
+        log('\n[8/12] Creating business_profile_pages...')
+        const logoUrl = imageResults.logo?.fileUrl || null
+        const heroUrl = imageResults.hero?.fileUrl || null
+        const { error: bppErr } = await supabase.from('business_profile_pages').upsert({
+          business_id: userId, slug, is_published: true, name: companyName,
+          logo_url: logoUrl, hero_image_url: heroUrl,
+          tagline: data.profile?.tagline || '', mission: data.content?.mission || '',
+          value_prop_headline: data.content?.value_prop_headline || '',
+          value_prop_body: data.content?.value_prop_body || '',
+          impact_stats: data.impact_stats || [], culture_values: data.culture_values || [],
+          business_areas: data.business_areas || [], benefits: data.benefits || [],
+          programs: data.programs || [], social_proof: data.social_proof || [],
+          live_roles_count: (data.jobs || []).length, talent_community_enabled: true,
+          portfolio_intake_enabled: true, hiring_interests: data.hiring_interests || [],
+          industries_served: data.industries_served || [],
+          contact_email: data.business?.email || '', website_url: websiteUrl,
+          enquiry_enabled: true,
+          media_assets: { intro_video_url: videoPublicUrl, logo_url: logoUrl, hero_image_url: heroUrl },
+          badges: data.badges || [],
+          acknowledgement_of_country: data.content?.acknowledgement_of_country || '',
+        }, { onConflict: 'business_id' })
+        if (bppErr) err('  business_profile_pages: ' + bppErr.message)
+        else log('  ✓ business_profile_pages')
+
+        // ── Step 9: Location ─────────────────────────────────────────────────
+        log('\n[9/12] Creating location...')
+        let locationId: string
+        const { data: existingLoc } = await supabase.from('locations').select('id').eq('owner_id', userId).maybeSingle()
+        if (existingLoc) {
+          locationId = existingLoc.id
+          log('  Location exists: ' + locationId)
+        } else {
+          const { data: newLoc, error: locErr } = await supabase.from('locations').insert({
+            owner_type: 'business', owner_id: userId, business_id: userId,
+            name: `${companyName} — ${data.profile?.hq_city || 'HQ'}`,
+            address: data.profile?.hq_address || '',
+            city: data.profile?.hq_city || '', state: data.profile?.hq_state || '',
+            country: data.profile?.hq_country || 'Australia',
+            lat: data.profile?.latitude || null, lng: data.profile?.longitude || null,
+          }).select('id').single()
+          if (locErr) throw new Error('Create location: ' + locErr.message)
+          locationId = newLoc.id
+          log('  Created location: ' + locationId)
+        }
+
+        // ── Step 10: Roles & preferences ─────────────────────────────────────
+        log('\n[10/12] Setting roles and preferences...')
+        await supabase.from('user_business_roles').upsert({ user_id: userId, business_id: userId, role: 'business_admin' }, { onConflict: 'user_id,business_id' })
+        await supabase.from('user_location_roles').upsert({ user_id: userId, location_id: locationId, role: 'location_admin' }, { onConflict: 'user_id,location_id' })
+        await supabase.from('user_preferences').upsert({ user_id: userId, active_business_id: userId, active_location_id: locationId }, { onConflict: 'user_id' })
+        log('  ✓ Roles and preferences')
+
+        // ── Step 11: Jobs ─────────────────────────────────────────────────────
+        log('\n[11/12] Creating jobs...')
+        const jobs = data.jobs || []
+        let jobCount = 0
+        for (const job of jobs) {
+          const { error: jErr } = await supabase.from('jobs').insert({
+            business_profile_id: userId, business_id: userId, location_id: locationId,
+            status: 'published', is_active: true, list_on_creerlio: true,
+            title: job.title || '', description: job.description || '',
+            city: job.city || data.profile?.hq_city || '',
+            state: job.state || data.profile?.hq_state || '',
+            country: job.country || data.profile?.hq_country || 'Australia',
+            location: job.location || '', employment_type: job.employment_type || 'Full-time',
+            experience_level: job.experience_level || '',
+            salary_min: job.salary_min || null, salary_max: job.salary_max || null,
+            salary_currency: job.salary_currency || 'AUD',
+            required_skills: job.required_skills || [], preferred_skills: job.preferred_skills || [],
+            requirements: job.requirements || '',
+          })
+          if (jErr) err(`  ✗ Job "${job.title}": ${jErr.message}`)
+          else { jobCount++; log(`  ✓ ${job.title}`) }
+        }
+
+        // ── Step 12: Services ─────────────────────────────────────────────────
+        log('\n[12/12] Creating services...')
+        const services = data.services || []
+
+        const { error: ovErr } = await supabase.from('business_products_services_overview').upsert({
+          business_id: userId, user_id: userId,
+          short_headline: data.content?.value_prop_headline || `${companyName} — Services Overview`,
+          summary: data.content?.value_prop_body || '',
+          primary_industries: (data.industries_served || []).slice(0, 5),
+          business_model: 'B2B', is_public: true,
+        }, { onConflict: 'business_id' })
+        if (ovErr) err('  Overview: ' + ovErr.message)
+        else log('  ✓ Services overview')
+
+        let svcCount = 0
+        for (let i = 0; i < services.length; i++) {
+          const svc = services[i]
+          const { data: sv, error: svErr } = await supabase.from('business_products_services').insert({
+            business_id: userId, user_id: userId,
+            name: svc.name || `Service ${i+1}`, category: svc.category || 'Service',
+            short_description: svc.short_description || '', who_it_is_for: svc.who_it_is_for || '',
+            problem_it_solves: svc.problem_it_solves || '', order_index: i,
+            is_published: true, is_active: true,
+          }).select('id').single()
+
+          if (svErr) { err(`  ✗ Service "${svc.name}": ${svErr.message}`); continue }
+          svcCount++
+          log(`  ✓ ${svc.name} → id ${sv.id}`)
+
+          const productId = sv.id
+          const ins = async (table: string, rows: any[]) => {
+            if (!rows || rows.length === 0) return
+            const { error } = await supabase.from(table).insert(rows)
+            if (error) err(`    ${table}: ${error.message}`)
+          }
+
+          if (Array.isArray(svc.roles) && svc.roles.length > 0) {
+            await ins('business_product_roles', svc.roles.map((r: any, idx: number) => ({
+              product_id: productId, business_id: userId, user_id: userId,
+              role_name: typeof r === 'string' ? r : r.name, order_index: idx,
+            })))
+          }
+          if (Array.isArray(svc.skills) && svc.skills.length > 0) {
+            await ins('business_product_skills', svc.skills.map((s: any) => ({
+              product_id: productId, business_id: userId, user_id: userId,
+              skill_name: typeof s === 'string' ? s : s.name,
+            })))
+          }
+          if (Array.isArray(svc.growth_areas) && svc.growth_areas.length > 0) {
+            await ins('business_product_growth_areas', svc.growth_areas.map((g: any) => ({
+              product_id: productId, business_id: userId, user_id: userId,
+              growth_area: typeof g === 'string' ? g : g.area,
+            })))
+          }
+          if (svc.impact) {
+            await ins('business_product_impact', [{
+              product_id: productId, business_id: userId, user_id: userId,
+              who_it_helps: svc.impact.who_it_helps || '',
+              what_it_improves: svc.impact.what_it_improves || '',
+              real_world_outcomes: svc.impact.real_world_outcomes || '',
+            }])
+          }
+          await ins('business_product_signals', [{
+            product_id: productId, business_id: userId, user_id: userId,
+            we_are_hiring_for_this: svc.we_are_hiring || false,
+            open_to_partnerships: svc.open_to_partnerships || false,
+            in_research_and_development: false,
+            currently_scaling: svc.currently_scaling || false,
+          }])
+          await ins('business_product_permissions', [{ product_id: productId, business_id: userId, user_id: userId }])
+        }
+
+        // ── Cleanup & summary ────────────────────────────────────────────────
+        try { fs.rmSync(tmpDir, { recursive: true }) } catch (_) {}
+
+        log('\n╔══════════════════════════════════════════════════════════════╗')
+        log(`  ✅  ${companyName} profile created successfully!`)
+        log('╚══════════════════════════════════════════════════════════════╝')
+        log(`  Login Email:  ${demoEmail}`)
+        log(`  Password:     ${demoPass}`)
+        log(`  User ID:      ${userId}`)
+        log(`  Jobs:         ${jobCount} created`)
+        log(`  Services:     ${svcCount} created`)
+        log(`  Images:       ${Object.keys(imageResults).length} generated`)
+        if (videoPublicUrl) log(`  Video:        ${videoPublicUrl}`)
+        log('══════════════════════════════════════════════════════════════')
+
+        send({ done: true })
+      } catch (e: any) {
+        err('\n❌  FATAL: ' + (e?.message || String(e)))
+        send({ error: e?.message || 'Generation failed' })
+        try { fs.rmSync(tmpDir, { recursive: true }) } catch (_) {}
+      } finally {
         try { controller.close() } catch (_) {}
-      })
+      }
     },
   })
 

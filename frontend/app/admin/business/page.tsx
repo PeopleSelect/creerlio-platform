@@ -17,10 +17,14 @@ export default function AdminBusinessPage() {
 
   // AI Generator modal state
   const [showGenerator, setShowGenerator] = useState(false)
+  const [genMode, setGenMode]             = useState<'single' | 'bulk'>('single')
   const [genWebsite, setGenWebsite]       = useState('')
   const [genLinkedin, setGenLinkedin]     = useState('')
   const [genYoutube, setGenYoutube]       = useState('')
   const [genSlug, setGenSlug]             = useState('')
+  const [genIndustry, setGenIndustry]     = useState('')
+  const [genLocation, setGenLocation]     = useState('')
+  const [genMaxResults, setGenMaxResults] = useState(5)
   const [genRunning, setGenRunning]       = useState(false)
   const [genLogs, setGenLogs]             = useState<{ text: string; isError?: boolean }[]>([])
   const [genDone, setGenDone]             = useState(false)
@@ -140,7 +144,8 @@ export default function AdminBusinessPage() {
   }, [page, searchQuery, isAdmin, user])
 
   async function runGenerator() {
-    if (!genWebsite.trim()) return
+    if (genMode === 'single' && !genWebsite.trim()) return
+    if (genMode === 'bulk' && (!genIndustry.trim() || !genLocation.trim())) return
     setGenRunning(true)
     setGenLogs([])
     setGenDone(false)
@@ -151,15 +156,14 @@ export default function AdminBusinessPage() {
       const token = session?.access_token
       if (!token) throw new Error('No session token')
 
+      const body = genMode === 'bulk'
+        ? { mode: 'bulk', industry: genIndustry.trim(), location: genLocation.trim(), maxResults: genMaxResults }
+        : { mode: 'single', websiteUrl: genWebsite.trim(), linkedinUrl: genLinkedin.trim() || undefined, youtubeUrl: genYoutube.trim() || undefined, slug: genSlug.trim() || undefined }
+
       const res = await fetch('/api/admin/generate-business-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          websiteUrl:  genWebsite.trim(),
-          linkedinUrl: genLinkedin.trim() || undefined,
-          youtubeUrl:  genYoutube.trim()  || undefined,
-          slug:        genSlug.trim()     || undefined,
-        }),
+        body: JSON.stringify(body),
       })
 
       if (!res.ok || !res.body) {
@@ -204,10 +208,14 @@ export default function AdminBusinessPage() {
 
   function openGenerator() {
     setShowGenerator(true)
+    setGenMode('single')
     setGenWebsite('')
     setGenLinkedin('')
     setGenYoutube('')
     setGenSlug('')
+    setGenIndustry('')
+    setGenLocation('')
+    setGenMaxResults(5)
     setGenLogs([])
     setGenDone(false)
     setGenError('')
@@ -433,55 +441,82 @@ export default function AdminBusinessPage() {
             {/* Form */}
             {!genRunning && !genDone && (
               <div className="px-6 py-5 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Website URL <span className="text-red-400">*</span></label>
-                  <input
-                    type="url"
-                    placeholder="https://www.example.com.au"
-                    value={genWebsite}
-                    onChange={e => setGenWebsite(e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
-                  />
+                {/* Mode toggle */}
+                <div className="flex rounded-lg overflow-hidden border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setGenMode('single')}
+                    className={`flex-1 py-2 text-sm font-semibold transition-colors ${genMode === 'single' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-gray-400 hover:text-gray-200'}`}
+                  >
+                    Single Business
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGenMode('bulk')}
+                    className={`flex-1 py-2 text-sm font-semibold transition-colors ${genMode === 'bulk' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-gray-400 hover:text-gray-200'}`}
+                  >
+                    Bulk Discovery
+                  </button>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">LinkedIn URL <span className="text-gray-500">(optional)</span></label>
-                    <input
-                      type="url"
-                      placeholder="https://linkedin.com/company/..."
-                      value={genLinkedin}
-                      onChange={e => setGenLinkedin(e.target.value)}
-                      className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                      style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">YouTube URL <span className="text-gray-500">(optional)</span></label>
-                    <input
-                      type="url"
-                      placeholder="https://youtube.com/@..."
-                      value={genYoutube}
-                      onChange={e => setGenYoutube(e.target.value)}
-                      className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                      style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Slug <span className="text-gray-500">(optional — auto-generated if blank)</span></label>
-                  <input
-                    type="text"
-                    placeholder="e.g. ray-white"
-                    value={genSlug}
-                    onChange={e => setGenSlug(e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
-                  />
-                </div>
-                <div className="bg-slate-800/50 rounded-lg px-4 py-3 text-sm text-gray-400">
-                  This will generate <strong className="text-gray-200">10 DALL-E images</strong>, a <strong className="text-gray-200">TTS narration video</strong>, <strong className="text-gray-200">4 jobs</strong>, and <strong className="text-gray-200">5 services</strong> using AI. Takes ~3–5 minutes.
-                </div>
+
+                {genMode === 'single' ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Website URL <span className="text-red-400">*</span></label>
+                      <input type="url" placeholder="https://www.example.com.au" value={genWebsite} onChange={e => setGenWebsite(e.target.value)}
+                        className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                        style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">LinkedIn <span className="text-gray-500">(optional)</span></label>
+                        <input type="url" placeholder="https://linkedin.com/company/..." value={genLinkedin} onChange={e => setGenLinkedin(e.target.value)}
+                          className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                          style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">YouTube <span className="text-gray-500">(optional)</span></label>
+                        <input type="url" placeholder="https://youtube.com/@..." value={genYoutube} onChange={e => setGenYoutube(e.target.value)}
+                          className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                          style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Slug <span className="text-gray-500">(optional)</span></label>
+                      <input type="text" placeholder="e.g. ray-white (auto-generated if blank)" value={genSlug} onChange={e => setGenSlug(e.target.value)}
+                        className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                        style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
+                    </div>
+                    <div className="bg-slate-800/50 rounded-lg px-4 py-3 text-sm text-gray-400">
+                      Generates <strong className="text-gray-200">10 DALL-E images</strong>, <strong className="text-gray-200">TTS intro video</strong>, <strong className="text-gray-200">4 jobs</strong>, <strong className="text-gray-200">5 services</strong>. Takes ~3–5 minutes.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Industry <span className="text-red-400">*</span></label>
+                      <input type="text" placeholder="e.g. Law Firms, Real Estate, Accounting" value={genIndustry} onChange={e => setGenIndustry(e.target.value)}
+                        className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                        style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Location <span className="text-red-400">*</span></label>
+                      <input type="text" placeholder="e.g. Newtown NSW, Sydney, Melbourne CBD" value={genLocation} onChange={e => setGenLocation(e.target.value)}
+                        className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                        style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Number of businesses <span className="text-gray-500">(1–10)</span></label>
+                      <input type="number" min={1} max={10} title="Number of businesses to generate" placeholder="5" value={genMaxResults} onChange={e => setGenMaxResults(Math.min(10, Math.max(1, parseInt(e.target.value) || 5)))}
+                        className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                        style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
+                    </div>
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 text-sm text-amber-300">
+                      Bulk mode discovers {genMaxResults} real businesses via GPT-4o, then generates a full profile for each. Estimated time: <strong>{genMaxResults * 4}–{genMaxResults * 6} minutes</strong>. Max Vercel timeout is 5 min — keep to 1–2 businesses per run.
+                    </div>
+                  </>
+                )}
+
                 {genError && (
                   <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400">
                     {genError}
@@ -494,10 +529,10 @@ export default function AdminBusinessPage() {
                   <button
                     type="button"
                     onClick={runGenerator}
-                    disabled={!genWebsite.trim()}
+                    disabled={genMode === 'single' ? !genWebsite.trim() : (!genIndustry.trim() || !genLocation.trim())}
                     className="px-6 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
                   >
-                    Generate Profile
+                    {genMode === 'bulk' ? `Discover & Generate ${genMaxResults} Profiles` : 'Generate Profile'}
                   </button>
                 </div>
               </div>

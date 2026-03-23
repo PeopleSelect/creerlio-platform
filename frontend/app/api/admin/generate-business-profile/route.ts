@@ -622,7 +622,7 @@ async function generateSingleProfile(opts: {
     const detectedSocial = extractSocialLinks(websiteHtml)
     const origin         = new URL(websiteUrl).origin
     log('  Discovering logo...')
-    const effectiveLinkedin = (socialLinks.linkedin || linkedinUrl) || undefined
+    const effectiveLinkedin = (detectedSocial.linkedin || linkedinUrl) || undefined
     const logoCandidate  = await withTimeout(findBestLogoUrl(websiteHtml, origin, effectiveLinkedin), 8000, null)
 
     if (Object.keys(detectedSocial).length > 0) {

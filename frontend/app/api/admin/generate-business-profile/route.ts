@@ -277,7 +277,181 @@ async function scrapeJobsFromATS(careersUrl: string, log: (m: string) => void): 
   return []
 }
 
-/** Scrape homepage + key subpages — all in parallel, hard 8s total cap */
+/**
+ * SEEK job search — scrapes SEEK search results page for jobs at a given company.
+ * Parses __NEXT_DATA__ JSON embedded in the page.
+ */
+async function seekJobSearch(companyName: string, log: (m: string) => void): Promise<any[]> {
+  try {
+    const query = encodeURIComponent(companyName)
+    const seekUrl = `https://www.seek.com.au/jobs?keywords=${query}&where=Australia&page=1`
+    log(`  Searching SEEK: ${seekUrl}`)
+    const html = await fetchWebsiteText(seekUrl, 300000)
+    if (!html) { log('  ⚠ SEEK returned empty response'); return [] }
+
+    // Extract __NEXT_DATA__ JSON from script tag
+    const nextDataMatch = html.match(/<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i)
+    if (!nextDataMatch) { log('  ⚠ SEEK: __NEXT_DATA__ not found'); return [] }
+
+    const nextData = JSON.parse(nextDataMatch[1])
+    // SEEK embeds jobs in props.pageProps.results or props.pageProps.jobsearch.hits
+    const jobResults: any[] =
+      nextData?.props?.pageProps?.results ??
+      nextData?.props?.pageProps?.jobsearch?.hits ??
+      nextData?.props?.pageProps?.jobs ??
+      []
+
+    if (!Array.isArray(jobResults) || jobResults.length === 0) {
+      log('  ⚠ SEEK: no jobs found in page data'); return []
+    }
+
+    // Filter to jobs that match the company name (case-insensitive partial match)
+    const lowerCompany = companyName.toLowerCase()
+    const matched = jobResults.filter((j: any) => {
+      const advertiserName: string = (j.advertiser?.description || j.companyName || j.advertiser?.name || '').toLowerCase()
+      return advertiserName.includes(lowerCompany) || lowerCompany.split(/\s+/).some(w => w.length > 3 && advertiserName.includes(w))
+    })
+
+    const toProcess = matched.length > 0 ? matched : jobResults.slice(0, 20)
+    log(`  ✓ SEEK: found ${toProcess.length} matching jobs (of ${jobResults.length} total)`)
+
+    return toProcess.slice(0, 30).map((j: any) => {
+      const loc = j.location || j.suburb || ''
+      const area = j.area || j.state || ''
+      return {
+        title: j.title || j.jobTitle || '',
+        description: (j.teaser || j.description || '').slice(0, 600),
+        city: loc, state: area, country: 'Australia',
+        location: [loc, area].filter(Boolean).join(', '),
+        employment_type: j.workType || 'Full-time',
+        experience_level: '', salary_min: null, salary_max: null, salary_currency: 'AUD',
+        required_skills: [], preferred_skills: [], requirements: '',
+        apply_url: j.listingDate ? `https://www.seek.com.au/job/${j.id}` : '',
+      }
+    })
+  } catch (e: any) {
+    log(`  ⚠ SEEK scraping error: ${e.message}`)
+    return []
+  }
+}
+
+/**
+ * Auto-discover a company's YouTube channel via YouTube Data API v3.
+ * Returns the channel URL if found, null otherwise.
+ * Requires YOUTUBE_API_KEY env var — silently skips if missing.
+ */
+async function findYouTubeChannel(companyName: string, log: (m: string) => void): Promise<string | null> {
+  const apiKey = process.env.YOUTUBE_API_KEY
+  if (!apiKey) return null
+
+  try {
+    const q = encodeURIComponent(companyName)
+    const apiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${q}&maxResults=3&key=${apiKey}`
+    log(`  Searching YouTube for channel: ${companyName}`)
+    const data = await fetchJson(apiUrl)
+    const items: any[] = data?.items ?? []
+    if (!items.length) { log('  ⚠ YouTube: no channels found'); return null }
+
+    // Pick the channel whose title best matches the company name
+    const lowerCompany = companyName.toLowerCase()
+    const best = items.find((it: any) => {
+      const title = (it.snippet?.title || '').toLowerCase()
+      return title.includes(lowerCompany) || lowerCompany.includes(title.split(/\s+/)[0])
+    }) ?? items[0]
+
+    const channelId = best?.id?.channelId || best?.snippet?.channelId
+    if (!channelId) return null
+
+    const channelUrl = `https://www.youtube.com/channel/${channelId}`
+    log(`  ✓ YouTube channel found: ${best.snippet?.title} — ${channelUrl}`)
+    return channelUrl
+  } catch (e: any) {
+    log(`  ⚠ YouTube discovery error: ${e.message}`)
+    return null
+  }
+}
+
+/**
+ * Enrichment pass — second targeted GPT call to fill in any service sub-sections
+ * (teams, roles, skills, growth_areas) that the main pass left empty.
+ */
+async function enrichServiceSections(
+  openai: OpenAI,
+  services: any[],
+  companyName: string,
+  industry: string,
+  log: (m: string) => void
+): Promise<any[]> {
+  // Find services with any empty critical arrays
+  const weakIdxs = services
+    .map((s: any, i: number) => ({ s, i }))
+    .filter(({ s }) =>
+      !s.teams?.length || !s.roles?.length || !s.skills?.length || !s.growth_areas?.length
+    )
+
+  if (weakIdxs.length === 0) {
+    log('  ✓ All service sections populated — skipping enrichment pass')
+    return services
+  }
+
+  log(`  Running enrichment pass on ${weakIdxs.length} weak service(s)...`)
+
+  const weakList = weakIdxs.map(({ s, i }) => ({
+    index: i,
+    name: s.name,
+    short_description: s.short_description,
+    missing: [
+      !s.teams?.length && 'teams',
+      !s.roles?.length && 'roles',
+      !s.skills?.length && 'skills',
+      !s.growth_areas?.length && 'growth_areas',
+    ].filter(Boolean),
+  }))
+
+  const enrichPrompt = `You are filling in missing sub-sections for ${companyName} (${industry}) service cards.
+
+For each service below, provide ONLY the missing fields listed.
+
+Services to enrich:
+${JSON.stringify(weakList, null, 2)}
+
+Rules:
+- teams: minimum 2 internal team names that deliver this service (e.g. "Engineering", "Delivery", "Consulting")
+- roles: minimum 2 specific job titles needed for this service
+- skills: minimum 3 specific technical/professional skills for this service
+- growth_areas: minimum 2 emerging trends or growth opportunities relevant to this service
+- Infer from the service name, description, and industry — do NOT leave anything empty
+- Return ONLY valid JSON array matching this structure:
+[{ "index": 0, "teams": [], "roles": [], "skills": [], "growth_areas": [] }]`
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      temperature: 0.3,
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: enrichPrompt }],
+    })
+    const raw = (completion.choices[0].message.content || '[]').trim()
+      .replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+    const enriched: any[] = JSON.parse(raw)
+
+    for (const patch of enriched) {
+      const svc = services[patch.index]
+      if (!svc) continue
+      if (!svc.teams?.length && patch.teams?.length) svc.teams = patch.teams
+      if (!svc.roles?.length && patch.roles?.length) svc.roles = patch.roles
+      if (!svc.skills?.length && patch.skills?.length) svc.skills = patch.skills
+      if (!svc.growth_areas?.length && patch.growth_areas?.length) svc.growth_areas = patch.growth_areas
+    }
+    log(`  ✓ Enrichment pass complete`)
+  } catch (e: any) {
+    log(`  ⚠ Enrichment pass failed: ${e.message}`)
+  }
+
+  return services
+}
+
+/** Scrape homepage + comprehensive subpages — all in parallel, hard 12s total cap */
 async function fetchMultiplePages(websiteUrl: string, targetLocation?: string): Promise<string> {
   const base = new URL(websiteUrl)
   // Always scrape the actual homepage (origin), not a deep-link or search results page
@@ -286,30 +460,42 @@ async function fetchMultiplePages(websiteUrl: string, targetLocation?: string): 
     homepage,
     `${homepage}/about`,
     `${homepage}/about-us`,
+    `${homepage}/our-story`,
     `${homepage}/careers`,
+    `${homepage}/services`,
+    `${homepage}/what-we-do`,
+    `${homepage}/practice-areas`,
+    `${homepage}/expertise`,
+    `${homepage}/solutions`,
+    `${homepage}/team`,
+    `${homepage}/our-team`,
+    `${homepage}/people`,
+    `${homepage}/contact`,
+    `${homepage}/contact-us`,
   ]
 
   // If a target location/suburb is provided, try the most likely location-specific page only
   if (targetLocation) {
     const suburb = targetLocation.split(/[,\s]+/)[0].toLowerCase().replace(/\s+/g, '-')
     urls.push(`${homepage}/locations/${suburb}`)
+    urls.push(`${homepage}/offices/${suburb}`)
   }
 
   const seen = new Set<string>()
   const uniqueUrls = urls.filter(url => { if (seen.has(url)) return false; seen.add(url); return true })
 
-  // Fetch all pages in parallel with a hard 8s wall-clock cap on the entire batch
-  const batchPromise = Promise.allSettled(uniqueUrls.map(url => fetchWebsiteText(url)))
-  const results = await withTimeout(batchPromise, 8000, uniqueUrls.map(() => ({ status: 'fulfilled' as const, value: '' })))
+  // Fetch all pages in parallel with a hard 12s wall-clock cap on the entire batch
+  const batchPromise = Promise.allSettled(uniqueUrls.map(url => fetchWebsiteText(url, 20000)))
+  const results = await withTimeout(batchPromise, 12000, uniqueUrls.map(() => ({ status: 'fulfilled' as const, value: '' })))
 
   const parts: string[] = []
   for (let i = 0; i < uniqueUrls.length; i++) {
     const r = results[i]
     if (r.status === 'fulfilled' && r.value.length > 300) {
-      parts.push(`=== ${uniqueUrls[i]} ===\n${r.value.slice(0, 10000)}`)
+      parts.push(`=== ${uniqueUrls[i]} ===\n${r.value.slice(0, 8000)}`)
     }
   }
-  return parts.join('\n\n').slice(0, 40000)
+  return parts.join('\n\n').slice(0, 50000)
 }
 
 // ── HTML parsers ──────────────────────────────────────────────────────────────
@@ -487,7 +673,9 @@ async function researchCompany(
   socialLinks: Record<string, string>,
   websiteContent: string,
   targetLocation: string,
-  log: (msg: string) => void
+  log: (msg: string) => void,
+  scrapedJobTitles?: string[],
+  discoveredYouTube?: string
 ): Promise<any> {
   log(`  Got ${websiteContent.length} chars from website (multi-page scan)`)
 
@@ -642,9 +830,13 @@ RETURN ONLY valid JSON. No markdown, no explanation, no code fences.
   const detectedFacebook  = socialLinks.facebook  || 'not provided'
   const detectedInstagram = socialLinks.instagram || 'not provided'
   const detectedTwitter   = socialLinks.twitter   || 'not provided'
-  const detectedYoutube   = socialLinks.youtube   || youtubeUrl  || 'not provided'
+  const detectedYoutube   = discoveredYouTube || socialLinks.youtube || youtubeUrl || 'not provided'
 
   const locationLine = targetLocation ? `Target Location (LOCAL BRANCH): ${targetLocation}\n` : ''
+
+  const jobTitlesSection = scrapedJobTitles && scrapedJobTitles.length > 0
+    ? `\nReal job titles scraped from ATS/SEEK (use these to accurately represent the company's actual hiring — reflect them in services, roles, and jobs):\n${scrapedJobTitles.slice(0, 40).map(t => `• ${t}`).join('\n')}\n`
+    : ''
 
   const userPrompt = `Company Website: ${websiteUrl}
 ${locationLine}LinkedIn: ${detectedLinkedin}
@@ -652,9 +844,9 @@ YouTube: ${detectedYoutube}
 Facebook: ${detectedFacebook}
 Instagram: ${detectedInstagram}
 Twitter/X: ${detectedTwitter}
-
-Website Content (scraped):
-${websiteContent.slice(0, 30000)}
+${jobTitlesSection}
+Website Content (scraped from homepage + services/about/team/contact pages):
+${websiteContent.slice(0, 32000)}
 
 ${websiteContent.length < 2000 ? '⚠ IMPORTANT: Website returned minimal content — it is almost certainly JavaScript-rendered. You MUST use your training knowledge about this company and its industry to produce a rich, accurate, comprehensive profile. Do not produce generic content.' : ''}
 ${targetLocation ? `⚠ BRANCH REMINDER: Profile the LOCAL branch in "${targetLocation}" specifically. Business name must follow format: "{Brand} — {Suburb}". Use local address and phone, not head office defaults.` : ''}
@@ -843,13 +1035,48 @@ async function generateSingleProfile(opts: {
       log(`  Detected careers URL: ${careersUrl}`)
       scrapedJobs = await scrapeJobsFromATS(careersUrl, log)
     }
-    if (scrapedJobs.length > 0) {
-      log(`  ✓ ${scrapedJobs.length} real jobs will be imported from ATS`)
-    } else {
-      log('  No ATS jobs found — AI will generate representative listings')
+
+    // DIE: also search SEEK for additional real jobs (run in parallel with ATS if ATS returned few)
+    if (scrapedJobs.length < 5) {
+      log('  Searching SEEK for additional job listings...')
+      // Extract a rough company name from the URL for SEEK search
+      const domainName = origin.replace(/^https?:\/\/(?:www\.)?/, '').split('.')[0]
+      const seekJobs = await seekJobSearch(domainName, log)
+      if (seekJobs.length > 0) {
+        // Merge: add SEEK jobs that don't duplicate ATS titles
+        const existingTitles = new Set(scrapedJobs.map(j => j.title.toLowerCase()))
+        const newJobs = seekJobs.filter(j => !existingTitles.has(j.title.toLowerCase()))
+        scrapedJobs = [...scrapedJobs, ...newJobs]
+        log(`  ✓ Total after SEEK merge: ${scrapedJobs.length} jobs`)
+      }
     }
 
-    const data = await researchCompany(openai, websiteUrl, linkedinUrl, youtubeUrl, detectedSocial, websiteHtml, targetLocation, log)
+    if (scrapedJobs.length > 0) {
+      log(`  ✓ ${scrapedJobs.length} real jobs will be imported`)
+    } else {
+      log('  No real jobs found — AI will generate representative listings')
+    }
+
+    // DIE: auto-discover YouTube channel if not provided
+    let effectiveYoutube = youtubeUrl
+    if (!effectiveYoutube && !detectedSocial.youtube) {
+      log('  No YouTube URL provided — attempting auto-discovery...')
+      // Use domain name as search term; we'll refine after GPT gives us the company name
+      const domainName = origin.replace(/^https?:\/\/(?:www\.)?/, '').split('.')[0]
+      const discovered = await findYouTubeChannel(domainName, log)
+      if (discovered) effectiveYoutube = discovered
+    } else if (detectedSocial.youtube) {
+      log(`  ✓ YouTube detected from website: ${detectedSocial.youtube}`)
+    }
+
+    // Collect real job titles to pass as context to GPT
+    const scrapedJobTitles = scrapedJobs.map(j => j.title).filter(Boolean)
+
+    const data = await researchCompany(
+      openai, websiteUrl, linkedinUrl, effectiveYoutube,
+      detectedSocial, websiteHtml, targetLocation, log,
+      scrapedJobTitles, effectiveYoutube || undefined
+    )
 
     const companyName = data.business?.name || 'Company'
     const slug        = customSlug || slugify(companyName)
@@ -859,6 +1086,23 @@ async function generateSingleProfile(opts: {
     log(`\n  ✓ Company: ${companyName}`)
     log(`  ✓ Slug:    ${slug}`)
     log(`  ✓ Email:   ${demoEmail}`)
+
+    // DIE: enrichment pass — fill empty service sub-sections with targeted GPT call
+    if (Array.isArray(data.services) && data.services.length > 0) {
+      log('\n[1b/12] Running service enrichment pass...')
+      data.services = await enrichServiceSections(openai, data.services, companyName, data.profile?.industry || '', log)
+    }
+
+    // DIE: if YouTube was auto-discovered after GPT (using real company name now), re-search with accurate name
+    if (!effectiveYoutube && !detectedSocial.youtube) {
+      log('  Retrying YouTube discovery with confirmed company name...')
+      const discovered = await findYouTubeChannel(companyName, log)
+      if (discovered) {
+        effectiveYoutube = discovered
+        data.business = data.business || {}
+        data.business.youtube_url = discovered
+      }
+    }
 
     // ── Step 2: Auth user ────────────────────────────────────────────────
     log('\n[2/12] Creating auth user...')
@@ -957,14 +1201,14 @@ async function generateSingleProfile(opts: {
     }
 
     // ── Step 4: TTS ──────────────────────────────────────────────────────
-    // If a YouTube URL was provided, use it directly as the intro video (skip TTS + ffmpeg)
-    let videoPublicUrl: string | null = youtubeUrl || null
+    // If a YouTube URL was provided or discovered, use it directly as the intro video
+    let videoPublicUrl: string | null = effectiveYoutube || null
     let videoSize = 0
     let audioDur = 60
 
-    if (youtubeUrl) {
-      log('\n[4/12] YouTube URL provided — skipping TTS generation')
-      log(`  ✓ Using YouTube video: ${youtubeUrl}`)
+    if (effectiveYoutube) {
+      log('\n[4/12] YouTube URL available — skipping TTS generation')
+      log(`  ✓ Using YouTube video: ${effectiveYoutube}`)
     } else {
       log('\n[4/12] Generating TTS narration...')
       const narrationText = await generateNarration(openai, companyName, data, log)
@@ -1072,9 +1316,9 @@ async function generateSingleProfile(opts: {
       else { bankItems.push({ key: 'video', id: vidItem.id }); log(`  ✓ video → id ${vidItem.id}`) }
     }
 
-    // Merge social URLs: detected from HTML → GPT-4o output → user-provided inputs
-    const mergedLinkedin  = detectedSocial.linkedin  || data.business?.linkedin_url  || linkedinUrl  || null
-    const mergedYoutube   = detectedSocial.youtube   || data.business?.youtube_url   || youtubeUrl   || null
+    // Merge social URLs: detected from HTML → GPT-4o output → discovered → user-provided inputs
+    const mergedLinkedin  = detectedSocial.linkedin  || data.business?.linkedin_url  || linkedinUrl      || null
+    const mergedYoutube   = detectedSocial.youtube   || data.business?.youtube_url   || effectiveYoutube || null
     const mergedFacebook  = detectedSocial.facebook  || data.business?.facebook_url  || null
     const mergedInstagram = detectedSocial.instagram || data.business?.instagram_url || null
     const mergedTwitter   = detectedSocial.twitter   || data.business?.twitter_url   || null

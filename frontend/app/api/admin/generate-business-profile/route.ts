@@ -45,6 +45,12 @@ function slugify(str: string) {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)
 }
 
+function generateClaimToken(): string {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 /** Resolve the ffmpeg binary path — tries system paths before ffmpeg-static (which breaks when bundled) */
 function getFfmpegBin(): string {
   const systemPaths = [
@@ -984,16 +990,30 @@ async function generateSingleProfile(opts: {
       latitude: data.profile?.latitude || null, longitude: data.profile?.longitude || null,
       website: websiteUrl, email: data.business?.email || '',
       is_active: true, talent_community_enabled: true,
+      visibility: 'private', claim_token: generateClaimToken(),
+      claim_token_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      claim_status: 'pending', is_ai_generated: true,
     }, { onConflict: 'id' })
     if (bpErr) err('  business_profiles: ' + bpErr.message)
     else log('  ✓ business_profiles')
+
+    // Fetch the claim_token we just wrote (needed for claim link in summary)
+    let claimToken: string | null = null
+    const { data: bpRow } = await supabase.from('business_profiles').select('claim_token').eq('id', userId).maybeSingle()
+    claimToken = bpRow?.claim_token || null
+
+    // Log business_created event
+    await supabase.from('business_claim_events').insert({
+      business_id: userId, event_type: 'business_created',
+      metadata: { company_name: companyName, source: 'ai_generator', website: websiteUrl },
+    })
 
     // ── Step 8: business_profile_pages ───────────────────────────────────
     log('\n[8/12] Creating business_profile_pages...')
     const logoUrl = imageResults.logo?.fileUrl || null
     const heroUrl = imageResults.hero?.fileUrl || null
     const { error: bppErr } = await supabase.from('business_profile_pages').upsert({
-      business_id: userId, slug, is_published: true, name: companyName,
+      business_id: userId, slug, is_published: false, name: companyName,
       logo_url: logoUrl, hero_image_url: heroUrl,
       tagline: data.profile?.tagline || '', mission: data.content?.mission || '',
       value_prop_headline: data.content?.value_prop_headline || '',
@@ -1143,7 +1163,7 @@ async function generateSingleProfile(opts: {
     }
 
     try { fs.rmSync(tmpDir, { recursive: true }) } catch (_) {}
-    return { companyName, demoEmail, demoPass, jobCount, svcCount, videoUrl: videoPublicUrl }
+    return { companyName, demoEmail, demoPass, jobCount, svcCount, videoUrl: videoPublicUrl, claimToken }
   } catch (e) {
     try { fs.rmSync(tmpDir, { recursive: true }) } catch (_) {}
     throw e
@@ -1255,6 +1275,8 @@ export async function POST(req: NextRequest) {
             log, err,
           })
 
+          const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://creerlio.com'
+          const claimLink = result.claimToken ? `${siteUrl}/business/claim/${result.claimToken}` : null
           log('\n╔══════════════════════════════════════════════════════════════╗')
           log(`  ✅  ${result.companyName} profile created successfully!`)
           log('╚══════════════════════════════════════════════════════════════╝')
@@ -1263,7 +1285,10 @@ export async function POST(req: NextRequest) {
           log(`  Jobs:         ${result.jobCount} created`)
           log(`  Services:     ${result.svcCount} created`)
           if (result.videoUrl) log(`  Video:        ${result.videoUrl}`)
+          if (claimLink) log(`  Claim Link:   ${claimLink}`)
+          log('  Status:       Private — awaiting claim')
           log('══════════════════════════════════════════════════════════════')
+          send({ claimToken: result.claimToken, claimLink })
         }
 
         send({ done: true })

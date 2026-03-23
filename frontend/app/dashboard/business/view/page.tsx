@@ -819,50 +819,40 @@ function BusinessProfileViewPageInner() {
           // Set metadata first
           setMeta(saved)
           
-          // Then load images - also try to find files in business_bank_items if paths don't work
+          // Then load images - always check business_bank_items for the authoritative file_url
           const loadImages = async () => {
             let bannerPath = String(saved.banner_path ?? '').trim()
             let avatarPath = String(saved.avatar_path ?? '').trim()
-            
-            // If paths are missing, try to find them in business_bank_items
-            if ((!bannerPath || !avatarPath) && queryUserId) {
-              console.log('[View Profile] Checking business_bank_items for banner/avatar files')
+            // Direct file_url from bank item — bypasses signedUrl() entirely (always correct)
+            let logoDirectUrl: string | null = null
+            let heroDirectUrl: string | null = null
+
+            if (queryUserId) {
+              console.log('[View Profile] Checking business_bank_items for logo/hero file_url')
               try {
                 const { data: bankItems, error: bankError } = await supabase
                   .from('business_bank_items')
-                  .select('id, item_type, file_path, title')
+                  .select('id, item_type, file_path, file_url, title')
                   .eq('user_id', queryUserId)
-                  .in('item_type', ['logo', 'image', 'profile'])
-                  .not('file_path', 'is', null)
-                
+                  .in('item_type', ['logo', 'image'])
+
                 if (!bankError && Array.isArray(bankItems)) {
-                  console.log('[View Profile] Found business_bank_items:', bankItems.map(i => ({ type: i.item_type, path: i.file_path, title: i.title })))
-                  
-                  // Try to find banner (look for items with 'banner' in title or path)
-                  if (!bannerPath) {
-                    const bannerItem = bankItems.find(item => 
-                      item.title?.toLowerCase().includes('banner') ||
-                      item.file_path?.toLowerCase().includes('banner')
-                    )
-                    if (bannerItem?.file_path) {
-                      bannerPath = bannerItem.file_path
-                      console.log('[View Profile] Found banner in business_bank_items:', bannerPath)
-                    }
+                  // Logo: prefer item_type=logo, then title contains logo
+                  const logoItem = bankItems.find(i => i.item_type === 'logo')
+                    ?? bankItems.find(i => i.title?.toLowerCase().includes('logo') || i.file_path?.toLowerCase().includes('logo'))
+                  if (logoItem?.file_url) {
+                    logoDirectUrl = logoItem.file_url
+                    console.log('[View Profile] Using logo file_url from bank item:', logoDirectUrl)
+                  } else if (logoItem?.file_path && !avatarPath) {
+                    avatarPath = logoItem.file_path
                   }
-                  
-                  // Try to find avatar (look for items with 'avatar' or 'logo' in title or path)
-                  if (!avatarPath) {
-                    const avatarItem = bankItems.find(item => 
-                      item.title?.toLowerCase().includes('avatar') ||
-                      item.title?.toLowerCase().includes('logo') ||
-                      item.file_path?.toLowerCase().includes('avatar') ||
-                      item.file_path?.toLowerCase().includes('logo') ||
-                      item.item_type === 'logo'
-                    )
-                    if (avatarItem?.file_path) {
-                      avatarPath = avatarItem.file_path
-                      console.log('[View Profile] Found avatar in business_bank_items:', avatarPath)
-                    }
+
+                  // Hero: look for 'hero' in title or path
+                  const heroItem = bankItems.find(i => i.title?.toLowerCase().includes('hero') || i.file_path?.toLowerCase().includes('hero'))
+                  if (heroItem?.file_url) {
+                    heroDirectUrl = heroItem.file_url
+                  } else if (heroItem?.file_path && !bannerPath) {
+                    bannerPath = heroItem.file_path
                   }
                 }
               } catch (err) {
@@ -880,10 +870,10 @@ function BusinessProfileViewPageInner() {
               savedKeys: Object.keys(saved ?? {})
             })
             
-            if (bannerPath || avatarPath) {
+            if (heroDirectUrl || logoDirectUrl || bannerPath || avatarPath) {
               const [b, a] = await Promise.all([
-                bannerPath ? signedUrl(bannerPath) : Promise.resolve(null),
-                avatarPath ? signedUrl(avatarPath) : Promise.resolve(null),
+                heroDirectUrl ? Promise.resolve(heroDirectUrl) : (bannerPath ? signedUrl(bannerPath) : Promise.resolve(null)),
+                logoDirectUrl ? Promise.resolve(logoDirectUrl) : (avatarPath ? signedUrl(avatarPath) : Promise.resolve(null)),
               ])
               
               console.log('[View Profile] Banner and avatar URLs loaded:', {
@@ -900,7 +890,7 @@ function BusinessProfileViewPageInner() {
                 setAvatarUrl(a)
               }
             } else {
-              console.warn('[View Profile] No banner or avatar paths found')
+              console.warn('[View Profile] No banner or avatar paths or direct URLs found')
               if (!cancelled) {
                 setBannerUrl(null)
                 setAvatarUrl(null)

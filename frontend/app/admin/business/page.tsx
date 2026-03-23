@@ -29,6 +29,7 @@ export default function AdminBusinessPage() {
   const [genLogs, setGenLogs]             = useState<{ text: string; isError?: boolean }[]>([])
   const [genDone, setGenDone]             = useState(false)
   const [genError, setGenError]           = useState('')
+  const [genClaimLink, setGenClaimLink]   = useState<string | null>(null)
 
   useEffect(() => {
     async function checkAdmin() {
@@ -195,6 +196,9 @@ export default function AdminBusinessPage() {
               setGenDone(true)
               loadBusiness(user.id)
             }
+            if (msg.claimLink) {
+              setGenClaimLink(msg.claimLink)
+            }
             if (msg.error) {
               setGenError(msg.error)
             }
@@ -226,6 +230,24 @@ export default function AdminBusinessPage() {
     setGenDone(false)
     setGenError('')
     setGenRunning(false)
+    setGenClaimLink(null)
+  }
+
+  function openRegenerator(business: any) {
+    setShowGenerator(true)
+    setGenMode('single')
+    setGenWebsite(business.website || '')
+    setGenLinkedin('')
+    setGenYoutube('')
+    setGenSlug(business.slug || '')
+    setGenIndustry('')
+    setGenLocation('')
+    setGenMaxResults(2)
+    setGenLogs([])
+    setGenDone(false)
+    setGenError('')
+    setGenRunning(false)
+    setGenClaimLink(null)
   }
 
   async function toggleActive(businessId: string, currentStatus: boolean) {
@@ -321,6 +343,7 @@ export default function AdminBusinessPage() {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Industry</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Location</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Status</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Claim</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Created</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
                 </tr>
@@ -332,6 +355,9 @@ export default function AdminBusinessPage() {
                   const email = business.email || 'N/A'
                   const industry = business.industry || business.sector || 'N/A'
                   const location = business.location || business.city || business.address || 'N/A'
+                  const claimStatus = business.claim_status || (business.is_ai_generated ? 'pending' : null)
+                  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://creerlio.com'
+                  const claimLink = business.claim_token ? `${siteUrl}/business/claim/${business.claim_token}` : null
                   
                   return (
                   <tr 
@@ -354,6 +380,32 @@ export default function AdminBusinessPage() {
                         {business.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
+                    <td className="px-6 py-4">
+                      {claimStatus ? (
+                        <div className="flex flex-col gap-1">
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold w-fit ${
+                            claimStatus === 'claimed'
+                              ? 'bg-green-500/20 text-green-400 border border-green-500/50'
+                              : claimStatus === 'removed'
+                              ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                              : 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+                          }`}>
+                            {claimStatus === 'claimed' ? 'Claimed' : claimStatus === 'removed' ? 'Removed' : 'Unclaimed'}
+                          </span>
+                          {claimLink && claimStatus === 'pending' && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(claimLink) }}
+                              className="text-xs text-amber-400 hover:text-amber-300 underline text-left"
+                            >
+                              Copy link
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-600 text-xs">—</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-gray-400 text-sm">
                       {business.created_at
                         ? new Date(business.created_at).toLocaleDateString()
@@ -369,6 +421,15 @@ export default function AdminBusinessPage() {
                           className="px-3 py-1 rounded text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/50 hover:bg-blue-500/30 transition-colors"
                         >
                           View
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openRegenerator(business)
+                          }}
+                          className="px-3 py-1 rounded text-xs font-semibold bg-purple-500/20 text-purple-400 border border-purple-500/50 hover:bg-purple-500/30 transition-colors"
+                        >
+                          Regenerate
                         </button>
                         <button
                           onClick={(e) => {
@@ -502,7 +563,7 @@ export default function AdminBusinessPage() {
                       </div>
                     </div>
                     <div className="bg-slate-800/50 rounded-lg px-4 py-3 text-sm text-gray-400">
-                      Generates <strong className="text-gray-200">10 DALL-E images</strong>, <strong className="text-gray-200">TTS intro video</strong>, <strong className="text-gray-200">4 jobs</strong>, <strong className="text-gray-200">5 services</strong>. Takes ~3–5 minutes. Specify a location to profile a local branch.
+                      Generates <strong className="text-gray-200">10 DALL-E images</strong>, <strong className="text-gray-200">4 jobs</strong>, <strong className="text-gray-200">5 services</strong>. If a YouTube URL is detected, it is used as the intro video (skipping TTS). Takes ~3–5 minutes. Specify a location to profile a local branch.
                     </div>
                   </>
                 ) : (
@@ -569,10 +630,26 @@ export default function AdminBusinessPage() {
                 <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center text-3xl">✅</div>
                 <div>
                   <h3 className="text-lg font-bold text-white">Profile Created Successfully!</h3>
-                  <p className="text-gray-400 text-sm mt-1">The business profile has been added to the platform and is now visible in the list below.</p>
+                  <p className="text-gray-400 text-sm mt-1">The profile is <strong className="text-amber-400">private</strong> — share the claim link with the business to let them take ownership.</p>
                 </div>
+                {genClaimLink && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-4 text-left w-full max-w-lg">
+                    <p className="text-xs text-amber-400 font-semibold mb-2 uppercase tracking-wide">Claim Link (share with business)</p>
+                    <div className="flex items-center gap-2">
+                      <code className="text-sm text-amber-200 break-all flex-1 font-mono">{genClaimLink}</code>
+                      <button
+                        type="button"
+                        onClick={() => navigator.clipboard.writeText(genClaimLink)}
+                        className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 text-xs rounded-lg border border-amber-500/30 transition-colors whitespace-nowrap"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">Link expires in 30 days.</p>
+                  </div>
+                )}
                 <div className="bg-slate-800 rounded-lg px-6 py-3 text-left w-full max-w-sm">
-                  <p className="text-xs text-gray-500 mb-1">Login credentials saved to profile</p>
+                  <p className="text-xs text-gray-500 mb-1">Admin credentials (for testing)</p>
                   {genLogs.filter(l => l.text.includes('Login Email') || l.text.includes('Password')).map((l, i) => (
                     <p key={i} className="text-sm font-mono text-gray-200">{l.text.trim()}</p>
                   ))}

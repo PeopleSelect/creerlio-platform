@@ -427,20 +427,20 @@ async function enrichServiceSections(
     ].filter(Boolean),
   }))
 
-  const enrichPrompt = `You are filling in missing sub-sections for ${companyName} (${industry}) service cards.
+  const enrichPrompt = `You are the ZGE enrichment pass for ${companyName} (${industry}) service cards.
 
-For each service below, provide ONLY the missing fields listed.
+Extract ONLY from the service name and short_description provided — do NOT guess or infer from general industry knowledge.
 
 Services to enrich:
 ${JSON.stringify(weakList, null, 2)}
 
 Rules:
-- teams: minimum 2 internal team names that deliver this service (e.g. "Engineering", "Delivery", "Consulting")
-- roles: minimum 2 specific job titles needed for this service
-- skills: minimum 3 specific technical/professional skills for this service
-- growth_areas: minimum 2 emerging trends or growth opportunities relevant to this service
-- Infer from the service name, description, and industry — do NOT leave anything empty
-- Return ONLY valid JSON array matching this structure:
+- teams: extract any internal team names mentioned or strongly implied by the service description; if none → []
+- roles: extract any job titles mentioned in the description; if none → []
+- skills: extract any specific technical skills, tools, or qualifications mentioned; if none → []
+- growth_areas: extract any growth areas, emerging trends, or future directions mentioned; if none → []
+- DO NOT fabricate content not present in the service name or description
+- Return ONLY valid JSON array:
 [{ "index": 0, "teams": [], "roles": [], "skills": [], "growth_areas": [] }]`
 
   try {
@@ -539,6 +539,127 @@ function extractSocialLinks(html: string): Record<string, string> {
 function resolveUrl(href: string, origin: string): string | null {
   if (!href || href.length < 4) return null
   try { return href.startsWith('http') ? href : new URL(href, origin).href } catch (_) { return null }
+}
+
+/** Decode common HTML entities in a scraped string */
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
+    .trim()
+}
+
+/** Clean "not_found" sentinels returned by ZGE before writing to DB */
+function nf<T>(val: T, fallback: T): T {
+  if (val === null || val === undefined) return fallback
+  if (typeof val === 'string' && (val.trim() === '' || val.trim().toLowerCase() === 'not_found')) return fallback
+  if (typeof val === 'number' && val === 0) return fallback
+  return val
+}
+function nfStr(val: any): string { return nf(val, '') }
+function nfNum(val: any): number | null { return nf(val, null as any) }
+function nfArr(val: any): any[] { return Array.isArray(val) ? val.filter((v: any) => v !== 'not_found' && v !== null) : [] }
+
+/**
+ * Scrape LinkedIn company page — extract description, employee count, industry.
+ * LinkedIn is JS-rendered so we parse whatever meta tags we can get.
+ */
+async function scrapeLinkedInData(linkedinUrl: string, log: (m: string) => void): Promise<{
+  description: string; employees: string; industry: string
+}> {
+  const result = { description: '', employees: '', industry: '' }
+  if (!linkedinUrl) return result
+  try {
+    log(`  Scraping LinkedIn: ${linkedinUrl}`)
+    const html = await fetchWebsiteText(linkedinUrl, 100000)
+    if (!html || html.length < 200) { log('  ⚠ LinkedIn: empty/blocked response'); return result }
+
+    // og:description — LinkedIn puts company summary here
+    const ogDesc = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1]
+               ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)?.[1]
+    if (ogDesc) result.description = decodeEntities(ogDesc)
+
+    // Employee count
+    const empM = html.match(/([\d,+]+)\s*(?:employees?|members?)\b/i)
+    if (empM) result.employees = empM[0].trim()
+
+    // Industry — appears in multiple places in LinkedIn HTML
+    const indM = html.match(/"industry"\s*:\s*"([^"]+)"/i)
+              ?? html.match(/industry[^\n]{0,40}?[">]([A-Za-z &/]+)[<"]/i)
+    if (indM) result.industry = indM[1].trim()
+
+    if (result.description) log(`  ✓ LinkedIn description extracted (${result.description.length} chars)`)
+    if (result.employees)   log(`  ✓ LinkedIn employees: ${result.employees}`)
+    if (result.industry)    log(`  ✓ LinkedIn industry: ${result.industry}`)
+  } catch (e: any) {
+    log(`  ⚠ LinkedIn scraping error: ${e.message}`)
+  }
+  return result
+}
+
+/**
+ * Scrape YouTube channel page — extract channel description and find a representative video.
+ */
+async function scrapeYouTubeData(youtubeUrl: string, log: (m: string) => void): Promise<{
+  description: string; channelName: string; featuredVideoUrl: string
+}> {
+  const result = { description: '', channelName: '', featuredVideoUrl: '' }
+  if (!youtubeUrl) return result
+  try {
+    log(`  Scraping YouTube channel: ${youtubeUrl}`)
+    const html = await fetchWebsiteText(youtubeUrl, 150000)
+    if (!html || html.length < 200) { log('  ⚠ YouTube: empty response'); return result }
+
+    // og:title → channel name
+    const titleM = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
+    if (titleM) result.channelName = decodeEntities(titleM).replace(/\s*[-|]\s*YouTube\s*$/i, '').trim()
+
+    // og:description → channel description
+    const descM = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1]
+               ?? html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)?.[1]
+    if (descM) result.description = decodeEntities(descM)
+
+    // First video ID found in the page
+    const vidM = html.match(/["']\/watch\?v=([a-zA-Z0-9_-]{11})["']/)?.[1]
+              ?? html.match(/watch%3Fv%3D([a-zA-Z0-9_-]{11})/)?.[1]
+    if (vidM) result.featuredVideoUrl = `https://www.youtube.com/watch?v=${vidM}`
+
+    if (result.channelName)    log(`  ✓ YouTube channel: ${result.channelName}`)
+    if (result.featuredVideoUrl) log(`  ✓ YouTube video found: ${result.featuredVideoUrl}`)
+    if (result.description)    log(`  ✓ YouTube description extracted`)
+  } catch (e: any) {
+    log(`  ⚠ YouTube scraping error: ${e.message}`)
+  }
+  return result
+}
+
+/**
+ * Scrape Instagram profile — extract bio and follower count from og tags.
+ */
+async function scrapeInstagramData(instagramUrl: string, log: (m: string) => void): Promise<{
+  bio: string; followers: string
+}> {
+  const result = { bio: '', followers: '' }
+  if (!instagramUrl) return result
+  try {
+    log(`  Scraping Instagram: ${instagramUrl}`)
+    const html = await fetchWebsiteText(instagramUrl, 60000)
+    if (!html || html.length < 200) { log('  ⚠ Instagram: empty/blocked response'); return result }
+
+    const descM = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1]
+               ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)?.[1]
+    if (descM) {
+      result.bio = decodeEntities(descM)
+      const follM = descM.match(/([\d,.]+[kKmMbB]?)\s*Followers?/i)
+      if (follM) result.followers = follM[1]
+    }
+
+    if (result.bio) log(`  ✓ Instagram bio found (${result.bio.length} chars)`)
+  } catch (e: any) {
+    log(`  ⚠ Instagram scraping error: ${e.message}`)
+  }
+  return result
 }
 
 /**
@@ -695,152 +816,125 @@ async function researchCompany(
   targetLocation: string,
   log: (msg: string) => void,
   scrapedJobTitles?: string[],
-  discoveredYouTube?: string
+  discoveredYouTube?: string,
+  linkedinContent?: { description: string; employees: string; industry: string },
+  youtubeContent?: { description: string; channelName: string; featuredVideoUrl: string },
+  instagramContent?: { bio: string; followers: string }
 ): Promise<any> {
   log(`  Got ${websiteContent.length} chars from website (multi-page scan)`)
 
   const branchInstructions = targetLocation ? `
-═══ BRANCH RESOLUTION (MANDATORY) ═══
-
-A specific location has been requested: "${targetLocation}"
-
-You MUST profile the LOCAL BRANCH at this location, NOT the corporate head office.
-
-PRIORITY ORDER for website selection:
-1. Branch-specific website (e.g. lanecove.ljhooker.com.au) — highest priority
-2. Location-specific page on main domain (e.g. /offices/lane-cove)
-3. General company homepage — fallback only
-
-YOU MUST:
-• Identify the exact branch/office serving ${targetLocation}
-• Extract LOCAL details: branch address, local phone number, local team members
-• Name the business as: "{Brand Name} — {Suburb}" (e.g. "LJ Hooker — Lane Cove")
-• Use business.name in that exact format
-• Set hq_city and hq_address to the LOCAL branch address, not head office
-• Set jobs city/state to match the target suburb/state
-• Extract local services if they differ from national offerings
-• If branch-specific data is not available on the website, use your training knowledge to provide accurate local branch details — label inferred address/phone as "location-specific (estimated)"
-
-DO NOT:
-• Default to corporate HQ address or national phone numbers
-• Use generic brand-wide content without localising to ${targetLocation}
-• Merge multiple branches — profile only the ${targetLocation} branch
+═══ BRANCH / LOCAL OFFICE RESOLUTION ═══
+Target location requested: "${targetLocation}"
+• Profile the LOCAL BRANCH at ${targetLocation} specifically — NOT corporate head office
+• Business name format: "{Brand} — {Suburb}" (e.g. "LJ Hooker — Lane Cove")
+• hq_city / hq_address: use the local branch address from the scraped content
+• jobs city/state: set to ${targetLocation} area
+• Extract local services if the website shows location-specific offerings
+• If the local address is not in the scraped content → use "not_found"
 ` : ''
 
-  const systemPrompt = `You are CADE — the Creerlio Autonomous Data Engine. You build complete, verified, production-ready business profiles for the Creerlio talent platform.
+  const systemPrompt = `You are the ZGE — Creerlio Zero-Guess Extraction Engine.
+You are a DETERMINISTIC DATA EXTRACTION SYSTEM. You are NOT a content generator.
 ${branchInstructions}
 ════════════════════════════════════════════════════════════
-🚫 CORE RULES — NON-NEGOTIABLE
+🚫 ABSOLUTE RULES — NON-NEGOTIABLE
 ════════════════════════════════════════════════════════════
-• ZERO empty fields. ZERO empty arrays. ZERO "not listed" or "N/A".
-• ZERO generic placeholders (e.g. "competitive salary", "great culture").
-• If data is not on the website → use your full training knowledge about this company, its industry, real competitors, Australian market rates, and sector norms.
-• Partial output = FAILURE. Weak data = FAILURE.
-
-════════════════════════════════════════════════════════════
-🧠 INFERENCE ENGINE (MANDATORY FOR ALL ARRAYS)
-════════════════════════════════════════════════════════════
-If a field (roles, skills, growth_areas, etc.) is not explicitly stated in the website content, you MUST infer it from:
-1. The service description and what delivering it requires
-2. Job descriptions present in the scraped content
-3. Industry standards for this type of company in Australia
-4. The company's known clients, products, or positioning
-
-EXAMPLE — If service = "Residential Property Management":
-→ roles MUST include: Property Manager, Leasing Consultant, Property Administrator, BDM
-→ skills MUST include: REIQ/relevant licence, PropertyMe/Palace, tenancy legislation, landlord negotiation, arrears management
-→ growth_areas MUST include: short-stay/Airbnb management, build-to-rent sector, digital inspection tooling
-
-EMPTY ARRAYS ARE A CRITICAL FAILURE. Always populate with minimum values stated.
+• ONLY extract data that exists verbatim or near-verbatim in the provided source materials
+• DO NOT guess, infer, paraphrase, hallucinate, or fill gaps with assumptions
+• DO NOT use your training knowledge to generate content not found in the sources
+• If a field's value CANNOT be found in the provided sources → use the exact string "not_found"
+• Preserve EXACT original text — do not rephrase, rewrite, improve, or embellish
+• Preserve EXACT service names, role titles, and team names as they appear in the sources
+• For array fields with no extractable data → return []
+• For numeric fields with no data → return null
 
 ════════════════════════════════════════════════════════════
-🔁 SELF-CHECK BEFORE OUTPUT (MANDATORY)
+📄 SOURCE MATERIALS PROVIDED (in priority order)
 ════════════════════════════════════════════════════════════
-Before returning JSON, you MUST internally verify:
-✅ All arrays have required minimum entries (roles ≥ 2, skills ≥ 3, growth_areas ≥ 2)
-✅ No field contains only "" or []
-✅ Company name is consistent throughout
-✅ All counts: jobs=4, services=5, impact_stats=5, culture_values=5, benefits=5, hiring_interests=6, skills=6
-✅ Grammar, spelling, professional tone throughout
-If any check fails → fix it before outputting.
+1. Official website scraped content (multiple pages — provided in user message)
+2. LinkedIn company page data (provided in user message if available)
+3. YouTube channel data (provided in user message if available)
+4. Instagram profile data (provided in user message if available)
+5. Real job listings from ATS/SEEK (provided in user message if available)
 
 ════════════════════════════════════════════════════════════
-📋 FIELD-BY-FIELD REQUIREMENTS
+📋 FIELD-BY-FIELD EXTRACTION RULES
 ════════════════════════════════════════════════════════════
 
-ABOUT (profile.about):
-• Exactly 5 paragraphs, each 4–6 sentences
-• Para 1: Founding story, history, mission roots — specific years, founders, original vision
-• Para 2: Core services and what makes them genuinely different from competitors
-• Para 3: Scale, reach, market position, notable clients/projects
-• Para 4: Workplace culture, team ethos, how people describe working there
-• Para 5: Growth trajectory, future direction, why this is an exciting time to join
+COMPANY NAME: Extract verbatim from website title, <h1>, or og:title. Do NOT abbreviate or invent.
 
-TAGLINE: Memorable, company-specific — not generic. Max 10 words.
+TAGLINE: Only include if it appears verbatim on the website homepage as a standalone slogan. If not found → "not_found".
 
-IMPACT STATS (exactly 5):
-• Real or well-estimated figures: years operating, team size, clients served, offices, projects
-• Format: "500+", "20 years", "$2B+", "98%" — concrete numbers only
+ABOUT (profile.about): Use the actual company description/about text from the scraped content.
+• Lightly structure into paragraphs if needed but DO NOT add invented content
+• If the about section is short → reproduce it fully without padding
+• If no about section found → "not_found"
 
-CULTURE VALUES (exactly 5):
-• Title: 1–2 words (real values or well-inferred)
-• Description: 3–4 sentences — how this value manifests in real day-to-day work
+INDUSTRY: Extract from LinkedIn industry field or website footer/about. If not stated → "not_found".
 
-SERVICES (exactly 5):
-• Each service: specific to what this company actually offers
-• short_description: 3–4 sentences on HOW the service works and what clients receive
-• who_it_is_for: specific persona (e.g. "Landlords in the Lane Cove area with 1–3 investment properties")
-• problem_it_solves: real pain point, written with empathy
-• teams: MINIMUM 2 internal teams involved in delivering this service (e.g. "Engineering", "Product", "Sales", "Customer Success"). Infer from industry. NEVER empty.
-• roles: MINIMUM 2 specific job titles. Infer from industry if not stated. NEVER empty.
-• skills: MINIMUM 3 specific technical/professional skills. Infer if needed. NEVER empty.
-• growth_areas: MINIMUM 2 emerging areas. Infer from market trends if needed. NEVER empty.
-• impact.who_it_helps: specific client/user type who benefits. NEVER empty.
-• impact.what_it_improves: what measurably improves for them. NEVER empty.
-• impact.real_world_outcomes: 1–2 concrete outcomes (e.g. "40% faster onboarding", "2x retention rate"). NEVER empty.
-• we_are_hiring: set to true if this service requires specialist staff to deliver
-• currently_scaling: set to true if this is a growth area for the company
+LOCATIONS (hq_city, hq_state, hq_country, hq_address):
+• Extract from the contact page or footer EXACTLY as written
+• If not found → "not_found"
 
-JOBS (exactly 4):
-• Titles: realistic for this company and industry
-• description: 5–6 sentences — role, day-to-day, team, impact
-• requirements: specific years of experience, licences, qualifications, tools
-• salary: realistic Australian market rates for this role/seniority
-• city/state: actual office locations where known
-• apply_url: real careers page URL or realistic SEEK/LinkedIn URL. NEVER placeholder text.
+SERVICES: Extract service names and descriptions EXACTLY as they appear on the website.
+• Preserve exact naming — do NOT rename, generalise, or combine services
+• short_description: use the website text directly — do NOT expand or invent
+• who_it_is_for / problem_it_solves: extract from service page text if present, else "not_found"
+• teams / roles / skills / growth_areas: extract ONLY from the scraped text content
+  → If mentioned → extract; if not mentioned anywhere → return []
+• impact fields: extract only if explicitly stated — else "not_found"
 
-BENEFITS (exactly 5):
-• Specific to this company type — NOT "competitive salary" or "great team"
-• description: 2–3 sentences on what this benefit actually looks like in practice
+JOBS: Use ONLY the real job listings provided in the ATS/SEEK section.
+• DO NOT invent additional jobs
+• If no real jobs were provided → return []
 
-PROGRAMS (3–5): Real or highly plausible programs this company type offers. Include URL paths.
+CULTURE VALUES: Extract only if the website has an explicit values/culture section.
+• Preserve exact value names and descriptions from the source
+• If no values section → return []
 
-SOCIAL PROOF (3 quotes): Specific, plausible quotes from realistic clients or employees.
+BENEFITS: Extract only explicitly stated employee benefits.
+• If not stated → return []
 
-DALL-E IMAGE PROMPTS:
-• Vivid, cinematic, industry-specific — 2–3 sentences each
-• Reference actual industry aesthetic, city setting, office type, client type
-• NO generic stock photo descriptions
-• logo: brand identity style (colours, typography feel, mark style)
-• hero: dramatic establishing shot for their industry and location
-• office: specific interior (open plan CBD, boutique suburban, etc.)
-• community: specific initiative this company type would run
+SOCIAL PROOF: Extract ONLY verbatim quotes present in the source text.
+• If no quotes found → return []
 
-HIRING INTERESTS: exactly 6 specific role types this company hires for
-SKILLS: exactly 6 specific technical/professional skills valued here
-SPECIALISATIONS: exactly 5 specific practice areas
+PROGRAMS: Extract only explicitly named programs/initiatives.
+• If not found → return []
 
-CREDENTIALS:
-• email: demo.[slug]@creerlio.com
-• password: Demo[CompanyNameNoSpaces]2025!
+IMPACT STATS: Extract only real numbers stated on the website (years founded, team size, client count, offices, awards).
+• Format as stated on the website — do not estimate
+• If not stated → return []
+
+MISSION / VALUE PROP: Extract from website "mission", "vision", "what we do", or "why us" sections.
+• Preserve original language — do NOT paraphrase
+• If not found → "not_found"
+
+HIRING INTERESTS: Extract job categories this company actively hires for, from careers page or job listings.
+• If no data → return []
+
+SKILLS: Extract skills explicitly mentioned in job listings or the website.
+• If no data → return []
+
+SPECIALISATIONS: Extract practice areas or specialisations stated on the website.
+• If no data → return []
+
+DALL-E IMAGE PROMPTS: Generate vivid, accurate image prompts for each key.
+• Base them on the company's real industry, actual location, and aesthetic described in sources
+• These are visual prompts only — you may compose them creatively based on extracted facts
+• logo: brand identity style (infer from industry + location if company colours not stated)
+• hero, office, team, culture, awards, work, community: cinematic, industry-specific scenes
+
+CREDENTIALS: Always generate → email: demo.[slug]@creerlio.com, password: Demo[CompanyName]2025!
 
 ════════════════════════════════════════════════════════════
-🥇 SOURCE PRIORITY (for resolving conflicts)
+✅ SELF-CHECK BEFORE OUTPUT
 ════════════════════════════════════════════════════════════
-1. Official website (specific page > homepage)
-2. LinkedIn company page
-3. YouTube channel
-4. Trusted business directories (ASIC, Google Business, Seek company profiles)
+• Every non-array text field either has extracted content OR "not_found" — never ""
+• Job array contains ONLY real scraped jobs (or [])
+• Service names match the website exactly
+• No invented quotes, stats, or programs
+• JSON is valid — no trailing commas, no comments
 
 ════════════════════════════════════════════════════════════
 RETURN ONLY valid JSON. No markdown, no explanation, no code fences.
@@ -854,22 +948,37 @@ RETURN ONLY valid JSON. No markdown, no explanation, no code fences.
 
   const locationLine = targetLocation ? `Target Location (LOCAL BRANCH): ${targetLocation}\n` : ''
 
-  const jobTitlesSection = scrapedJobTitles && scrapedJobTitles.length > 0
-    ? `\nReal job titles scraped from ATS/SEEK (use these to accurately represent the company's actual hiring — reflect them in services, roles, and jobs):\n${scrapedJobTitles.slice(0, 40).map(t => `• ${t}`).join('\n')}\n`
+  // Real jobs block — clearly labelled so GPT uses them verbatim
+  const realJobsSection = scrapedJobTitles && scrapedJobTitles.length > 0
+    ? `\n━━━ REAL JOB LISTINGS FROM ATS/SEEK (${scrapedJobTitles.length} jobs) ━━━\nExtract ONLY these job titles into the jobs array — do NOT invent additional roles:\n${scrapedJobTitles.slice(0, 50).map(t => `• ${t}`).join('\n')}\n`
+    : '\n━━━ JOBS: No real job listings were found — return jobs: [] ━━━\n'
+
+  // LinkedIn content block
+  const linkedinBlock = linkedinContent?.description
+    ? `\n━━━ LINKEDIN COMPANY DATA ━━━\nDescription: ${linkedinContent.description}\nEmployees: ${linkedinContent.employees || 'not found'}\nIndustry: ${linkedinContent.industry || 'not found'}\n`
+    : ''
+
+  // YouTube content block
+  const youtubeBlock = youtubeContent?.channelName
+    ? `\n━━━ YOUTUBE CHANNEL DATA ━━━\nChannel: ${youtubeContent.channelName}\nDescription: ${youtubeContent.description || 'not found'}\nFeatured video: ${youtubeContent.featuredVideoUrl || 'not found'}\n`
+    : ''
+
+  // Instagram content block
+  const instagramBlock = instagramContent?.bio
+    ? `\n━━━ INSTAGRAM PROFILE DATA ━━━\nBio: ${instagramContent.bio}\nFollowers: ${instagramContent.followers || 'not found'}\n`
     : ''
 
   const userPrompt = `Company Website: ${websiteUrl}
-${locationLine}LinkedIn: ${detectedLinkedin}
-YouTube: ${detectedYoutube}
-Facebook: ${detectedFacebook}
-Instagram: ${detectedInstagram}
-Twitter/X: ${detectedTwitter}
-${jobTitlesSection}
-Website Content (scraped from homepage + services/about/team/contact pages):
-${websiteContent.slice(0, 32000)}
-
-${websiteContent.length < 2000 ? '⚠ IMPORTANT: Website returned minimal content — it is almost certainly JavaScript-rendered. You MUST use your training knowledge about this company and its industry to produce a rich, accurate, comprehensive profile. Do not produce generic content.' : ''}
-${targetLocation ? `⚠ BRANCH REMINDER: Profile the LOCAL branch in "${targetLocation}" specifically. Business name must follow format: "{Brand} — {Suburb}". Use local address and phone, not head office defaults.` : ''}
+${locationLine}LinkedIn URL: ${detectedLinkedin}
+YouTube URL: ${detectedYoutube}
+Facebook URL: ${detectedFacebook}
+Instagram URL: ${detectedInstagram}
+Twitter/X URL: ${detectedTwitter}
+${linkedinBlock}${youtubeBlock}${instagramBlock}${realJobsSection}
+━━━ WEBSITE CONTENT (scraped: homepage, about, services, team, contact, careers) ━━━
+${websiteContent.slice(0, 28000)}
+${websiteContent.length < 1500 ? '\n⚠ NOTE: Website returned very little content — likely JavaScript-rendered. Extract only what is present; mark all unavailable fields as "not_found".' : ''}
+${targetLocation ? `\n⚠ BRANCH: Extract data for the ${targetLocation} branch specifically. Name = "{Brand} — {Suburb}".` : ''}
 
 Generate the complete Creerlio Business Profile JSON:
 
@@ -1056,46 +1165,51 @@ async function generateSingleProfile(opts: {
       scrapedJobs = await scrapeJobsFromATS(careersUrl, log)
     }
 
-    // DIE: also search SEEK for additional real jobs (run in parallel with ATS if ATS returned few)
+    // ZGE: SEEK search for more real jobs if ATS returned few
     if (scrapedJobs.length < 5) {
-      log('  Searching SEEK for additional job listings...')
-      // Extract a rough company name from the URL for SEEK search
+      log('  Searching SEEK for additional real job listings...')
       const domainName = origin.replace(/^https?:\/\/(?:www\.)?/, '').split('.')[0]
       const seekJobs = await seekJobSearch(domainName, log)
       if (seekJobs.length > 0) {
-        // Merge: add SEEK jobs that don't duplicate ATS titles
         const existingTitles = new Set(scrapedJobs.map(j => j.title.toLowerCase()))
         const newJobs = seekJobs.filter(j => !existingTitles.has(j.title.toLowerCase()))
         scrapedJobs = [...scrapedJobs, ...newJobs]
         log(`  ✓ Total after SEEK merge: ${scrapedJobs.length} jobs`)
       }
     }
-
     if (scrapedJobs.length > 0) {
-      log(`  ✓ ${scrapedJobs.length} real jobs will be imported`)
+      log(`  ✓ ${scrapedJobs.length} real jobs found — will be used verbatim`)
     } else {
-      log('  No real jobs found — AI will generate representative listings')
+      log('  No real jobs found — jobs array will be empty in profile')
     }
 
-    // DIE: auto-discover YouTube channel if not provided
-    let effectiveYoutube = youtubeUrl
-    if (!effectiveYoutube && !detectedSocial.youtube) {
-      log('  No YouTube URL provided — attempting auto-discovery...')
-      // Use domain name as search term; we'll refine after GPT gives us the company name
+    // ZGE: resolve effective YouTube URL
+    let effectiveYoutube = detectedSocial.youtube || youtubeUrl || ''
+    if (!effectiveYoutube) {
       const domainName = origin.replace(/^https?:\/\/(?:www\.)?/, '').split('.')[0]
       const discovered = await findYouTubeChannel(domainName, log)
       if (discovered) effectiveYoutube = discovered
-    } else if (detectedSocial.youtube) {
-      log(`  ✓ YouTube detected from website: ${detectedSocial.youtube}`)
     }
 
-    // Collect real job titles to pass as context to GPT
+    // ZGE: scrape LinkedIn, YouTube, Instagram for verified source content
+    log('\n[1b/12] Scraping social profiles for verified data...')
+    const effectiveLinkedinUrl = detectedSocial.linkedin || linkedinUrl || ''
+    const effectiveInstagramUrl = detectedSocial.instagram || ''
+
+    const [linkedinContent, youtubeContent, instagramContent] = await Promise.all([
+      effectiveLinkedinUrl ? scrapeLinkedInData(effectiveLinkedinUrl, log) : Promise.resolve({ description: '', employees: '', industry: '' }),
+      effectiveYoutube     ? scrapeYouTubeData(effectiveYoutube, log)     : Promise.resolve({ description: '', channelName: '', featuredVideoUrl: '' }),
+      effectiveInstagramUrl ? scrapeInstagramData(effectiveInstagramUrl, log) : Promise.resolve({ bio: '', followers: '' }),
+    ])
+
+    // Collect real job titles for GPT context
     const scrapedJobTitles = scrapedJobs.map(j => j.title).filter(Boolean)
 
     const data = await researchCompany(
       openai, websiteUrl, linkedinUrl, effectiveYoutube,
       detectedSocial, websiteHtml, targetLocation, log,
-      scrapedJobTitles, effectiveYoutube || undefined
+      scrapedJobTitles, effectiveYoutube || undefined,
+      linkedinContent, youtubeContent, instagramContent
     )
 
     const companyName = data.business?.name || 'Company'
@@ -1386,25 +1500,23 @@ async function generateSingleProfile(opts: {
     ]
 
     const profileMetadata = {
-      // Core identity — drives the view page header
       name: companyName,
-      title: data.profile?.tagline || '',
-      bio: data.profile?.about || '',
-      // Media — drives logo and banner display (must be storage path, not full URL)
+      title: nfStr(data.profile?.tagline),
+      bio: nfStr(data.profile?.about),
       avatar_path: imageResults.logo?.storagePath || null,
       banner_path: imageResults.hero?.storagePath || null,
-      // Bank item references
       logoId: logoItem?.id || null, heroImageId: heroItem?.id || null,
       introVideoId: videoItem?.id || null, introVideoUrl: videoPublicUrl,
       attachmentIds,
-      // Social links as [{platform,url}] array (expected by view page)
       socialLinks: socialLinksArray,
-      // Profile fields
-      tagline: data.profile?.tagline || '',
-      businessType: data.profile?.business_type || '', industry: data.profile?.industry || '',
-      specialisations: data.specialisations || [], founded: data.profile?.founded_year || null,
-      size: data.profile?.company_size || '', website: websiteUrl,
-      skills: data.skills || [],
+      tagline: nfStr(data.profile?.tagline),
+      businessType: nfStr(data.profile?.business_type),
+      industry: nfStr(data.profile?.industry),
+      specialisations: nfArr(data.specialisations),
+      founded: nfNum(data.profile?.founded_year),
+      size: nfStr(data.profile?.company_size),
+      website: websiteUrl,
+      skills: nfArr(data.skills),
     }
 
     const { data: metaItem, error: metaErr } = await supabase.from('business_bank_items').insert({
@@ -1417,22 +1529,26 @@ async function generateSingleProfile(opts: {
     // ── Step 7: businesses ───────────────────────────────────────────────
     log('\n[7/12] Creating business records...')
     const { error: bizErr } = await supabase.from('businesses').upsert({
-      id: userId, name: companyName, industry: data.profile?.industry || '',
+      id: userId, name: companyName, industry: nfStr(data.profile?.industry),
     }, { onConflict: 'id' })
     if (bizErr) err('  businesses: ' + bizErr.message)
     else log('  ✓ businesses')
 
+    const hqCity    = nfStr(data.profile?.hq_city)
+    const hqState   = nfStr(data.profile?.hq_state)
+    const hqCountry = nfStr(data.profile?.hq_country) || 'Australia'
+    const locationStr = [hqCity, hqState, hqCountry].filter(Boolean).join(', ')
+
     const { error: bpErr } = await supabase.from('business_profiles').upsert({
       id: userId, user_id: userId, business_id: userId,
       name: companyName, business_name: companyName,
-      description: (data.profile?.about || '').slice(0, 500),
-      slug, industry: data.profile?.industry || '',
-      size: data.profile?.company_size || '',
-      location: `${data.profile?.hq_city || ''}, ${data.profile?.hq_state || ''}, ${data.profile?.hq_country || 'Australia'}`.replace(/^,\s*,\s*/, '').trim(),
-      city: data.profile?.hq_city || '', state: data.profile?.hq_state || '',
-      country: data.profile?.hq_country || 'Australia',
-      latitude: data.profile?.latitude || null, longitude: data.profile?.longitude || null,
-      website: websiteUrl, email: data.business?.email || '',
+      description: nfStr(data.profile?.about).slice(0, 500),
+      slug, industry: nfStr(data.profile?.industry),
+      size: nfStr(data.profile?.company_size),
+      location: locationStr,
+      city: hqCity, state: hqState, country: hqCountry,
+      latitude: nfNum(data.profile?.latitude), longitude: nfNum(data.profile?.longitude),
+      website: websiteUrl, email: nfStr(data.business?.email),
       is_active: true, talent_community_enabled: true,
       visibility: 'private', claim_token: generateClaimToken(),
       claim_token_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -1459,22 +1575,27 @@ async function generateSingleProfile(opts: {
     const { error: bppErr } = await supabase.from('business_profile_pages').upsert({
       business_id: userId, slug, is_published: false, name: companyName,
       logo_url: logoUrl, hero_image_url: heroUrl,
-      tagline: data.profile?.tagline || '', mission: data.content?.mission || '',
-      value_prop_headline: data.content?.value_prop_headline || '',
-      value_prop_body: data.content?.value_prop_body || '',
-      impact_stats: data.impact_stats || [], culture_values: data.culture_values || [],
-      business_areas: data.business_areas || [], benefits: data.benefits || [],
-      programs: data.programs || [], social_proof: data.social_proof || [],
-      live_roles_count: (data.jobs || []).length, talent_community_enabled: true,
-      portfolio_intake_enabled: true, hiring_interests: data.hiring_interests || [],
-      industries_served: data.industries_served || [],
-      contact_email: data.business?.email || '', website_url: websiteUrl,
+      tagline: nfStr(data.profile?.tagline),
+      mission: nfStr(data.content?.mission),
+      value_prop_headline: nfStr(data.content?.value_prop_headline),
+      value_prop_body: nfStr(data.content?.value_prop_body),
+      impact_stats: nfArr(data.impact_stats),
+      culture_values: nfArr(data.culture_values),
+      business_areas: nfArr(data.business_areas),
+      benefits: nfArr(data.benefits),
+      programs: nfArr(data.programs),
+      social_proof: nfArr(data.social_proof),
+      live_roles_count: scrapedJobs.length, talent_community_enabled: true,
+      portfolio_intake_enabled: true,
+      hiring_interests: nfArr(data.hiring_interests),
+      industries_served: nfArr(data.industries_served),
+      contact_email: nfStr(data.business?.email), website_url: websiteUrl,
       linkedin_url: mergedLinkedin, youtube_url: mergedYoutube,
       facebook_url: mergedFacebook, instagram_url: mergedInstagram, twitter_url: mergedTwitter,
       enquiry_enabled: true,
       media_assets: { intro_video_url: videoPublicUrl, logo_url: logoUrl, hero_image_url: heroUrl },
-      badges: data.badges || [],
-      acknowledgement_of_country: data.content?.acknowledgement_of_country || '',
+      badges: nfArr(data.badges),
+      acknowledgement_of_country: nfStr(data.content?.acknowledgement_of_country),
     }, { onConflict: 'business_id' })
     if (bppErr) err('  business_profile_pages: ' + bppErr.message)
     else log('  ✓ business_profile_pages')
@@ -1489,11 +1610,10 @@ async function generateSingleProfile(opts: {
     } else {
       const { data: newLoc, error: locErr } = await supabase.from('locations').insert({
         owner_type: 'business', owner_id: userId, business_id: userId,
-        name: `${companyName} — ${data.profile?.hq_city || 'HQ'}`,
-        address: data.profile?.hq_address || '',
-        city: data.profile?.hq_city || '', state: data.profile?.hq_state || '',
-        country: data.profile?.hq_country || 'Australia',
-        lat: data.profile?.latitude || null, lng: data.profile?.longitude || null,
+        name: `${companyName} — ${hqCity || 'HQ'}`,
+        address: nfStr(data.profile?.hq_address),
+        city: hqCity, state: hqState, country: hqCountry,
+        lat: nfNum(data.profile?.latitude), lng: nfNum(data.profile?.longitude),
       }).select('id').single()
       if (locErr) throw new Error('Create location: ' + locErr.message)
       locationId = newLoc.id
@@ -1514,10 +1634,10 @@ async function generateSingleProfile(opts: {
     if (delJobsErr) err('  ⚠ Could not clear old jobs: ' + delJobsErr.message)
     else log('  ✓ Cleared previous jobs')
 
-    // Use real ATS jobs when available; fall back to GPT-generated
-    const jobs = scrapedJobs.length > 0 ? scrapedJobs : (data.jobs || [])
-    if (scrapedJobs.length > 0) log(`  Using ${jobs.length} real jobs from ATS`)
-    else log(`  Using ${jobs.length} AI-generated jobs`)
+    // ZGE: use only real scraped jobs — no AI-generated fallback
+    const jobs = scrapedJobs.length > 0 ? scrapedJobs : []
+    if (jobs.length > 0) log(`  Using ${jobs.length} real jobs from ATS/SEEK`)
+    else log('  No real jobs found — jobs section will be empty')
     let jobCount = 0
     for (const job of jobs) {
       const { error: jErr } = await supabase.from('jobs').insert({

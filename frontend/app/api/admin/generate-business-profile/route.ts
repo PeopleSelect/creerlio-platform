@@ -420,9 +420,15 @@ SERVICES (exactly 5):
 • short_description: 3–4 sentences on HOW the service works and what clients receive
 • who_it_is_for: specific persona (e.g. "Landlords in the Lane Cove area with 1–3 investment properties")
 • problem_it_solves: real pain point, written with empathy
+• teams: MINIMUM 2 internal teams involved in delivering this service (e.g. "Engineering", "Product", "Sales", "Customer Success"). Infer from industry. NEVER empty.
 • roles: MINIMUM 2 specific job titles. Infer from industry if not stated. NEVER empty.
 • skills: MINIMUM 3 specific technical/professional skills. Infer if needed. NEVER empty.
 • growth_areas: MINIMUM 2 emerging areas. Infer from market trends if needed. NEVER empty.
+• impact.who_it_helps: specific client/user type who benefits. NEVER empty.
+• impact.what_it_improves: what measurably improves for them. NEVER empty.
+• impact.real_world_outcomes: 1–2 concrete outcomes (e.g. "40% faster onboarding", "2x retention rate"). NEVER empty.
+• we_are_hiring: set to true if this service requires specialist staff to deliver
+• currently_scaling: set to true if this is a growth area for the company
 
 JOBS (exactly 4):
 • Titles: realistic for this company and industry
@@ -507,7 +513,7 @@ Generate the complete Creerlio Business Profile JSON:
   "specialisations": [],
   "skills": [],
   "badges": [],
-  "services": [{ "name": "", "category": "Service", "short_description": "", "who_it_is_for": "", "problem_it_solves": "", "roles": [], "skills": [], "growth_areas": [], "impact": { "who_it_helps": "", "what_it_improves": "", "real_world_outcomes": "" }, "we_are_hiring": false, "open_to_partnerships": false, "currently_scaling": false }],
+  "services": [{ "name": "", "category": "Service", "short_description": "", "who_it_is_for": "", "problem_it_solves": "", "teams": [], "roles": [], "skills": [], "growth_areas": [], "impact": { "who_it_helps": "", "what_it_improves": "", "real_world_outcomes": "" }, "we_are_hiring": true, "open_to_partnerships": false, "currently_scaling": false }],
   "jobs": [{ "title": "", "description": "", "city": "", "state": "", "country": "Australia", "location": "", "employment_type": "Full-time", "experience_level": "", "salary_min": 0, "salary_max": 0, "salary_currency": "AUD", "required_skills": [], "preferred_skills": [], "requirements": "", "apply_url": "" }],
   "dal_le_images": [
     { "key": "logo",        "filename": "logo.jpg",        "bank_type": "logo",     "title": "", "prompt": "", "size": "1024x1024" },
@@ -1086,6 +1092,12 @@ async function generateSingleProfile(opts: {
         if (error) err(`    ${table}: ${error.message}`)
       }
 
+      if (Array.isArray(svc.teams) && svc.teams.length > 0) {
+        await ins('business_product_teams', svc.teams.map((t: any, idx: number) => ({
+          product_id: productId, business_id: userId, user_id: userId,
+          team_name: typeof t === 'string' ? t : t.name, order_index: idx,
+        })))
+      }
       if (Array.isArray(svc.roles) && svc.roles.length > 0) {
         await ins('business_product_roles', svc.roles.map((r: any, idx: number) => ({
           product_id: productId, business_id: userId, user_id: userId,
@@ -1104,17 +1116,15 @@ async function generateSingleProfile(opts: {
           growth_area: typeof g === 'string' ? g : g.area,
         })))
       }
-      if (svc.impact) {
-        await ins('business_product_impact', [{
-          product_id: productId, business_id: userId, user_id: userId,
-          who_it_helps: svc.impact.who_it_helps || '',
-          what_it_improves: svc.impact.what_it_improves || '',
-          real_world_outcomes: svc.impact.real_world_outcomes || '',
-        }])
-      }
+      await ins('business_product_impact', [{
+        product_id: productId, business_id: userId, user_id: userId,
+        who_it_helps: svc.impact?.who_it_helps || '',
+        what_it_improves: svc.impact?.what_it_improves || '',
+        real_world_outcomes: svc.impact?.real_world_outcomes || '',
+      }])
       await ins('business_product_signals', [{
         product_id: productId, business_id: userId, user_id: userId,
-        we_are_hiring_for_this: svc.we_are_hiring || false,
+        we_are_hiring_for_this: svc.we_are_hiring !== false,
         open_to_partnerships: svc.open_to_partnerships || false,
         in_research_and_development: false,
         currently_scaling: svc.currently_scaling || false,

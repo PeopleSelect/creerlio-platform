@@ -45,6 +45,29 @@ function slugify(str: string) {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)
 }
 
+/** Resolve the ffmpeg binary path — tries system paths before ffmpeg-static (which breaks when bundled) */
+function getFfmpegBin(): string {
+  const systemPaths = [
+    process.env.FFMPEG_PATH,
+    '/usr/bin/ffmpeg',        // Vercel / AWS Lambda Linux
+    '/usr/local/bin/ffmpeg',  // Homebrew / some Linux
+    '/opt/bin/ffmpeg',        // Lambda layers
+  ].filter(Boolean) as string[]
+
+  for (const p of systemPaths) {
+    try { if (fs.existsSync(p)) return p } catch (_) {}
+  }
+
+  // ffmpeg-static works in local dev but path breaks when Next.js bundles the route
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const staticPath: string = require('ffmpeg-static')
+    if (staticPath && fs.existsSync(staticPath)) return staticPath
+  } catch (_) {}
+
+  throw new Error('ffmpeg not found on this system')
+}
+
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
 
 async function downloadFile(url: string, dest: string): Promise<void> {
@@ -768,8 +791,10 @@ async function generateSingleProfile(opts: {
     let audioDur = 60
 
     try {
+      const ffmpegBin = getFfmpegBin()
+      log(`  ffmpeg: ${ffmpegBin}`)
       try {
-        execFileSync(require('ffmpeg-static'), ['-i', audioPath, '-f', 'null', '-'], { stdio: ['pipe','pipe','pipe'] })
+        execFileSync(ffmpegBin, ['-i', audioPath, '-f', 'null', '-'], { stdio: ['pipe','pipe','pipe'] })
       } catch (e: any) {
         const m = ((e.stderr || Buffer.alloc(0)) as Buffer).toString().match(/Duration:\s*(\d+):(\d+):([\d.]+)/)
         if (m) audioDur = parseInt(m[1])*3600 + parseInt(m[2])*60 + parseFloat(m[3])
@@ -788,7 +813,7 @@ async function generateSingleProfile(opts: {
         const videoFilename  = `${slug}-intro-video.mp4`
         const videoLocalPath = path.join(tmpDir, videoFilename)
 
-        execFileSync(require('ffmpeg-static'), [
+        execFileSync(ffmpegBin, [
           '-y', '-f', 'concat', '-safe', '0', '-i', concatFile,
           '-i', audioPath,
           '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p',
@@ -812,6 +837,17 @@ async function generateSingleProfile(opts: {
       }
     } catch (e: any) {
       err('  ✗ Video skipped: ' + e.message)
+      // Still upload the narration audio so the TTS work isn't wasted
+      try {
+        const audioStoragePath = `${userId}/bank/${slug}-narration.mp3`
+        const { error: audioUpErr } = await supabase.storage.from(BUCKET).upload(
+          audioStoragePath, fs.readFileSync(audioPath), { contentType: 'audio/mpeg', upsert: true }
+        )
+        if (!audioUpErr) {
+          videoPublicUrl = publicStorageUrl(SUPABASE_URL, audioStoragePath)
+          log('  ✓ Narration audio uploaded as fallback')
+        }
+      } catch (_) {}
     }
 
     // ── Step 6: Bank items ───────────────────────────────────────────────

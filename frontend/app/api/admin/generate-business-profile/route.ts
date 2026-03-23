@@ -247,7 +247,20 @@ async function findBestLogoUrl(html: string, origin: string, linkedinUrl?: strin
     }
   }
 
-  // ── 7. LinkedIn og:image (MANDATORY if linkedinUrl provided) ───────────
+  // ── 7. Clearbit Logo API — highly reliable for known companies ──────────
+  try {
+    const domain = origin.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+    const clearbitUrl = `https://logo.clearbit.com/${domain}?size=256`
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 4000)
+    const cbRes = await fetch(clearbitUrl, { method: 'HEAD', signal: controller.signal }).catch(() => null)
+    clearTimeout(timer)
+    if (cbRes?.ok && cbRes.headers.get('content-type')?.startsWith('image/')) {
+      candidates.push({ url: clearbitUrl, score: 78, source: `Clearbit logo API (${domain})` })
+    }
+  } catch (_) {}
+
+  // ── 8. LinkedIn og:image (MANDATORY if linkedinUrl provided) ───────────
   if (linkedinUrl) {
     try {
       const controller = new AbortController()
@@ -829,11 +842,12 @@ async function generateSingleProfile(opts: {
       else { bankItems.push({ key: 'video', id: vidItem.id }); log(`  ✓ video → id ${vidItem.id}`) }
     }
 
-    const mergedLinkedin  = linkedinUrl  || detectedSocial.linkedin  || null
-    const mergedYoutube   = youtubeUrl   || detectedSocial.youtube   || null
-    const mergedFacebook  = detectedSocial.facebook  || null
-    const mergedInstagram = detectedSocial.instagram || null
-    const mergedTwitter   = detectedSocial.twitter   || null
+    // Merge social URLs: detected from HTML → GPT-4o output → user-provided inputs
+    const mergedLinkedin  = detectedSocial.linkedin  || data.business?.linkedin_url  || linkedinUrl  || null
+    const mergedYoutube   = detectedSocial.youtube   || data.business?.youtube_url   || youtubeUrl   || null
+    const mergedFacebook  = detectedSocial.facebook  || data.business?.facebook_url  || null
+    const mergedInstagram = detectedSocial.instagram || data.business?.instagram_url || null
+    const mergedTwitter   = detectedSocial.twitter   || data.business?.twitter_url   || null
 
     const linkDefs = [
       { title: `${companyName} Website`,   url: websiteUrl },
@@ -858,19 +872,37 @@ async function generateSingleProfile(opts: {
     const videoItem = bankItems.find(b => b.key === 'video')
     const attachmentIds = bankItems.filter(b => b.key !== 'logo' && !b.key.startsWith('link_')).map(b => b.id)
 
+    // Build socialLinks as the array format the view page expects
+    const socialLinksArray = [
+      { platform: 'Website',   url: websiteUrl },
+      ...(mergedLinkedin  ? [{ platform: 'LinkedIn',   url: mergedLinkedin  }] : []),
+      ...(mergedYoutube   ? [{ platform: 'YouTube',    url: mergedYoutube   }] : []),
+      ...(mergedFacebook  ? [{ platform: 'Facebook',   url: mergedFacebook  }] : []),
+      ...(mergedInstagram ? [{ platform: 'Instagram',  url: mergedInstagram }] : []),
+      ...(mergedTwitter   ? [{ platform: 'X',          url: mergedTwitter   }] : []),
+      ...(data.business?.careers_url ? [{ platform: 'Careers', url: data.business.careers_url }] : []),
+    ]
+
     const profileMetadata = {
-      bio: data.profile?.about || '', tagline: data.profile?.tagline || '',
+      // Core identity — drives the view page header
+      name: companyName,
+      title: data.profile?.tagline || '',
+      bio: data.profile?.about || '',
+      // Media — drives logo and banner display
+      avatar_path: imageResults.logo?.fileUrl || null,
+      banner_path: imageResults.hero?.fileUrl || null,
+      // Bank item references
+      logoId: logoItem?.id || null, heroImageId: heroItem?.id || null,
+      introVideoId: videoItem?.id || null, introVideoUrl: videoPublicUrl,
+      attachmentIds,
+      // Social links as [{platform,url}] array (expected by view page)
+      socialLinks: socialLinksArray,
+      // Profile fields
+      tagline: data.profile?.tagline || '',
       businessType: data.profile?.business_type || '', industry: data.profile?.industry || '',
       specialisations: data.specialisations || [], founded: data.profile?.founded_year || null,
       size: data.profile?.company_size || '', website: websiteUrl,
-      logoId: logoItem?.id || null, heroImageId: heroItem?.id || null,
-      introVideoId: videoItem?.id || null, introVideoUrl: videoPublicUrl,
-      attachmentIds, skills: data.skills || [],
-      socialLinks: {
-        website: websiteUrl, linkedin: mergedLinkedin, youtube: mergedYoutube,
-        facebook: mergedFacebook, instagram: mergedInstagram, twitter: mergedTwitter,
-        careers: data.business?.careers_url || null,
-      },
+      skills: data.skills || [],
     }
 
     const { data: metaItem, error: metaErr } = await supabase.from('business_bank_items').insert({

@@ -2680,6 +2680,9 @@ function BusinessProfileViewPageInner() {
                       <p className="text-slate-300 mt-1">{title}</p>
                       <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300 mt-3">
                         {location ? <span>📍 {location}</span> : null}
+                        {(meta as any)?.industry ? (
+                          <span className="px-3 py-1 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300">{(meta as any).industry}</span>
+                        ) : null}
                         {yearsExperience ? (
                           <span className="px-3 py-1 rounded-xl bg-white/5 border border-white/10">{yearsExperience}</span>
                         ) : null}

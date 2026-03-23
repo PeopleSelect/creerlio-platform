@@ -779,82 +779,88 @@ async function generateSingleProfile(opts: {
     }
 
     // ── Step 4: TTS ──────────────────────────────────────────────────────
-    log('\n[4/12] Generating TTS narration...')
-    const narrationText = await generateNarration(openai, companyName, data, log)
-    log(`  Script: ${narrationText.split(' ').length} words`)
-    const audioPath = path.join(tmpDir, 'narration.mp3')
-    const mp3 = await openai.audio.speech.create({
-      model: 'tts-1-hd', voice: 'onyx',
-      input: narrationText.slice(0, 4096), speed: 0.9,
-    })
-    fs.writeFileSync(audioPath, Buffer.from(await mp3.arrayBuffer()))
-    log('  ✓ TTS generated')
-
-    // ── Step 5: Video ────────────────────────────────────────────────────
-    log('\n[5/12] Encoding intro video...')
-    let videoPublicUrl: string | null = null
+    // If a YouTube URL was provided, use it directly as the intro video (skip TTS + ffmpeg)
+    let videoPublicUrl: string | null = youtubeUrl || null
     let videoSize = 0
     let audioDur = 60
 
-    try {
-      const ffmpegBin = getFfmpegBin()
-      log(`  ffmpeg: ${ffmpegBin}`)
+    if (youtubeUrl) {
+      log('\n[4/12] YouTube URL provided — skipping TTS generation')
+      log(`  ✓ Using YouTube video: ${youtubeUrl}`)
+    } else {
+      log('\n[4/12] Generating TTS narration...')
+      const narrationText = await generateNarration(openai, companyName, data, log)
+      log(`  Script: ${narrationText.split(' ').length} words`)
+      const audioPath = path.join(tmpDir, 'narration.mp3')
+      const mp3 = await openai.audio.speech.create({
+        model: 'tts-1-hd', voice: 'onyx',
+        input: narrationText.slice(0, 4096), speed: 0.9,
+      })
+      fs.writeFileSync(audioPath, Buffer.from(await mp3.arrayBuffer()))
+      log('  ✓ TTS generated')
+
+      // ── Step 5: Video ──────────────────────────────────────────────────
+      log('\n[5/12] Encoding intro video...')
       try {
-        execFileSync(ffmpegBin, ['-i', audioPath, '-f', 'null', '-'], { stdio: ['pipe','pipe','pipe'] })
-      } catch (e: any) {
-        const m = ((e.stderr || Buffer.alloc(0)) as Buffer).toString().match(/Duration:\s*(\d+):(\d+):([\d.]+)/)
-        if (m) audioDur = parseInt(m[1])*3600 + parseInt(m[2])*60 + parseFloat(m[3])
-      }
-      log(`  Duration: ${audioDur.toFixed(1)}s`)
-
-      const slideKeys = ['hero','office','team','culture','awards','work','community']
-      const slideImages = slideKeys.map(k => imageResults[k]?.tmpPath).filter(Boolean) as string[]
-
-      if (slideImages.length > 0) {
-        const spi = audioDur / slideImages.length
-        const concatLines = slideImages.map(p => `file '${p.replace(/\\/g,'/')}'\nduration ${spi.toFixed(3)}`).join('\n')
-        const concatFile = path.join(tmpDir, 'concat.txt')
-        fs.writeFileSync(concatFile, concatLines + `\nfile '${slideImages[slideImages.length-1].replace(/\\/g,'/')}'`)
-
-        const videoFilename  = `${slug}-intro-video.mp4`
-        const videoLocalPath = path.join(tmpDir, videoFilename)
-
-        execFileSync(ffmpegBin, [
-          '-y', '-f', 'concat', '-safe', '0', '-i', concatFile,
-          '-i', audioPath,
-          '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
-          '-c:a', 'aac', '-b:a', '128k',
-          '-shortest', '-movflags', '+faststart',
-          videoLocalPath,
-        ], { stdio: 'pipe', timeout: 240000 })
-
-        videoSize = fs.statSync(videoLocalPath).size
-        const videoStoragePath = `${userId}/bank/${videoFilename}`
-        await supabase.storage.from(BUCKET).remove([videoStoragePath])
-        const { error: vidUpErr } = await supabase.storage.from(BUCKET).upload(
-          videoStoragePath, fs.readFileSync(videoLocalPath), { contentType: 'video/mp4', upsert: true }
-        )
-        if (vidUpErr) throw new Error('Video upload: ' + vidUpErr.message)
-        videoPublicUrl = publicStorageUrl(SUPABASE_URL, videoStoragePath)
-        log(`  ✓ Video: ${(videoSize/1e6).toFixed(2)} MB`)
-      } else {
-        log('  No slide images — skipping video')
-      }
-    } catch (e: any) {
-      err('  ✗ Video skipped: ' + e.message)
-      // Still upload the narration audio so the TTS work isn't wasted
-      try {
-        const audioStoragePath = `${userId}/bank/${slug}-narration.mp3`
-        const { error: audioUpErr } = await supabase.storage.from(BUCKET).upload(
-          audioStoragePath, fs.readFileSync(audioPath), { contentType: 'audio/mpeg', upsert: true }
-        )
-        if (!audioUpErr) {
-          videoPublicUrl = publicStorageUrl(SUPABASE_URL, audioStoragePath)
-          log('  ✓ Narration audio uploaded as fallback')
+        const ffmpegBin = getFfmpegBin()
+        log(`  ffmpeg: ${ffmpegBin}`)
+        try {
+          execFileSync(ffmpegBin, ['-i', audioPath, '-f', 'null', '-'], { stdio: ['pipe','pipe','pipe'] })
+        } catch (e: any) {
+          const m = ((e.stderr || Buffer.alloc(0)) as Buffer).toString().match(/Duration:\s*(\d+):(\d+):([\d.]+)/)
+          if (m) audioDur = parseInt(m[1])*3600 + parseInt(m[2])*60 + parseFloat(m[3])
         }
-      } catch (_) {}
-    }
+        log(`  Duration: ${audioDur.toFixed(1)}s`)
+
+        const slideKeys = ['hero','office','team','culture','awards','work','community']
+        const slideImages = slideKeys.map(k => imageResults[k]?.tmpPath).filter(Boolean) as string[]
+
+        if (slideImages.length > 0) {
+          const spi = audioDur / slideImages.length
+          const concatLines = slideImages.map(p => `file '${p.replace(/\\/g,'/')}'\nduration ${spi.toFixed(3)}`).join('\n')
+          const concatFile = path.join(tmpDir, 'concat.txt')
+          fs.writeFileSync(concatFile, concatLines + `\nfile '${slideImages[slideImages.length-1].replace(/\\/g,'/')}'`)
+
+          const videoFilename  = `${slug}-intro-video.mp4`
+          const videoLocalPath = path.join(tmpDir, videoFilename)
+
+          execFileSync(ffmpegBin, [
+            '-y', '-f', 'concat', '-safe', '0', '-i', concatFile,
+            '-i', audioPath,
+            '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+            '-c:a', 'aac', '-b:a', '128k',
+            '-shortest', '-movflags', '+faststart',
+            videoLocalPath,
+          ], { stdio: 'pipe', timeout: 240000 })
+
+          videoSize = fs.statSync(videoLocalPath).size
+          const videoStoragePath = `${userId}/bank/${videoFilename}`
+          await supabase.storage.from(BUCKET).remove([videoStoragePath])
+          const { error: vidUpErr } = await supabase.storage.from(BUCKET).upload(
+            videoStoragePath, fs.readFileSync(videoLocalPath), { contentType: 'video/mp4', upsert: true }
+          )
+          if (vidUpErr) throw new Error('Video upload: ' + vidUpErr.message)
+          videoPublicUrl = publicStorageUrl(SUPABASE_URL, videoStoragePath)
+          log(`  ✓ Video: ${(videoSize/1e6).toFixed(2)} MB`)
+        } else {
+          log('  No slide images — skipping video')
+        }
+      } catch (e: any) {
+        err('  ✗ Video skipped: ' + e.message)
+        // Still upload the narration audio so the TTS work isn't wasted
+        try {
+          const audioStoragePath = `${userId}/bank/${slug}-narration.mp3`
+          const { error: audioUpErr } = await supabase.storage.from(BUCKET).upload(
+            audioStoragePath, fs.readFileSync(audioPath), { contentType: 'audio/mpeg', upsert: true }
+          )
+          if (!audioUpErr) {
+            videoPublicUrl = publicStorageUrl(SUPABASE_URL, audioStoragePath)
+            log('  ✓ Narration audio uploaded as fallback')
+          }
+        } catch (_) {}
+      }
+    } // end of else (no youtubeUrl)
 
     // ── Step 6: Bank items ───────────────────────────────────────────────
     log('\n[6/12] Inserting business bank items...')
@@ -874,11 +880,15 @@ async function generateSingleProfile(opts: {
     }
 
     if (videoPublicUrl) {
+      const isYouTube = videoPublicUrl.includes('youtube.com') || videoPublicUrl.includes('youtu.be')
       const { data: vidItem, error: vidErr } = await supabase.from('business_bank_items').insert({
-        user_id: userId, item_type: 'business_introduction',
-        title: `${companyName} — Introduction Video`,
-        file_url: videoPublicUrl, file_type: 'video/mp4', file_size: videoSize,
-        metadata: { duration: Math.round(audioDur) }, is_active: true,
+        user_id: userId,
+        item_type: isYouTube ? 'link' : 'business_introduction',
+        title: `${companyName} — ${isYouTube ? 'YouTube Channel' : 'Introduction Video'}`,
+        file_url: videoPublicUrl,
+        file_type: isYouTube ? 'text/uri-list' : 'video/mp4',
+        file_size: videoSize,
+        metadata: { duration: Math.round(audioDur), is_youtube: isYouTube }, is_active: true,
       }).select('id').single()
       if (vidErr) err('  ✗ Video bank item: ' + vidErr.message)
       else { bankItems.push({ key: 'video', id: vidItem.id }); log(`  ✓ video → id ${vidItem.id}`) }
@@ -930,9 +940,9 @@ async function generateSingleProfile(opts: {
       name: companyName,
       title: data.profile?.tagline || '',
       bio: data.profile?.about || '',
-      // Media — drives logo and banner display
-      avatar_path: imageResults.logo?.fileUrl || null,
-      banner_path: imageResults.hero?.fileUrl || null,
+      // Media — drives logo and banner display (must be storage path, not full URL)
+      avatar_path: imageResults.logo?.storagePath || null,
+      banner_path: imageResults.hero?.storagePath || null,
       // Bank item references
       logoId: logoItem?.id || null, heroImageId: heroItem?.id || null,
       introVideoId: videoItem?.id || null, introVideoUrl: videoPublicUrl,

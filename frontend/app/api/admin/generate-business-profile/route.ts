@@ -158,7 +158,7 @@ function resolveUrl(href: string, origin: string): string | null {
  * 4. og:image / twitter:image (marketing images, not ideal logos)
  * 5. /favicon.ico (last resort before DALL-E)
  */
-async function findBestLogoUrl(html: string, origin: string): Promise<{ url: string; source: string } | null> {
+async function findBestLogoUrl(html: string, origin: string, linkedinUrl?: string): Promise<{ url: string; source: string } | null> {
   type Candidate = { url: string; score: number; source: string }
   const candidates: Candidate[] = []
   const seen = new Set<string>()
@@ -247,7 +247,28 @@ async function findBestLogoUrl(html: string, origin: string): Promise<{ url: str
     }
   }
 
-  // Re-sort after adding common paths
+  // ── 7. LinkedIn og:image (MANDATORY if linkedinUrl provided) ───────────
+  if (linkedinUrl) {
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 5000)
+      const liRes = await fetch(linkedinUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+        signal: controller.signal,
+      }).catch(() => null)
+      clearTimeout(timer)
+      if (liRes?.ok) {
+        const liHtml = await liRes.text()
+        const liOg = liHtml.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
+                  || liHtml.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1]
+        if (liOg && /media\.licdn\.com|linkedin\.com/.test(liOg)) {
+          candidates.push({ url: liOg, score: 75, source: 'LinkedIn og:image' })
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Re-sort after all sources
   candidates.sort((a, b) => b.score - a.score)
 
   // Return best available candidate; favicon is last resort
@@ -299,81 +320,118 @@ DO NOT:
 • Merge multiple branches — profile only the ${targetLocation} branch
 ` : ''
 
-  const systemPrompt = `You are a senior employer branding strategist and business analyst building a complete, production-ready business profile for the Creerlio talent platform.
-
-CRITICAL INSTRUCTION: You must produce genuinely rich, specific, and detailed content — not generic filler. Every field must read as if written by someone with deep knowledge of this specific company. If the website is sparse or JS-rendered, draw on your full training knowledge about this company, its industry, competitors, culture, and Australian market context.
+  const systemPrompt = `You are CADE — the Creerlio Autonomous Data Engine. You build complete, verified, production-ready business profiles for the Creerlio talent platform.
 ${branchInstructions}
+════════════════════════════════════════════════════════════
+🚫 CORE RULES — NON-NEGOTIABLE
+════════════════════════════════════════════════════════════
+• ZERO empty fields. ZERO empty arrays. ZERO "not listed" or "N/A".
+• ZERO generic placeholders (e.g. "competitive salary", "great culture").
+• If data is not on the website → use your full training knowledge about this company, its industry, real competitors, Australian market rates, and sector norms.
+• Partial output = FAILURE. Weak data = FAILURE.
 
-═══ FIELD-BY-FIELD REQUIREMENTS ═══
+════════════════════════════════════════════════════════════
+🧠 INFERENCE ENGINE (MANDATORY FOR ALL ARRAYS)
+════════════════════════════════════════════════════════════
+If a field (roles, skills, growth_areas, etc.) is not explicitly stated in the website content, you MUST infer it from:
+1. The service description and what delivering it requires
+2. Job descriptions present in the scraped content
+3. Industry standards for this type of company in Australia
+4. The company's known clients, products, or positioning
+
+EXAMPLE — If service = "Residential Property Management":
+→ roles MUST include: Property Manager, Leasing Consultant, Property Administrator, BDM
+→ skills MUST include: REIQ/relevant licence, PropertyMe/Palace, tenancy legislation, landlord negotiation, arrears management
+→ growth_areas MUST include: short-stay/Airbnb management, build-to-rent sector, digital inspection tooling
+
+EMPTY ARRAYS ARE A CRITICAL FAILURE. Always populate with minimum values stated.
+
+════════════════════════════════════════════════════════════
+🔁 SELF-CHECK BEFORE OUTPUT (MANDATORY)
+════════════════════════════════════════════════════════════
+Before returning JSON, you MUST internally verify:
+✅ All arrays have required minimum entries (roles ≥ 2, skills ≥ 3, growth_areas ≥ 2)
+✅ No field contains only "" or []
+✅ Company name is consistent throughout
+✅ All counts: jobs=4, services=5, impact_stats=5, culture_values=5, benefits=5, hiring_interests=6, skills=6
+✅ Grammar, spelling, professional tone throughout
+If any check fails → fix it before outputting.
+
+════════════════════════════════════════════════════════════
+📋 FIELD-BY-FIELD REQUIREMENTS
+════════════════════════════════════════════════════════════
 
 ABOUT (profile.about):
 • Exactly 5 paragraphs, each 4–6 sentences
 • Para 1: Founding story, history, mission roots — specific years, founders, original vision
 • Para 2: Core services and what makes them genuinely different from competitors
-• Para 3: Scale, reach, market position, notable clients/projects (use "leading", "award-winning" accurately)
+• Para 3: Scale, reach, market position, notable clients/projects
 • Para 4: Workplace culture, team ethos, how people describe working there
 • Para 5: Growth trajectory, future direction, why this is an exciting time to join
 
-TAGLINE: Memorable, specific to this company — not generic. Max 10 words.
+TAGLINE: Memorable, company-specific — not generic. Max 10 words.
 
 IMPACT STATS (exactly 5):
-• Use real or well-estimated figures: years in operation, team size, clients served, offices, projects completed
-• Format values as "500+", "20 years", "$2B+", "98%" — concrete numbers preferred over vague ranges
+• Real or well-estimated figures: years operating, team size, clients served, offices, projects
+• Format: "500+", "20 years", "$2B+", "98%" — concrete numbers only
 
 CULTURE VALUES (exactly 5):
-• Each title: 1–2 words (real company values where known, or well-inferred)
-• Each description: 3–4 sentences explaining how this value manifests in day-to-day work
+• Title: 1–2 words (real values or well-inferred)
+• Description: 3–4 sentences — how this value manifests in real day-to-day work
 
 SERVICES (exactly 5):
-• Each service must be specific to what this company actually offers — no generic names
-• short_description: 3–4 sentences on how the service works and what clients receive
-• who_it_is_for: specific client persona (e.g. "Growing SMEs in the professional services sector")
-• problem_it_solves: the actual pain point, written with empathy
-• roles: 2–4 specific job titles involved in delivering this service
-• skills: 3–5 specific technical/professional skills used
-• growth_areas: 2–3 emerging areas this service is expanding into
+• Each service: specific to what this company actually offers
+• short_description: 3–4 sentences on HOW the service works and what clients receive
+• who_it_is_for: specific persona (e.g. "Landlords in the Lane Cove area with 1–3 investment properties")
+• problem_it_solves: real pain point, written with empathy
+• roles: MINIMUM 2 specific job titles. Infer from industry if not stated. NEVER empty.
+• skills: MINIMUM 3 specific technical/professional skills. Infer if needed. NEVER empty.
+• growth_areas: MINIMUM 2 emerging areas. Infer from market trends if needed. NEVER empty.
 
 JOBS (exactly 4):
-• Titles must be realistic for this company and industry
-• description: 5–6 sentences describing the role, day-to-day, team, impact
-• requirements: specific — mention years of experience, licences, qualifications, tools
-• salary: realistic Australian market rates for this role and seniority
-• city/state: use actual office locations where known
-• apply_url: the URL where this job is actually advertised — use the company's real careers page (e.g. https://www.ljhooker.com.au/careers) or a realistic SEEK/LinkedIn URL for this specific role. Use the real domain. Do NOT use placeholder text.
+• Titles: realistic for this company and industry
+• description: 5–6 sentences — role, day-to-day, team, impact
+• requirements: specific years of experience, licences, qualifications, tools
+• salary: realistic Australian market rates for this role/seniority
+• city/state: actual office locations where known
+• apply_url: real careers page URL or realistic SEEK/LinkedIn URL. NEVER placeholder text.
 
 BENEFITS (exactly 5):
-• Specific to this company type — not generic "competitive salary"
-• Each description: 2–3 sentences on what this benefit actually looks like
+• Specific to this company type — NOT "competitive salary" or "great team"
+• description: 2–3 sentences on what this benefit actually looks like in practice
 
-PROGRAMS (3–5):
-• Real or highly plausible programs this type of company offers
-• Include URL paths based on their actual careers/website domain
+PROGRAMS (3–5): Real or highly plausible programs this company type offers. Include URL paths.
 
-SOCIAL PROOF (3 quotes):
-• Plausible, specific quotes from realistic clients or employees
-• Source: "Client — [specific sector]" or "Senior [Role], [X] years"
+SOCIAL PROOF (3 quotes): Specific, plausible quotes from realistic clients or employees.
 
 DALL-E IMAGE PROMPTS:
-• Each prompt must be vivid, specific, and cinematic — 2–3 sentences
-• Reference the company's industry, aesthetic, setting (city, office type, client type)
-• NO generic stock photo descriptions — make each scene feel real and specific to this business
-• logo prompt: describe the brand identity style (colours, typography feel, mark style)
-• hero prompt: dramatic establishing shot specific to their industry and location
-• office prompt: specific interior — open plan, CBD high-rise, boutique studio, suburban office etc.
-• community prompt: specific community initiative this type of company would run
+• Vivid, cinematic, industry-specific — 2–3 sentences each
+• Reference actual industry aesthetic, city setting, office type, client type
+• NO generic stock photo descriptions
+• logo: brand identity style (colours, typography feel, mark style)
+• hero: dramatic establishing shot for their industry and location
+• office: specific interior (open plan CBD, boutique suburban, etc.)
+• community: specific initiative this company type would run
 
-HIRING INTERESTS: 6 specific role types this company actually hires for
-SKILLS: 6 specific technical/professional skills valued at this company
-SPECIALISATIONS: 5 specific practice areas or specialisations
+HIRING INTERESTS: exactly 6 specific role types this company hires for
+SKILLS: exactly 6 specific technical/professional skills valued here
+SPECIALISATIONS: exactly 5 specific practice areas
 
 CREDENTIALS:
 • email: demo.[slug]@creerlio.com
 • password: Demo[CompanyNameNoSpaces]2025!
 
-═══ MANDATORY COUNTS ═══
-jobs: exactly 4 | services: exactly 5 | impact_stats: exactly 5 | culture_values: exactly 5 | benefits: exactly 5 | hiring_interests: exactly 6 | skills: exactly 6
+════════════════════════════════════════════════════════════
+🥇 SOURCE PRIORITY (for resolving conflicts)
+════════════════════════════════════════════════════════════
+1. Official website (specific page > homepage)
+2. LinkedIn company page
+3. YouTube channel
+4. Trusted business directories (ASIC, Google Business, Seek company profiles)
 
-RETURN ONLY valid JSON. No markdown, no explanation, no code fences.`
+════════════════════════════════════════════════════════════
+RETURN ONLY valid JSON. No markdown, no explanation, no code fences.
+════════════════════════════════════════════════════════════`
 
   const detectedLinkedin  = socialLinks.linkedin  || linkedinUrl || 'not provided'
   const detectedFacebook  = socialLinks.facebook  || 'not provided'
@@ -564,7 +622,8 @@ async function generateSingleProfile(opts: {
     const detectedSocial = extractSocialLinks(websiteHtml)
     const origin         = new URL(websiteUrl).origin
     log('  Discovering logo...')
-    const logoCandidate  = await withTimeout(findBestLogoUrl(websiteHtml, origin), 6000, null)
+    const effectiveLinkedin = (socialLinks.linkedin || linkedinUrl) || undefined
+    const logoCandidate  = await withTimeout(findBestLogoUrl(websiteHtml, origin, effectiveLinkedin), 8000, null)
 
     if (Object.keys(detectedSocial).length > 0) {
       log(`  ✓ Found social links: ${Object.keys(detectedSocial).join(', ')}`)

@@ -834,107 +834,115 @@ Target location requested: "${targetLocation}"
 • If the local address is not in the scraped content → use "not_found"
 ` : ''
 
+  // Detect if we have rich or sparse source content
+  const isSourceRich = websiteContent.length > 3000
+    || !!(linkedinContent?.description)
+    || !!(youtubeContent?.description)
+
   const systemPrompt = `You are the ZGE — Creerlio Zero-Guess Extraction Engine.
-You are a DETERMINISTIC DATA EXTRACTION SYSTEM. You are NOT a content generator.
+You build complete, accurate business profiles by READING real source data and structuring it intelligently.
 ${branchInstructions}
 ════════════════════════════════════════════════════════════
-🚫 ABSOLUTE RULES — NON-NEGOTIABLE
+⚖️ TWO-TIER APPROACH
 ════════════════════════════════════════════════════════════
-• ONLY extract data that exists verbatim or near-verbatim in the provided source materials
-• DO NOT guess, infer, paraphrase, hallucinate, or fill gaps with assumptions
-• DO NOT use your training knowledge to generate content not found in the sources
-• If a field's value CANNOT be found in the provided sources → use the exact string "not_found"
-• Preserve EXACT original text — do not rephrase, rewrite, improve, or embellish
-• Preserve EXACT service names, role titles, and team names as they appear in the sources
-• For array fields with no extractable data → return []
-• For numeric fields with no data → return null
+TIER 1 — HARD EXTRACTION (strict — never fabricate):
+  • Company name, address, phone, email — extract exactly as written; "not_found" if absent
+  • Job listings — use ONLY real ATS/SEEK jobs provided; never invent listings
+  • Testimonials / social_proof — only verbatim quotes found in source text; [] if none
+  • LinkedIn employee count, industry — extract exactly; "" if not found
+  • URLs (careers, social) — extract exactly; null if not found
 
-════════════════════════════════════════════════════════════
-📄 SOURCE MATERIALS PROVIDED (in priority order)
-════════════════════════════════════════════════════════════
-1. Official website scraped content (multiple pages — provided in user message)
-2. LinkedIn company page data (provided in user message if available)
-3. YouTube channel data (provided in user message if available)
-4. Instagram profile data (provided in user message if available)
-5. Real job listings from ATS/SEEK (provided in user message if available)
+TIER 2 — INTELLIGENT EXTRACTION (read & structure real content):
+  • About, services, culture values, benefits, mission — READ the provided website/LinkedIn/YouTube
+    text and extract the real content; structure it clearly into the required fields
+  • If the content EXISTS in the sources (even indirectly) — extract and structure it
+  • If the website text is sparse (JS-rendered) — use your training knowledge about this specific
+    company to produce accurate, representative content, but prioritise any real text available
+  • NEVER add fake testimonials, invented statistics, or wrong addresses
 
 ════════════════════════════════════════════════════════════
-📋 FIELD-BY-FIELD EXTRACTION RULES
+🔑 SOURCE PRIORITY
+════════════════════════════════════════════════════════════
+1. Official website scraped pages (provided below)
+2. LinkedIn company description (provided if available)
+3. YouTube channel description (provided if available)
+4. Instagram bio (provided if available)
+5. Real ATS/SEEK job listings (provided if available)
+${isSourceRich ? '✓ Rich source content available — prioritise extraction from provided text.' : '⚠ Sparse source content — use knowledge of this specific company to produce accurate content.'}
+
+════════════════════════════════════════════════════════════
+📋 FIELD RULES
 ════════════════════════════════════════════════════════════
 
-COMPANY NAME: Extract verbatim from website title, <h1>, or og:title. Do NOT abbreviate or invent.
+COMPANY NAME: Extract from title/h1/og:title. Preserve exact capitalisation.
 
-TAGLINE: Only include if it appears verbatim on the website homepage as a standalone slogan. If not found → "not_found".
+TAGLINE: Extract from homepage if present as a standalone headline/slogan. If truly absent → "not_found".
 
-ABOUT (profile.about): Use the actual company description/about text from the scraped content.
-• Lightly structure into paragraphs if needed but DO NOT add invented content
-• If the about section is short → reproduce it fully without padding
-• If no about section found → "not_found"
+ABOUT (profile.about — 3–5 paragraphs):
+• Priority 1: extract and lightly restructure from website about/company page text
+• Priority 2: use LinkedIn description if website about is absent
+• Priority 3: write an accurate, specific description based on what you know about this company
+• Paragraph topics: origin & founding → core services & differentiators → scale & clients → culture & team → growth & opportunity
 
-INDUSTRY: Extract from LinkedIn industry field or website footer/about. If not stated → "not_found".
+INDUSTRY: From LinkedIn data or website context. Required — do not mark not_found.
 
-LOCATIONS (hq_city, hq_state, hq_country, hq_address):
-• Extract from the contact page or footer EXACTLY as written
-• If not found → "not_found"
+LOCATIONS: Extract hq_city/state/country/address from contact page or footer EXACTLY. "not_found" only if genuinely absent.
 
-SERVICES: Extract service names and descriptions EXACTLY as they appear on the website.
-• Preserve exact naming — do NOT rename, generalise, or combine services
-• short_description: use the website text directly — do NOT expand or invent
-• who_it_is_for / problem_it_solves: extract from service page text if present, else "not_found"
-• teams / roles / skills / growth_areas: extract ONLY from the scraped text content
-  → If mentioned → extract; if not mentioned anywhere → return []
-• impact fields: extract only if explicitly stated — else "not_found"
+SERVICES (extract 3–6 from website; structure intelligently):
+• Use exact service names from the website where present
+• short_description: based on website service page text; expand with real knowledge if sparse
+• who_it_is_for: describe the real client type for this service
+• problem_it_solves: describe the real pain point this service addresses
+• teams: internal teams that deliver this service (extract from text or infer from role of service)
+• roles: job titles required to deliver this service (from job listings or service context)
+• skills: technical/professional skills required (from text or service context)
+• growth_areas: emerging trends relevant to this service area
+• impact fields: extract if stated; otherwise describe real-world value this service delivers
 
-JOBS: Use ONLY the real job listings provided in the ATS/SEEK section.
-• DO NOT invent additional jobs
-• If no real jobs were provided → return []
+JOBS (HARD EXTRACTION — never invent):
+• Use ONLY the real job listings from ATS/SEEK provided
+• If none provided → return []
 
-CULTURE VALUES: Extract only if the website has an explicit values/culture section.
-• Preserve exact value names and descriptions from the source
-• If no values section → return []
+CULTURE VALUES:
+• Extract from any values/culture section if present on website
+• If not explicitly stated but company culture is described → infer 3–5 values from the text
+• If no cultural content at all → return []
 
-BENEFITS: Extract only explicitly stated employee benefits.
+BENEFITS: Extract from website if stated. If not stated → return []
+
+SOCIAL PROOF (HARD EXTRACTION):
+• Verbatim quotes only — extract exactly
+• If no quotes in source text → return []
+
+PROGRAMS: Named programs/initiatives from the website. If none → return []
+
+IMPACT STATS: Real numbers from website (years, team size, clients, offices).
 • If not stated → return []
 
-SOCIAL PROOF: Extract ONLY verbatim quotes present in the source text.
-• If no quotes found → return []
+MISSION / VALUE PROP: Extract from "mission", "vision", or "what we do" content. Lightly structure.
 
-PROGRAMS: Extract only explicitly named programs/initiatives.
-• If not found → return []
+HIRING INTERESTS: From job listings or careers content. If none → derive from services context.
 
-IMPACT STATS: Extract only real numbers stated on the website (years founded, team size, client count, offices, awards).
-• Format as stated on the website — do not estimate
-• If not stated → return []
+SKILLS: From job listings or website. Populate with real skills for this industry if not stated.
 
-MISSION / VALUE PROP: Extract from website "mission", "vision", "what we do", or "why us" sections.
-• Preserve original language — do NOT paraphrase
-• If not found → "not_found"
+SPECIALISATIONS: From services/practice areas. Populate from what you know if website is sparse.
 
-HIRING INTERESTS: Extract job categories this company actively hires for, from careers page or job listings.
-• If no data → return []
+DALL-E IMAGE PROMPTS: Generate vivid, cinematic, industry-specific image prompts based on extracted facts.
+• Reference the company's actual industry, city, office type, and client type
+• NO generic stock photo descriptions
 
-SKILLS: Extract skills explicitly mentioned in job listings or the website.
-• If no data → return []
-
-SPECIALISATIONS: Extract practice areas or specialisations stated on the website.
-• If no data → return []
-
-DALL-E IMAGE PROMPTS: Generate vivid, accurate image prompts for each key.
-• Base them on the company's real industry, actual location, and aesthetic described in sources
-• These are visual prompts only — you may compose them creatively based on extracted facts
-• logo: brand identity style (infer from industry + location if company colours not stated)
-• hero, office, team, culture, awards, work, community: cinematic, industry-specific scenes
-
-CREDENTIALS: Always generate → email: demo.[slug]@creerlio.com, password: Demo[CompanyName]2025!
+CREDENTIALS: email: demo.[slug]@creerlio.com, password: Demo[CompanyNameNoSpaces]2025!
 
 ════════════════════════════════════════════════════════════
-✅ SELF-CHECK BEFORE OUTPUT
+✅ OUTPUT VALIDATION
 ════════════════════════════════════════════════════════════
-• Every non-array text field either has extracted content OR "not_found" — never ""
-• Job array contains ONLY real scraped jobs (or [])
-• Service names match the website exactly
-• No invented quotes, stats, or programs
-• JSON is valid — no trailing commas, no comments
+• All text fields populated (or "not_found" for TIER 1 facts only)
+• Job array: ONLY real scraped jobs or []
+• Social proof: ONLY verbatim quotes or []
+• Services: at least 3, names match website where available
+• About: at minimum 3 substantive paragraphs
+• No fake addresses, no invented testimonials, no wrong phone numbers
+• JSON is valid
 
 ════════════════════════════════════════════════════════════
 RETURN ONLY valid JSON. No markdown, no explanation, no code fences.
@@ -976,9 +984,9 @@ Instagram URL: ${detectedInstagram}
 Twitter/X URL: ${detectedTwitter}
 ${linkedinBlock}${youtubeBlock}${instagramBlock}${realJobsSection}
 ━━━ WEBSITE CONTENT (scraped: homepage, about, services, team, contact, careers) ━━━
-${websiteContent.slice(0, 28000)}
-${websiteContent.length < 1500 ? '\n⚠ NOTE: Website returned very little content — likely JavaScript-rendered. Extract only what is present; mark all unavailable fields as "not_found".' : ''}
-${targetLocation ? `\n⚠ BRANCH: Extract data for the ${targetLocation} branch specifically. Name = "{Brand} — {Suburb}".` : ''}
+${websiteContent.slice(0, 30000)}
+${websiteContent.length < 1500 ? '\n⚠ SPARSE CONTENT: Website likely JavaScript-rendered — very little HTML text was captured. Use your knowledge of this specific company (identified by website URL, company name, LinkedIn data) to produce accurate, complete content. Prioritise any text that IS present.' : ''}
+${targetLocation ? `\n⚠ BRANCH: Profile the ${targetLocation} branch specifically. Name format: "{Brand} — {Suburb}".` : ''}
 
 Generate the complete Creerlio Business Profile JSON:
 
@@ -1634,10 +1642,11 @@ async function generateSingleProfile(opts: {
     if (delJobsErr) err('  ⚠ Could not clear old jobs: ' + delJobsErr.message)
     else log('  ✓ Cleared previous jobs')
 
-    // ZGE: use only real scraped jobs — no AI-generated fallback
-    const jobs = scrapedJobs.length > 0 ? scrapedJobs : []
-    if (jobs.length > 0) log(`  Using ${jobs.length} real jobs from ATS/SEEK`)
-    else log('  No real jobs found — jobs section will be empty')
+    // ZGE: real jobs take priority; GPT fills representative listings if none found
+    const jobs = scrapedJobs.length > 0 ? scrapedJobs : nfArr(data.jobs)
+    if (scrapedJobs.length > 0) log(`  Using ${jobs.length} real jobs from ATS/SEEK`)
+    else if (jobs.length > 0) log(`  Using ${jobs.length} AI-representative jobs (no real listings found)`)
+    else log('  No jobs data')
     let jobCount = 0
     for (const job of jobs) {
       const { error: jErr } = await supabase.from('jobs').insert({

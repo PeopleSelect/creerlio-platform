@@ -79,24 +79,43 @@ function getFfmpegBin(): string {
 // SSL-tolerant HTTPS agent — handles company sites with self-signed or chain-broken certs
 const insecureAgent = new https.Agent({ rejectUnauthorized: false })
 
-async function downloadFile(url: string, dest: string): Promise<void> {
+async function downloadFile(url: string, dest: string, referer?: string, depth = 0): Promise<void> {
+  if (depth > 4) throw new Error('Too many redirects')
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest)
     const proto = url.startsWith('https') ? https : http
-    const opts: any = { headers: { 'User-Agent': 'Mozilla/5.0' } }
+    const origin = (() => { try { return new URL(url).origin } catch (_) { return '' } })()
+    const opts: any = {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language': 'en-AU,en;q=0.9',
+        'Accept-Encoding': 'identity',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Referer': referer || origin || 'https://www.google.com/',
+        'Sec-Fetch-Dest': 'image',
+        'Sec-Fetch-Mode': 'no-cors',
+        'Sec-Fetch-Site': 'cross-site',
+      },
+    }
     if (url.startsWith('https')) opts.agent = insecureAgent
     const req = proto.get(url, opts, (res: any) => {
-      if (res.statusCode === 301 || res.statusCode === 302) {
+      if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
         file.close()
         try { fs.unlinkSync(dest) } catch (_) {}
-        downloadFile(res.headers.location, dest).then(resolve).catch(reject)
+        const location = res.headers.location
+        if (!location) { reject(new Error('Redirect with no Location')); return }
+        const next = location.startsWith('http') ? location : new URL(location, url).href
+        downloadFile(next, dest, referer || origin, depth + 1).then(resolve).catch(reject)
         return
       }
       if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return }
       res.pipe(file)
       file.on('finish', () => { file.close(); resolve() })
     })
-    ;(req as any).on('error', reject)
+    ;(req as any).on('error', (e: any) => { file.close(); try { fs.unlinkSync(dest) } catch (_) {} reject(e) })
+    ;(req as any).setTimeout(10000, () => { (req as any).destroy(); reject(new Error('Download timeout')) })
   })
 }
 
@@ -528,9 +547,10 @@ function resolveUrl(href: string, origin: string): string | null {
  * 2. <link> tags: apple-touch-icon, manifest, PNG/SVG icons
  * 3. Common well-known asset paths (/logo.svg, /logo.png, etc.)
  * 4. og:image / twitter:image (marketing images, not ideal logos)
- * 5. /favicon.ico (last resort before DALL-E)
+ * 5. /favicon.ico (last resort)
+ * Returns ALL candidates sorted by score so callers can try each in sequence.
  */
-async function findBestLogoUrl(html: string, origin: string, linkedinUrl?: string): Promise<{ url: string; source: string } | null> {
+async function findBestLogoUrl(html: string, origin: string, linkedinUrl?: string): Promise<{ url: string; source: string }[]> {
   type Candidate = { url: string; score: number; source: string }
   const candidates: Candidate[] = []
   const seen = new Set<string>()
@@ -656,11 +676,11 @@ async function findBestLogoUrl(html: string, origin: string, linkedinUrl?: strin
   // Re-sort after all sources
   candidates.sort((a, b) => b.score - a.score)
 
-  // Return best available candidate; favicon is last resort
-  const best = candidates[0]
-  if (best) return best
+  // Add favicon as absolute last resort
+  const faviconUrl = `${origin}/favicon.ico`
+  if (!seen.has(faviconUrl)) candidates.push({ url: faviconUrl, score: 1, source: 'favicon.ico fallback' })
 
-  return { url: `${origin}/favicon.ico`, source: 'favicon.ico fallback' }
+  return candidates
 }
 
 // ── GPT-4o Research ───────────────────────────────────────────────────────────
@@ -1021,7 +1041,7 @@ async function generateSingleProfile(opts: {
     const origin         = new URL(websiteUrl).origin
     log('  Discovering logo...')
     const effectiveLinkedin = (detectedSocial.linkedin || linkedinUrl) || undefined
-    const logoCandidate  = await withTimeout(findBestLogoUrl(websiteHtml, origin, effectiveLinkedin), 8000, null)
+    const logoCandidates = await withTimeout(findBestLogoUrl(websiteHtml, origin, effectiveLinkedin), 10000, [])
 
     if (Object.keys(detectedSocial).length > 0) {
       log(`  ✓ Found social links: ${Object.keys(detectedSocial).join(', ')}`)
@@ -1127,47 +1147,55 @@ async function generateSingleProfile(opts: {
     const dalleImages = data.dal_le_images || []
     const imageResults: Record<string, { storagePath: string; fileUrl: string; tmpPath: string; size: number }> = {}
 
-    if (logoCandidate) {
-      log(`  Logo source: ${logoCandidate.source}`)
-      log(`  Downloading: ${logoCandidate.url}`)
-      try {
-        const isSvg = /\.svg(\?|$)/i.test(logoCandidate.url)
-        const ext = isSvg ? 'svg' : /\.png(\?|$)/i.test(logoCandidate.url) ? 'png' : 'jpg'
-        const logoFilename = `${slug}-logo.${ext}`
-        const logoTmpPath  = path.join(tmpDir, logoFilename)
-        await downloadFile(logoCandidate.url, logoTmpPath)
-        const logoSize = fs.statSync(logoTmpPath).size
-        if (logoSize > 500) {
+    // Try each logo candidate in priority order until one downloads successfully
+    if (logoCandidates.length > 0) {
+      log(`  Found ${logoCandidates.length} logo candidates — trying in priority order...`)
+      for (const candidate of logoCandidates) {
+        try {
+          log(`  Trying: ${candidate.source} — ${candidate.url}`)
+          const isSvg = /\.svg(\?|$)/i.test(candidate.url)
+          const ext = isSvg ? 'svg' : /\.png(\?|$)/i.test(candidate.url) ? 'png' : 'jpg'
+          const logoFilename = `${slug}-logo.${ext}`
+          const logoTmpPath  = path.join(tmpDir, logoFilename)
+          await downloadFile(candidate.url, logoTmpPath, origin)
+          const logoSize = fs.statSync(logoTmpPath).size
+          if (logoSize < 500) {
+            log(`    Too small (${logoSize}B) — trying next`)
+            try { fs.unlinkSync(logoTmpPath) } catch (_) {}
+            continue
+          }
           const storagePath = `${userId}/bank/${logoFilename}`
           const contentType = isSvg ? 'image/svg+xml'
             : ext === 'png' ? 'image/png'
-            : /\.ico(\?|$)/i.test(logoCandidate.url) ? 'image/x-icon'
+            : /\.ico(\?|$)/i.test(candidate.url) ? 'image/x-icon'
             : 'image/jpeg'
           const { error: upErr } = await supabase.storage.from(BUCKET).upload(
             storagePath, fs.readFileSync(logoTmpPath), { contentType, upsert: true }
           )
-          if (!upErr) {
-            imageResults['logo'] = {
-              storagePath, tmpPath: logoTmpPath,
-              fileUrl: publicStorageUrl(SUPABASE_URL, storagePath), size: logoSize,
-            }
-            log(`  ✓ Real logo acquired via ${logoCandidate.source} (${(logoSize/1024).toFixed(0)} KB, ${ext.toUpperCase()})`)
-          } else {
-            err(`  ✗ Logo upload failed: ${upErr.message} — will generate with DALL-E`)
+          if (upErr) {
+            err(`    Upload failed: ${upErr.message} — trying next`)
+            continue
           }
-        } else {
-          log(`  Logo file too small (${logoSize}B) — trying DALL-E`)
+          imageResults['logo'] = {
+            storagePath, tmpPath: logoTmpPath,
+            fileUrl: publicStorageUrl(SUPABASE_URL, storagePath), size: logoSize,
+          }
+          log(`  ✓ Logo acquired via ${candidate.source} (${(logoSize/1024).toFixed(0)} KB, ${ext.toUpperCase()})`)
+          break
+        } catch (e: any) {
+          log(`    Failed (${e.message}) — trying next candidate`)
         }
-      } catch (e: any) {
-        err(`  ✗ Logo download failed: ${e.message} — will generate with DALL-E`)
+      }
+      if (!imageResults['logo']) {
+        log('  ⚠ All logo candidates exhausted — no logo will be generated')
       }
     } else {
-      log('  No logo found from website — will generate with DALL-E')
+      log('  No logo candidates found from website scan')
     }
 
-    // Generate DALL-E images in parallel batches of 3 to respect rate limits
-    const pendingDalle = dalleImages.filter((img: any) => !(img.key === 'logo' && imageResults['logo']))
-    if (dalleImages.length > pendingDalle.length) log('  Skipping DALL-E logo (using real website logo)')
+    // Generate DALL-E images in parallel batches of 3 — logo is always excluded
+    const pendingDalle = dalleImages.filter((img: any) => img.key !== 'logo')
+    log(`  Generating ${pendingDalle.length} DALL-E images (logo excluded)...`)
 
     const BATCH = 3
     for (let b = 0; b < pendingDalle.length; b += BATCH) {

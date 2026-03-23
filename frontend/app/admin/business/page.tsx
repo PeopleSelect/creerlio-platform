@@ -233,7 +233,8 @@ export default function AdminBusinessPage() {
     setGenClaimLink(null)
   }
 
-  function openRegenerator(business: any) {
+  async function openRegenerator(business: any) {
+    // Open modal immediately with what we know
     setShowGenerator(true)
     setGenMode('single')
     setGenWebsite(business.website || '')
@@ -241,13 +242,25 @@ export default function AdminBusinessPage() {
     setGenYoutube('')
     setGenSlug(business.slug || '')
     setGenIndustry('')
-    setGenLocation('')
+    setGenLocation(business.location || business.city || '')
     setGenMaxResults(2)
-    setGenLogs([])
+    setGenLogs([{ text: `  Loading profile data for ${business.name || business.business_name}…` }])
     setGenDone(false)
     setGenError('')
     setGenRunning(false)
     setGenClaimLink(null)
+
+    // Fetch social/video URLs saved in previous generation
+    try {
+      const { data: page } = await supabase
+        .from('business_profile_pages')
+        .select('youtube_url, linkedin_url')
+        .eq('business_id', business.id)
+        .maybeSingle()
+      if (page?.linkedin_url) setGenLinkedin(page.linkedin_url)
+      if (page?.youtube_url) setGenYoutube(page.youtube_url)
+    } catch (_) {}
+    setGenLogs([])
   }
 
   async function toggleActive(businessId: string, currentStatus: boolean) {

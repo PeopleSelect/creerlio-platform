@@ -1065,6 +1065,11 @@ async function generateSingleProfile(opts: {
 
     // ── Step 11: Jobs ────────────────────────────────────────────────────
     log('\n[11/12] Creating jobs...')
+    // Delete any previously generated jobs so regeneration doesn't duplicate them
+    const { error: delJobsErr } = await supabase.from('jobs').delete().eq('business_id', userId)
+    if (delJobsErr) err('  ⚠ Could not clear old jobs: ' + delJobsErr.message)
+    else log('  ✓ Cleared previous jobs')
+
     const jobs = data.jobs || []
     let jobCount = 0
     for (const job of jobs) {
@@ -1089,6 +1094,23 @@ async function generateSingleProfile(opts: {
 
     // ── Step 12: Services ────────────────────────────────────────────────
     log('\n[12/12] Creating services...')
+    // Delete previously generated services (and cascade-delete all sub-tables)
+    const { data: existingProducts } = await supabase
+      .from('business_products_services')
+      .select('id')
+      .eq('business_id', userId)
+    if (existingProducts && existingProducts.length > 0) {
+      const productIds = existingProducts.map(p => p.id)
+      // Delete sub-tables first (guard against missing FK cascades)
+      for (const tbl of ['business_product_teams', 'business_product_roles', 'business_product_skills',
+        'business_product_growth_areas', 'business_product_impact', 'business_product_signals',
+        'business_product_permissions', 'business_product_media']) {
+        await supabase.from(tbl as any).delete().in('product_id', productIds)
+      }
+      await supabase.from('business_products_services').delete().eq('business_id', userId)
+      log(`  ✓ Cleared ${existingProducts.length} previous services`)
+    }
+
     const services = data.services || []
 
     const { error: ovErr } = await supabase.from('business_products_services_overview').upsert({

@@ -2211,7 +2211,45 @@ function BusinessProfileViewPageInner() {
 
               return (
                 <div className="mt-6 space-y-6">
-                  {productModal.media.length ? (
+                  {/* Explainer video */}
+                  {productModal.explainer_video_url && (() => {
+                    const vUrl = productModal.explainer_video_url
+                    const ytMatch = vUrl.match(/(?:v=|youtu\.be\/)([^&?/]+)/)
+                    if (ytMatch) {
+                      return (
+                        <div className="rounded-xl overflow-hidden aspect-video bg-black">
+                          <iframe
+                            src={`https://www.youtube.com/embed/${ytMatch[1]}?rel=0`}
+                            className="w-full h-full"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        </div>
+                      )
+                    }
+                    return (
+                      <video src={vUrl} controls className="w-full rounded-xl bg-black" />
+                    )
+                  })()}
+
+                  {/* External link */}
+                  {productModal.external_link && (
+                    <a
+                      href={productModal.external_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 transition-colors"
+                    >
+                      <span className="text-blue-400 text-lg">🔗</span>
+                      <div>
+                        <div className="text-blue-300 text-sm font-semibold">Learn more</div>
+                        <div className="text-slate-400 text-xs truncate">{productModal.external_link}</div>
+                      </div>
+                    </a>
+                  )}
+
+                  {/* Media items */}
+                  {productModal.media.length > 0 && (
                     <div>
                       <div className="text-sm font-semibold mb-2">Media</div>
                       <div className="grid sm:grid-cols-2 gap-3">
@@ -2224,7 +2262,7 @@ function BusinessProfileViewPageInner() {
                                 <img
                                   src={m.file_url}
                                   alt={m.title || 'Media'}
-                                  className="w-full h-40 object-cover rounded-lg"
+                                  className="w-full h-40 object-cover rounded-lg cursor-pointer"
                                   onClick={() => setPreview({ kind: 'image', url: m.file_url as string, title: m.title || 'Media' })}
                                 />
                               ) : m.media_type === 'video' ? (
@@ -2234,74 +2272,114 @@ function BusinessProfileViewPageInner() {
                                   {m.title || 'Open media'}
                                 </a>
                               )
-                            ) : (
-                              <div className="text-xs text-slate-500">No media preview available.</div>
-                            )}
+                            ) : null}
                           </div>
                         ))}
                       </div>
                     </div>
-                  ) : null}
+                  )}
 
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm font-semibold mb-2">Teams involved</div>
-                      <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-                        {productModal.teams.length ? productModal.teams.map((t) => (
-                          <span key={t} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">{t}</span>
-                        )) : <span className="text-slate-500">No teams listed.</span>}
-                      </div>
+                  {/* Teams · Roles · Skills · Growth areas — only render if data exists */}
+                  {(productModal.teams.length > 0 || productModal.roles.length > 0 ||
+                    productModal.skills.length > 0 || productModal.growth_areas.length > 0) && (
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {productModal.teams.length > 0 && (
+                        <div>
+                          <div className="text-sm font-semibold mb-2">Teams involved</div>
+                          <div className="flex flex-wrap gap-2">
+                            {productModal.teams.map((t) => (
+                              <span key={t} className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-slate-300">{t}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {productModal.roles.length > 0 && (
+                        <div>
+                          <div className="text-sm font-semibold mb-2">Typical roles</div>
+                          <div className="flex flex-wrap gap-2">
+                            {productModal.roles.map((r) => (
+                              <span key={r} className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-slate-300">{r}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {productModal.skills.length > 0 && (
+                        <div>
+                          <div className="text-sm font-semibold mb-2">Skills used</div>
+                          <div className="flex flex-wrap gap-2">
+                            {productModal.skills.map((s) => (
+                              <span key={s} className="px-2 py-1 rounded-full bg-purple-500/15 border border-purple-500/30 text-xs text-purple-300">{s}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {productModal.growth_areas.length > 0 && (
+                        <div>
+                          <div className="text-sm font-semibold mb-2">Growth areas</div>
+                          <div className="flex flex-wrap gap-2">
+                            {productModal.growth_areas.map((g) => (
+                              <span key={g} className="px-2 py-1 rounded-full bg-green-500/15 border border-green-500/30 text-xs text-green-300">{g}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <div className="text-sm font-semibold mb-2">Typical roles</div>
-                      <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-                        {productModal.roles.length ? productModal.roles.map((r) => (
-                          <span key={r} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">{r}</span>
-                        )) : <span className="text-slate-500">No roles listed.</span>}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold mb-2">Skills used</div>
-                      <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-                        {productModal.skills.length ? productModal.skills.map((s) => (
-                          <span key={s} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">{s}</span>
-                        )) : <span className="text-slate-500">No skills listed.</span>}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold mb-2">Growth areas</div>
-                      <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-                        {productModal.growth_areas.length ? productModal.growth_areas.map((g) => (
-                          <span key={g} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">{g}</span>
-                        )) : <span className="text-slate-500">No growth areas listed.</span>}
-                      </div>
-                    </div>
-                  </div>
+                  )}
 
-                  <div>
-                    <div className="text-sm font-semibold mb-2">Impact & Outcomes</div>
-                    <div className="text-slate-300 whitespace-pre-wrap text-sm">
-                      {productModal.impact.who_it_helps ? `Who it helps: ${productModal.impact.who_it_helps}\n` : ''}
-                      {productModal.impact.what_it_improves ? `What it improves: ${productModal.impact.what_it_improves}\n` : ''}
-                      {productModal.impact.real_world_outcomes ? `Real-world outcomes: ${productModal.impact.real_world_outcomes}` : ''}
+                  {/* Impact & Outcomes — only if any field is populated */}
+                  {(productModal.impact.who_it_helps || productModal.impact.what_it_improves || productModal.impact.real_world_outcomes) && (
+                    <div className="rounded-xl bg-slate-900/50 border border-white/10 p-4 space-y-2">
+                      <div className="text-sm font-semibold">Impact & Outcomes</div>
+                      {productModal.impact.who_it_helps && (
+                        <div className="text-sm">
+                          <span className="text-slate-400">Who it helps: </span>
+                          <span className="text-slate-200">{productModal.impact.who_it_helps}</span>
+                        </div>
+                      )}
+                      {productModal.impact.what_it_improves && (
+                        <div className="text-sm">
+                          <span className="text-slate-400">What it improves: </span>
+                          <span className="text-slate-200">{productModal.impact.what_it_improves}</span>
+                        </div>
+                      )}
+                      {productModal.impact.real_world_outcomes && (
+                        <div className="text-sm">
+                          <span className="text-slate-400">Real-world outcomes: </span>
+                          <span className="text-slate-200">{productModal.impact.real_world_outcomes}</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )}
 
-                  <div>
-                    <div className="text-sm font-semibold mb-2">Relationship signals</div>
-                    <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-                      {productModal.signals.we_are_hiring_for_this ? <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Hiring</span> : null}
-                      {productModal.signals.open_to_partnerships ? <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Partnerships</span> : null}
-                      {productModal.signals.in_research_and_development ? <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">R&D</span> : null}
-                      {productModal.signals.currently_scaling ? <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Scaling</span> : null}
-                      {!productModal.signals.we_are_hiring_for_this &&
-                        !productModal.signals.open_to_partnerships &&
-                        !productModal.signals.in_research_and_development &&
-                        !productModal.signals.currently_scaling ? (
-                        <span className="text-slate-500">No signals shared.</span>
-                      ) : null}
+                  {/* Relationship signals — only if any flag is true */}
+                  {(productModal.signals.we_are_hiring_for_this || productModal.signals.open_to_partnerships ||
+                    productModal.signals.in_research_and_development || productModal.signals.currently_scaling) && (
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Relationship signals</div>
+                      <div className="flex flex-wrap gap-2">
+                        {productModal.signals.we_are_hiring_for_this && (
+                          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-xs text-blue-300 font-medium">
+                            <span>👥</span> Hiring
+                          </span>
+                        )}
+                        {productModal.signals.open_to_partnerships && (
+                          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-500/15 border border-green-500/30 text-xs text-green-300 font-medium">
+                            <span>🤝</span> Open to partnerships
+                          </span>
+                        )}
+                        {productModal.signals.in_research_and_development && (
+                          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-xs text-yellow-300 font-medium">
+                            <span>🔬</span> R&amp;D
+                          </span>
+                        )}
+                        {productModal.signals.currently_scaling && (
+                          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-xs text-purple-300 font-medium">
+                            <span>🚀</span> Scaling
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {(productsRoadmap && (productsRoadmap.is_public || isOwner)) ? (
                     <div>

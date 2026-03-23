@@ -144,25 +144,117 @@ function extractSocialLinks(html: string): Record<string, string> {
   return result
 }
 
-function extractLogoFromHtml(html: string, baseUrl: string): string | null {
-  const base = new URL(baseUrl)
-  const candidates: string[] = []
-  const ogImage = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-                 || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
-  if (ogImage?.[1]) candidates.push(ogImage[1])
-  const twImage = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
-                 || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i)
-  if (twImage?.[1]) candidates.push(twImage[1])
-  const apple = html.match(/<link[^>]+rel=["']apple-touch-icon["'][^>]+href=["']([^"']+)["']/i)
-               || html.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["']apple-touch-icon["']/i)
-  if (apple?.[1]) candidates.push(apple[1])
-  const icons = [...html.matchAll(/<link[^>]+rel=["'](?:shortcut icon|icon)["'][^>]+href=["']([^"']+\.(?:png|svg|ico))["']/gi)]
-  for (const m of icons) { if (m[1]) candidates.push(m[1]) }
-  for (const c of candidates) {
-    if (!c || c.length < 4) continue
-    try { return c.startsWith('http') ? c : new URL(c, base.origin).href } catch (_) {}
+/** Resolve a raw href to an absolute URL, or null if invalid */
+function resolveUrl(href: string, origin: string): string | null {
+  if (!href || href.length < 4) return null
+  try { return href.startsWith('http') ? href : new URL(href, origin).href } catch (_) { return null }
+}
+
+/**
+ * Comprehensive logo discovery with strict priority order:
+ * 1. <img> tags with logo/brand in src/class/id/alt — SVG preferred
+ * 2. <link> tags: apple-touch-icon, manifest, PNG/SVG icons
+ * 3. Common well-known asset paths (/logo.svg, /logo.png, etc.)
+ * 4. og:image / twitter:image (marketing images, not ideal logos)
+ * 5. /favicon.ico (last resort before DALL-E)
+ */
+async function findBestLogoUrl(html: string, origin: string): Promise<{ url: string; source: string } | null> {
+  type Candidate = { url: string; score: number; source: string }
+  const candidates: Candidate[] = []
+  const seen = new Set<string>()
+
+  const add = (href: string | null | undefined, score: number, source: string) => {
+    const url = resolveUrl(href || '', origin)
+    if (!url || seen.has(url)) return
+    seen.add(url)
+    candidates.push({ url, score, source })
   }
-  return `${base.origin}/favicon.ico`
+
+  // ── 1. <img> tags with logo/brand/header in any attribute ──────────────
+  for (const m of html.matchAll(/<img([^>]+)>/gi)) {
+    const tag = m[1]
+    const src = tag.match(/src=["']([^"']+)["']/i)?.[1]
+    if (!src) continue
+    const attrs = tag.toLowerCase()
+    const isLogoLike = /logo|brand|header/.test(attrs) || /logo|brand/.test(src.toLowerCase())
+    if (!isLogoLike) continue
+    const isSvg = /\.svg(\?|$)/i.test(src)
+    const isPng = /\.png(\?|$)/i.test(src)
+    // SVG img tag logo = highest confidence
+    add(src, isSvg ? 100 : isPng ? 90 : 80, `<img> tag (${isSvg ? 'SVG' : isPng ? 'PNG' : 'JPG'})`)
+  }
+
+  // ── 2. <picture> / <source> with logo in src ───────────────────────────
+  for (const m of html.matchAll(/<source([^>]+)>/gi)) {
+    const src = m[1].match(/srcset=["']([^"'\s,]+)/i)?.[1]
+    if (src && /logo|brand/i.test(src)) {
+      add(src, /\.svg/i.test(src) ? 95 : 85, '<picture> source')
+    }
+  }
+
+  // ── 3. SVG <use> or inline <symbol> — skip (can't download inline SVG)
+
+  // ── 4. <link> tags: apple-touch-icon, manifest icons ──────────────────
+  const apple = html.match(/<link[^>]+rel=["'][^"']*apple-touch-icon[^"']*["'][^>]+href=["']([^"']+)["']/i)
+             || html.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["'][^"']*apple-touch-icon[^"']*["']/i)
+  add(apple?.[1], 50, 'apple-touch-icon')
+
+  for (const m of html.matchAll(/<link[^>]+rel=["'][^"']*icon[^"']*["'][^>]+href=["']([^"']+\.(?:png|svg))["']/gi)) {
+    const isSvg = /\.svg/i.test(m[1])
+    add(m[1], isSvg ? 70 : 45, `<link> icon (${isSvg ? 'SVG' : 'PNG'})`)
+  }
+
+  // ── 5. og:image / twitter:image ────────────────────────────────────────
+  const ogImg = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
+             || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1]
+  add(ogImg, 30, 'og:image')
+
+  const twImg = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
+             || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i)?.[1]
+  add(twImg, 25, 'twitter:image')
+
+  // Sort by score desc — try in priority order
+  candidates.sort((a, b) => b.score - a.score)
+
+  // ── 6. Common asset paths — try in parallel (HEAD check) ───────────────
+  const commonPaths = [
+    '/logo.svg', '/logo.png', '/logo.jpg',
+    '/images/logo.svg', '/images/logo.png',
+    '/assets/logo.svg', '/assets/logo.png',
+    '/static/logo.svg', '/static/logo.png',
+    '/media/logo.svg', '/media/logo.png',
+    '/brand/logo.svg', '/brand/logo.png',
+    '/img/logo.svg', '/img/logo.png',
+  ]
+
+  const pathChecks = await Promise.allSettled(
+    commonPaths.map(async (p) => {
+      const url = `${origin}${p}`
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 3000)
+      try {
+        const r = await fetch(url, { method: 'HEAD', signal: controller.signal })
+        clearTimeout(timer)
+        if (r.ok) return { url, source: `common path ${p}`, score: /\.svg/.test(p) ? 88 : 82 }
+      } catch (_) { clearTimeout(timer) }
+      return null
+    })
+  )
+
+  for (const r of pathChecks) {
+    if (r.status === 'fulfilled' && r.value) {
+      candidates.push(r.value)
+    }
+  }
+
+  // Re-sort after adding common paths
+  candidates.sort((a, b) => b.score - a.score)
+
+  // Return best available candidate; favicon is last resort
+  const best = candidates[0]
+  if (best) return best
+
+  return { url: `${origin}/favicon.ico`, source: 'favicon.ico fallback' }
 }
 
 // ── GPT-4o Research ───────────────────────────────────────────────────────────
@@ -468,14 +560,15 @@ async function generateSingleProfile(opts: {
     log('\n[1/12] Researching company...')
     if (targetLocation) log(`  Target location: ${targetLocation}`)
     log('  Scanning website for social links and logo...')
-    const websiteHtml = await fetchMultiplePages(websiteUrl, targetLocation)
-    const detectedSocial   = extractSocialLinks(websiteHtml)
-    const detectedLogoUrl  = extractLogoFromHtml(websiteHtml, websiteUrl)
+    const websiteHtml    = await fetchMultiplePages(websiteUrl, targetLocation)
+    const detectedSocial = extractSocialLinks(websiteHtml)
+    const origin         = new URL(websiteUrl).origin
+    log('  Discovering logo...')
+    const logoCandidate  = await withTimeout(findBestLogoUrl(websiteHtml, origin), 6000, null)
 
     if (Object.keys(detectedSocial).length > 0) {
       log(`  ✓ Found social links: ${Object.keys(detectedSocial).join(', ')}`)
     }
-    if (detectedLogoUrl) log('  ✓ Found logo/brand image')
 
     const data = await researchCompany(openai, websiteUrl, linkedinUrl, youtubeUrl, detectedSocial, websiteHtml, targetLocation, log)
 
@@ -511,18 +604,21 @@ async function generateSingleProfile(opts: {
     const dalleImages = data.dal_le_images || []
     const imageResults: Record<string, { storagePath: string; fileUrl: string; tmpPath: string; size: number }> = {}
 
-    if (detectedLogoUrl) {
-      log('  Downloading real logo from website...')
+    if (logoCandidate) {
+      log(`  Logo source: ${logoCandidate.source}`)
+      log(`  Downloading: ${logoCandidate.url}`)
       try {
-        const logoFilename = `${slug}-logo.jpg`
+        const isSvg = /\.svg(\?|$)/i.test(logoCandidate.url)
+        const ext = isSvg ? 'svg' : /\.png(\?|$)/i.test(logoCandidate.url) ? 'png' : 'jpg'
+        const logoFilename = `${slug}-logo.${ext}`
         const logoTmpPath  = path.join(tmpDir, logoFilename)
-        await downloadFile(detectedLogoUrl, logoTmpPath)
+        await downloadFile(logoCandidate.url, logoTmpPath)
         const logoSize = fs.statSync(logoTmpPath).size
         if (logoSize > 500) {
           const storagePath = `${userId}/bank/${logoFilename}`
-          const contentType = detectedLogoUrl.endsWith('.png') ? 'image/png'
-            : detectedLogoUrl.endsWith('.svg') ? 'image/svg+xml'
-            : detectedLogoUrl.endsWith('.ico') ? 'image/x-icon'
+          const contentType = isSvg ? 'image/svg+xml'
+            : ext === 'png' ? 'image/png'
+            : /\.ico(\?|$)/i.test(logoCandidate.url) ? 'image/x-icon'
             : 'image/jpeg'
           const { error: upErr } = await supabase.storage.from(BUCKET).upload(
             storagePath, fs.readFileSync(logoTmpPath), { contentType, upsert: true }
@@ -532,16 +628,18 @@ async function generateSingleProfile(opts: {
               storagePath, tmpPath: logoTmpPath,
               fileUrl: publicStorageUrl(SUPABASE_URL, storagePath), size: logoSize,
             }
-            log(`  ✓ Real logo downloaded (${(logoSize/1024).toFixed(0)} KB)`)
+            log(`  ✓ Real logo acquired via ${logoCandidate.source} (${(logoSize/1024).toFixed(0)} KB, ${ext.toUpperCase()})`)
           } else {
-            err(`  ✗ Logo upload: ${upErr.message} — will generate with DALL-E`)
+            err(`  ✗ Logo upload failed: ${upErr.message} — will generate with DALL-E`)
           }
         } else {
-          log(`  Logo too small (${logoSize}B) — will generate with DALL-E`)
+          log(`  Logo file too small (${logoSize}B) — trying DALL-E`)
         }
       } catch (e: any) {
         err(`  ✗ Logo download failed: ${e.message} — will generate with DALL-E`)
       }
+    } else {
+      log('  No logo found from website — will generate with DALL-E')
     }
 
     // Generate DALL-E images in parallel batches of 3 to respect rate limits

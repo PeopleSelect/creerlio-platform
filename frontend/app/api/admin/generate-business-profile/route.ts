@@ -76,14 +76,19 @@ function getFfmpegBin(): string {
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
 
+// SSL-tolerant HTTPS agent — handles company sites with self-signed or chain-broken certs
+const insecureAgent = new https.Agent({ rejectUnauthorized: false })
+
 async function downloadFile(url: string, dest: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest)
     const proto = url.startsWith('https') ? https : http
-    const req = proto.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } } as any, (res: any) => {
+    const opts: any = { headers: { 'User-Agent': 'Mozilla/5.0' } }
+    if (url.startsWith('https')) opts.agent = insecureAgent
+    const req = proto.get(url, opts, (res: any) => {
       if (res.statusCode === 301 || res.statusCode === 302) {
         file.close()
-        fs.unlinkSync(dest)
+        try { fs.unlinkSync(dest) } catch (_) {}
         downloadFile(res.headers.location, dest).then(resolve).catch(reject)
         return
       }
@@ -103,21 +108,173 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   ])
 }
 
-async function fetchWebsiteText(url: string): Promise<string> {
+async function fetchWebsiteText(url: string, maxBytes = 40000): Promise<string> {
   const inner = new Promise<string>((resolve) => {
     const proto = url.startsWith('https') ? https : http
+    const opts: any = { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Creerlio/1.0)' } }
+    if (url.startsWith('https')) opts.agent = insecureAgent
     let body = ''
-    const req = proto.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } } as any, (r) => {
+    const req = proto.get(url, opts, (r: any) => {
       r.setEncoding('utf8')
-      r.on('data', (d: string) => { body += d; if (body.length > 40000) (req as any).destroy() })
-      r.on('end', () => resolve(body.slice(0, 40000)))
+      r.on('data', (d: string) => { body += d; if (body.length > maxBytes) (req as any).destroy() })
+      r.on('end', () => resolve(body.slice(0, maxBytes)))
     })
     ;(req as any).on('error', () => resolve(''))
-    // Socket-level timeout (fires after connect)
-    ;(req as any).setTimeout(4000, () => { (req as any).destroy(); resolve(body) })
+    ;(req as any).setTimeout(6000, () => { (req as any).destroy(); resolve(body) })
   })
-  // Hard timeout including DNS + connect time — guarantees this never hangs
-  return withTimeout(inner, 5000, '')
+  return withTimeout(inner, 8000, '')
+}
+
+/** Fetch and parse JSON from an API endpoint — larger buffer, ATS-focused */
+async function fetchJson(url: string): Promise<any> {
+  const inner = new Promise<string>((resolve) => {
+    const proto = url.startsWith('https') ? https : http
+    const opts: any = { headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' } }
+    if (url.startsWith('https')) opts.agent = insecureAgent
+    let body = ''
+    const req = proto.get(url, opts, (r: any) => {
+      r.setEncoding('utf8')
+      r.on('data', (d: string) => { body += d; if (body.length > 500000) (req as any).destroy() })
+      r.on('end', () => resolve(body))
+    })
+    ;(req as any).on('error', () => resolve(''))
+    ;(req as any).setTimeout(8000, () => { (req as any).destroy(); resolve(body) })
+  })
+  const text = await withTimeout(inner, 10000, '')
+  if (!text.trim()) throw new Error('Empty response')
+  return JSON.parse(text)
+}
+
+function stripHtmlTags(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<\/li>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ').replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/&#39;/g, "'").replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, '\n\n').trim()
+}
+
+/** Detect ATS / careers URL from scraped homepage HTML */
+function detectCareersUrl(html: string, baseOrigin: string): string | null {
+  // Known external ATS platforms — check href attributes and raw URL matches
+  const atsRegexes = [
+    /https?:\/\/[a-z0-9-]+\.csod\.com\/ux\/ats\/careersite\/[^\s"'<>]+/i,
+    /https?:\/\/boards\.greenhouse\.io\/[^\s"'<>]+/i,
+    /https?:\/\/jobs\.lever\.co\/[^\s"'<>]+/i,
+    /https?:\/\/[a-z0-9-]+\.smartrecruiters\.com\/[^\s"'<>]+/i,
+    /https?:\/\/[a-z0-9-]+\.bamboohr\.com\/jobs\/[^\s"'<>]+/i,
+    /https?:\/\/[a-z0-9-]+\.myworkdayjobs\.com\/[^\s"'<>]+/i,
+    /https?:\/\/[a-z0-9-]+\.taleo\.net\/[^\s"'<>]+/i,
+    /https?:\/\/careers\.seek\.com\.au\/[^\s"'<>]+/i,
+  ]
+  for (const re of atsRegexes) {
+    const m = html.match(re)
+    if (m) return m[0].replace(/['">\s]+$/, '')
+  }
+  // Internal careers page href
+  const hrefRe = /href=["']([^"']*(?:\/careers|\/jobs|\/join-us|\/work-with-us)[^"']*)["']/i
+  const hm = html.match(hrefRe)
+  if (hm) {
+    const href = hm[1]
+    if (href.startsWith('http')) return href
+    try { return new URL(href, baseOrigin).href } catch (_) {}
+  }
+  return null
+}
+
+/** Scrape real jobs from a known ATS URL. Returns [] on failure so caller can fall back to GPT. */
+async function scrapeJobsFromATS(careersUrl: string, log: (m: string) => void): Promise<any[]> {
+  const toJob = (title: string, description: string, location: string, city: string, state: string, employmentType: string, applyUrl: string) => ({
+    title: title.trim(),
+    description: stripHtmlTags(description).slice(0, 800),
+    city: city.trim(), state: state.trim(), country: 'Australia',
+    location: location.trim(), employment_type: employmentType || 'Full-time',
+    experience_level: '', salary_min: null, salary_max: null, salary_currency: 'AUD',
+    required_skills: [], preferred_skills: [], requirements: '', apply_url: applyUrl,
+  })
+
+  try {
+    // ── CSOD (Cornerstone OnDemand) ───────────────────────────────────────
+    if (careersUrl.includes('.csod.com')) {
+      const tenant = (careersUrl.match(/https?:\/\/([^.]+)\.csod\.com/) || [])[1]
+      const siteId = (careersUrl.match(/careersite\/(\d+)/) || [])[1]
+      if (tenant && siteId) {
+        const data = await fetchJson(`https://${tenant}.csod.com/ux/ats/careersite/${siteId}/home/requisition?skip=0&take=100`)
+        const rows: any[] = data?.data ?? data?.requisitions ?? (Array.isArray(data) ? data : [])
+        if (rows.length > 0) {
+          log(`  ✓ CSOD API: ${rows.length} real jobs found`)
+          return rows.map((j: any) => {
+            const city = j.city || (j.location || '').split(',')[0]?.trim() || ''
+            const state = j.state || (j.location || '').split(',')[1]?.trim() || ''
+            return toJob(
+              j.req_title || j.title || j.displayJobTitle || '',
+              j.job_description || j.description || j.req_description || '',
+              j.city_state || j.location || city,
+              city, state, j.employment_type || j.scheduleType || 'Full-time',
+              `https://${tenant}.csod.com/ux/ats/careersite/${siteId}/home/requisition/${j.req_id || j.id}`,
+            )
+          })
+        }
+      }
+    }
+
+    // ── Greenhouse ────────────────────────────────────────────────────────
+    if (careersUrl.includes('greenhouse.io')) {
+      const company = (careersUrl.match(/greenhouse\.io\/([^/?#\s]+)/) || [])[1]
+      if (company) {
+        const data = await fetchJson(`https://boards-api.greenhouse.io/v1/boards/${company}/jobs?content=true`)
+        const jobs: any[] = data?.jobs ?? []
+        if (jobs.length > 0) {
+          log(`  ✓ Greenhouse API: ${jobs.length} real jobs found`)
+          return jobs.slice(0, 50).map((j: any) => {
+            const loc = j.location?.name || ''
+            const parts = loc.split(',')
+            return toJob(j.title || '', j.content || '', loc, parts[0]?.trim() || '', parts[1]?.trim() || '', 'Full-time', j.absolute_url || careersUrl)
+          })
+        }
+      }
+    }
+
+    // ── Lever ─────────────────────────────────────────────────────────────
+    if (careersUrl.includes('lever.co')) {
+      const company = (careersUrl.match(/lever\.co\/([^/?#\s]+)/) || [])[1]
+      if (company) {
+        const jobs: any[] = await fetchJson(`https://api.lever.co/v0/postings/${company}?mode=json&limit=100`)
+        if (Array.isArray(jobs) && jobs.length > 0) {
+          log(`  ✓ Lever API: ${jobs.length} real jobs found`)
+          return jobs.slice(0, 50).map((j: any) => {
+            const loc = j.categories?.location || ''
+            const parts = loc.split(',')
+            const reqs = (j.lists || []).map((l: any) => stripHtmlTags(l.content || '')).join('\n').slice(0, 500)
+            return { ...toJob(j.text || '', j.descriptionBody || j.description || '', loc, parts[0]?.trim() || '', parts[1]?.trim() || '', j.categories?.commitment || 'Full-time', j.hostedUrl || careersUrl), requirements: reqs }
+          })
+        }
+      }
+    }
+
+    // ── SmartRecruiters ───────────────────────────────────────────────────
+    if (careersUrl.includes('smartrecruiters.com')) {
+      const company = (careersUrl.match(/smartrecruiters\.com\/([^/?#\s]+)/) || [])[1]
+      if (company) {
+        const data = await fetchJson(`https://api.smartrecruiters.com/v1/companies/${company}/postings?limit=100`)
+        const jobs: any[] = data?.content ?? []
+        if (jobs.length > 0) {
+          log(`  ✓ SmartRecruiters API: ${jobs.length} real jobs found`)
+          return jobs.slice(0, 50).map((j: any) => toJob(
+            j.name || '', j.jobAd?.sections?.jobDescription?.text || '',
+            [j.location?.city, j.location?.region].filter(Boolean).join(', '),
+            j.location?.city || '', j.location?.region || '',
+            j.typeOfEmployment?.label || 'Full-time',
+            `https://jobs.smartrecruiters.com/${company}/${j.id}`,
+          ))
+        }
+      }
+    }
+
+    log(`  ⚠ No matching ATS API for ${careersUrl} — will use AI-generated jobs`)
+  } catch (e: any) {
+    log(`  ⚠ ATS scraping error: ${e.message} — will use AI-generated jobs`)
+  }
+  return []
 }
 
 /** Scrape homepage + key subpages — all in parallel, hard 8s total cap */
@@ -638,6 +795,7 @@ interface ProfileResult {
   jobCount: number
   svcCount: number
   videoUrl: string | null
+  claimToken: string | null
 }
 
 async function generateSingleProfile(opts: {
@@ -675,6 +833,20 @@ async function generateSingleProfile(opts: {
 
     if (Object.keys(detectedSocial).length > 0) {
       log(`  ✓ Found social links: ${Object.keys(detectedSocial).join(', ')}`)
+    }
+
+    // Detect ATS / careers URL and scrape real jobs before calling GPT
+    log('  Scanning for real job listings...')
+    const careersUrl = detectCareersUrl(websiteHtml, origin)
+    let scrapedJobs: any[] = []
+    if (careersUrl) {
+      log(`  Detected careers URL: ${careersUrl}`)
+      scrapedJobs = await scrapeJobsFromATS(careersUrl, log)
+    }
+    if (scrapedJobs.length > 0) {
+      log(`  ✓ ${scrapedJobs.length} real jobs will be imported from ATS`)
+    } else {
+      log('  No ATS jobs found — AI will generate representative listings')
     }
 
     const data = await researchCompany(openai, websiteUrl, linkedinUrl, youtubeUrl, detectedSocial, websiteHtml, targetLocation, log)
@@ -1070,7 +1242,10 @@ async function generateSingleProfile(opts: {
     if (delJobsErr) err('  ⚠ Could not clear old jobs: ' + delJobsErr.message)
     else log('  ✓ Cleared previous jobs')
 
-    const jobs = data.jobs || []
+    // Use real ATS jobs when available; fall back to GPT-generated
+    const jobs = scrapedJobs.length > 0 ? scrapedJobs : (data.jobs || [])
+    if (scrapedJobs.length > 0) log(`  Using ${jobs.length} real jobs from ATS`)
+    else log(`  Using ${jobs.length} AI-generated jobs`)
     let jobCount = 0
     for (const job of jobs) {
       const { error: jErr } = await supabase.from('jobs').insert({

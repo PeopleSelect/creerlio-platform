@@ -247,6 +247,7 @@ JOBS (exactly 4):
 • requirements: specific — mention years of experience, licences, qualifications, tools
 • salary: realistic Australian market rates for this role and seniority
 • city/state: use actual office locations where known
+• apply_url: the URL where this job is actually advertised — use the company's real careers page (e.g. https://www.ljhooker.com.au/careers) or a realistic SEEK/LinkedIn URL for this specific role. Use the real domain. Do NOT use placeholder text.
 
 BENEFITS (exactly 5):
 • Specific to this company type — not generic "competitive salary"
@@ -321,7 +322,7 @@ Generate the complete Creerlio Business Profile JSON:
   "skills": [],
   "badges": [],
   "services": [{ "name": "", "category": "Service", "short_description": "", "who_it_is_for": "", "problem_it_solves": "", "roles": [], "skills": [], "growth_areas": [], "impact": { "who_it_helps": "", "what_it_improves": "", "real_world_outcomes": "" }, "we_are_hiring": false, "open_to_partnerships": false, "currently_scaling": false }],
-  "jobs": [{ "title": "", "description": "", "city": "", "state": "", "country": "Australia", "location": "", "employment_type": "Full-time", "experience_level": "", "salary_min": 0, "salary_max": 0, "salary_currency": "AUD", "required_skills": [], "preferred_skills": [], "requirements": "" }],
+  "jobs": [{ "title": "", "description": "", "city": "", "state": "", "country": "Australia", "location": "", "employment_type": "Full-time", "experience_level": "", "salary_min": 0, "salary_max": 0, "salary_currency": "AUD", "required_skills": [], "preferred_skills": [], "requirements": "", "apply_url": "" }],
   "dal_le_images": [
     { "key": "logo",        "filename": "logo.jpg",        "bank_type": "logo",     "title": "", "prompt": "", "size": "1024x1024" },
     { "key": "hero",        "filename": "hero.jpg",        "bank_type": "image",    "title": "", "prompt": "", "size": "1792x1024" },
@@ -819,6 +820,7 @@ async function generateSingleProfile(opts: {
         salary_currency: job.salary_currency || 'AUD',
         required_skills: job.required_skills || [], preferred_skills: job.preferred_skills || [],
         requirements: job.requirements || '',
+        application_url: job.apply_url || null,
       })
       if (jErr) err(`  ✗ Job "${job.title}": ${jErr.message}`)
       else { jobCount++; log(`  ✓ ${job.title}`) }

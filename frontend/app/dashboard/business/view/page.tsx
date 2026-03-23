@@ -3194,10 +3194,11 @@ function BusinessProfileViewPageInner() {
                                 href={job.application_url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-blue-300 hover:text-blue-200 text-sm underline"
+                                className="text-emerald-400 hover:text-emerald-300 text-sm font-medium underline"
                                 onClick={(e) => e.stopPropagation()}
+                                title={job.application_url}
                               >
-                                Apply via URL
+                                View Original Listing ↗
                               </a>
                             )}
                             {job.application_email && (

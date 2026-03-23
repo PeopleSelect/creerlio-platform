@@ -94,10 +94,16 @@ async function signedUrl(path: string, seconds = 60 * 30) {
     console.log('[View Profile] signedUrl: empty path provided')
     return null
   }
-  
+
+  // If already a full URL (old profiles stored fileUrl instead of storagePath), return as-is
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    console.log('[View Profile] signedUrl: received full URL, returning as-is')
+    return path
+  }
+
   // Remove leading slash if present (paths should be relative)
   const cleanPath = path.startsWith('/') ? path.slice(1) : path
-  
+
   // Since bucket is now public, use public URL directly (faster and more reliable)
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   if (supabaseUrl) {
@@ -928,7 +934,20 @@ function BusinessProfileViewPageInner() {
               // For uploaded/recorded videos, prefer public file_url, fall back to signed URL
               if (videoItem.file_url) {
                 if (!cancelled) {
-                  setIntroVideoUrl(videoItem.file_url)
+                  // If the stored file is audio (old TTS narration) and social links have YouTube, prefer YouTube
+                  const isAudio = /\.(mp3|m4a|wav|ogg|aac)(\?|$)/i.test(videoItem.file_url)
+                  const socialLinksData = saved?.socialLinks
+                  let resolvedUrl = videoItem.file_url
+                  if (isAudio && Array.isArray(socialLinksData)) {
+                    const ytLink = socialLinksData.find((l: any) =>
+                      String(l.platform || '').toLowerCase().includes('youtube') && String(l.url || '').includes('youtube')
+                    )
+                    if (ytLink?.url) {
+                      resolvedUrl = ytLink.url
+                      console.log('[View Profile] Replaced audio intro with YouTube URL:', resolvedUrl)
+                    }
+                  }
+                  setIntroVideoUrl(resolvedUrl)
                   setIntroVideoTitle('Introduction Video')
                 }
               } else if (videoItem.file_path) {
@@ -955,9 +974,21 @@ function BusinessProfileViewPageInner() {
             }
           }
         } else {
+          // No introVideoId — check if saved metadata has a YouTube URL in social links to use as intro
           if (!cancelled) {
-            setIntroVideoUrl(null)
-            setIntroVideoTitle(null)
+            const socialLinksData = saved?.socialLinks
+            const ytLink = Array.isArray(socialLinksData)
+              ? socialLinksData.find((l: any) =>
+                  String(l.platform || '').toLowerCase().includes('youtube') && String(l.url || '').includes('youtube')
+                )
+              : null
+            if (ytLink?.url) {
+              setIntroVideoUrl(ytLink.url)
+              setIntroVideoTitle('Introduction Video')
+            } else {
+              setIntroVideoUrl(null)
+              setIntroVideoTitle(null)
+            }
           }
         }
       } finally {
@@ -2577,7 +2608,8 @@ function BusinessProfileViewPageInner() {
                   </a>
                   {(() => {
                     const hasIntroVideoId = typeof meta?.introVideoId === 'number' && meta.introVideoId !== null
-                    if (!hasIntroVideoId) return null
+                    const hasIntroVideoUrl = !!introVideoUrl
+                    if (!hasIntroVideoId && !hasIntroVideoUrl) return null
                     return (
                       <a
                         href="#section-intro"
@@ -2724,62 +2756,106 @@ function BusinessProfileViewPageInner() {
                 {/* Show intro video section if introVideoId exists in saved profile, even if URL loading failed */}
                 {(() => {
                   const hasIntroVideoId = typeof meta?.introVideoId === 'number' && meta.introVideoId !== null
-                  if (!hasIntroVideoId) return null
-                  
+                  const hasIntroVideoUrl = !!introVideoUrl
+                  if (!hasIntroVideoId && !hasIntroVideoUrl) return null
+
+                  // YouTube video embed regex — matches watch?v=, youtu.be/, /embed/
+                  const ytVideoRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/
+                  // YouTube channel/user regex — matches @handle, /channel/, /user/, /@
+                  const ytChannelRegex = /youtube\.com\/(?:@[\w.-]+|channel\/[\w-]+|user\/[\w-]+)/i
+                  // Any YouTube URL
+                  const isAnyYouTube = introVideoUrl ? (ytVideoRegex.test(introVideoUrl) || ytChannelRegex.test(introVideoUrl)) : false
+
                   return (
                     <section id="section-intro" className="rounded-2xl border border-white/10 bg-slate-950/40 p-6">
                       <h2 className="text-xl font-semibold mb-4">{introVideoTitle || 'Introduction Video'}</h2>
                       {introVideoUrl ? (
                         <div className="mx-auto max-w-3xl">
-                          {/* Soft frame */}
-                          <div className="rounded-3xl p-[1px] bg-gradient-to-br from-white/15 via-white/5 to-transparent shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-                            <div className="rounded-3xl overflow-hidden bg-slate-950/60 border border-white/10">
-                              <div className="bg-black">
-                                {(() => {
-                                  // Check if it's a YouTube URL
-                                  const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/
-                                  const youtubeMatch = introVideoUrl.match(youtubeRegex)
-                                  if (youtubeMatch) {
-                                    const videoId = youtubeMatch[1]
-                                    return (
+                          {(() => {
+                            // Specific YouTube video — embed as iframe
+                            const ytVideoMatch = introVideoUrl.match(ytVideoRegex)
+                            if (ytVideoMatch) {
+                              const videoId = ytVideoMatch[1]
+                              return (
+                                <div className="rounded-3xl p-[1px] bg-gradient-to-br from-white/15 via-white/5 to-transparent shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+                                  <div className="rounded-3xl overflow-hidden bg-slate-950/60 border border-white/10">
+                                    <div className="bg-black">
                                       <iframe
                                         src={`https://www.youtube.com/embed/${videoId}?rel=0`}
                                         className="w-full aspect-video"
                                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                         allowFullScreen
                                       />
-                                    )
-                                  }
-                                  // Check if it's a Vimeo URL
-                                  const vimeoRegex = /(?:vimeo\.com\/)(\d+)/
-                                  const vimeoMatch = introVideoUrl.match(vimeoRegex)
-                                  if (vimeoMatch) {
-                                    const videoId = vimeoMatch[1]
-                                    return (
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            }
+                            // YouTube channel URL — can't embed, show styled CTA card
+                            if (ytChannelRegex.test(introVideoUrl)) {
+                              return (
+                                <a
+                                  href={introVideoUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-5 p-6 rounded-2xl border border-red-500/30 bg-red-500/5 hover:border-red-400/60 hover:bg-red-500/10 transition-all group"
+                                >
+                                  <div className="w-14 h-14 rounded-xl bg-red-600 flex items-center justify-center shrink-0">
+                                    <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                    </svg>
+                                  </div>
+                                  <div>
+                                    <div className="font-semibold text-white text-lg group-hover:text-red-300 transition-colors">Watch on YouTube</div>
+                                    <div className="text-slate-400 text-sm mt-1 truncate max-w-xs">{introVideoUrl.replace(/^https?:\/\//, '')}</div>
+                                  </div>
+                                  <svg className="w-5 h-5 text-slate-400 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                  </svg>
+                                </a>
+                              )
+                            }
+                            // Check if it's a Vimeo URL
+                            const vimeoRegex = /(?:vimeo\.com\/)(\d+)/
+                            const vimeoMatch = introVideoUrl.match(vimeoRegex)
+                            if (vimeoMatch) {
+                              const videoId = vimeoMatch[1]
+                              return (
+                                <div className="rounded-3xl p-[1px] bg-gradient-to-br from-white/15 via-white/5 to-transparent shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+                                  <div className="rounded-3xl overflow-hidden bg-slate-950/60 border border-white/10">
+                                    <div className="bg-black">
                                       <iframe
                                         src={`https://player.vimeo.com/video/${videoId}`}
                                         className="w-full aspect-video"
                                         allow="autoplay; fullscreen; picture-in-picture"
                                         allowFullScreen
                                       />
-                                    )
-                                  }
-                                  // Regular video URL
-                                  return (
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            }
+                            // Regular video/audio file
+                            return (
+                              <div className="rounded-3xl p-[1px] bg-gradient-to-br from-white/15 via-white/5 to-transparent shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+                                <div className="rounded-3xl overflow-hidden bg-slate-950/60 border border-white/10">
+                                  <div className="bg-black">
                                     <video
                                       src={introVideoUrl}
                                       controls
                                       playsInline
                                       className="w-full max-h-[280px] md:max-h-[300px] object-contain"
                                     />
-                                  )
-                                })()}
+                                  </div>
+                                </div>
                               </div>
+                            )
+                          })()}
+                          {!isAnyYouTube && (
+                            <div className="mt-3 text-xs text-slate-400">
+                              Tip: Keep your intro under 60–90 seconds and speak to your strongest work examples.
                             </div>
-                          </div>
-                          <div className="mt-3 text-xs text-slate-400">
-                            Tip: Keep your intro under 60–90 seconds and speak to your strongest work examples.
-                          </div>
+                          )}
                         </div>
                       ) : (
                         !isPublicViewer ? (

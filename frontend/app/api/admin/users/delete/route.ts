@@ -91,6 +91,17 @@ export async function POST(req: Request) {
     const { error: talentError } = await admin.from('talent_profiles').delete().eq('user_id', userId)
     if (talentError) deleteErrors.push(`talent_profiles: ${talentError.message}`)
 
+    // Delete applications for jobs owned by this business (FK blocks job delete otherwise)
+    const { data: userJobs } = await admin.from('jobs').select('id').eq('user_id', userId)
+    if (userJobs && userJobs.length > 0) {
+      const jobIds = userJobs.map((j: any) => j.id)
+      const { error: appsError } = await admin.from('applications').delete().in('job_id', jobIds)
+      if (appsError) deleteErrors.push(`applications: ${appsError.message}`)
+
+      const { error: jobsError } = await admin.from('jobs').delete().in('id', jobIds)
+      if (jobsError) deleteErrors.push(`jobs: ${jobsError.message}`)
+    }
+
     const { error: businessError } = await admin.from('business_profiles').delete().eq('user_id', userId)
     if (businessError) deleteErrors.push(`business_profiles: ${businessError.message}`)
 

@@ -102,6 +102,14 @@ export async function POST(req: Request) {
       if (jobsError) deleteErrors.push(`jobs: ${jobsError.message}`)
     }
 
+    // Delete business_profile_pages before business_profiles (no cascade until migration applied)
+    const { data: userBusinesses } = await admin.from('business_profiles').select('id').eq('user_id', userId)
+    if (userBusinesses && userBusinesses.length > 0) {
+      const bizIds = userBusinesses.map((b: any) => b.id)
+      const { error: pagesError } = await admin.from('business_profile_pages').delete().in('business_id', bizIds)
+      if (pagesError) deleteErrors.push(`business_profile_pages: ${pagesError.message}`)
+    }
+
     const { error: businessError } = await admin.from('business_profiles').delete().eq('user_id', userId)
     if (businessError) deleteErrors.push(`business_profiles: ${businessError.message}`)
 

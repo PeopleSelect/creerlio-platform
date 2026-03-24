@@ -2996,6 +2996,12 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
               Business Bank ↗
             </Link>
             <Link
+              href="/dashboard/video"
+              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
+            >
+              Video Studio ↗
+            </Link>
+            <Link
               href="/dashboard/business/candidates"
               className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
             >

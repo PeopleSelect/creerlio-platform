@@ -60,6 +60,9 @@ export async function GET(req: NextRequest) {
   const profileMap: Record<string, any> = {}
   for (const p of profiles || []) profileMap[p.id] = p
 
+  // Filter out orphaned pages whose business_profile has been deleted
+  pages = pages.filter((p: any) => p.business_id && profileMap[p.business_id])
+
   let businesses = pages.map((row: any) => {
     const prof = profileMap[row.business_id] || {}
     return {

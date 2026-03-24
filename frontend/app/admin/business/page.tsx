@@ -25,6 +25,8 @@ export default function AdminBusinessPage() {
   const [genIndustry, setGenIndustry]     = useState('')
   const [genLocation, setGenLocation]     = useState('')
   const [genMaxResults, setGenMaxResults] = useState(2)
+  const [genCompanyName, setGenCompanyName] = useState('')
+  const [genAutoPublish, setGenAutoPublish] = useState(false)
   const [genRunning, setGenRunning]       = useState(false)
   const [genLogs, setGenLogs]             = useState<{ text: string; isError?: boolean }[]>([])
   const [genDone, setGenDone]             = useState(false)
@@ -145,7 +147,7 @@ export default function AdminBusinessPage() {
   }, [page, searchQuery, isAdmin, user])
 
   async function runGenerator() {
-    if (genMode === 'single' && !genWebsite.trim()) return
+    if (genMode === 'single' && !genWebsite.trim() && !genCompanyName.trim()) return
     if (genMode === 'bulk' && (!genIndustry.trim() || !genLocation.trim())) return
     setGenRunning(true)
     setGenLogs([])
@@ -159,7 +161,7 @@ export default function AdminBusinessPage() {
 
       const body = genMode === 'bulk'
         ? { mode: 'bulk', industry: genIndustry.trim(), location: genLocation.trim(), maxResults: genMaxResults }
-        : { mode: 'single', websiteUrl: genWebsite.trim(), linkedinUrl: genLinkedin.trim() || undefined, youtubeUrl: genYoutube.trim() || undefined, slug: genSlug.trim() || undefined, location: genLocation.trim() || undefined }
+        : { mode: 'single', websiteUrl: genWebsite.trim() || undefined, companyName: genCompanyName.trim() || undefined, linkedinUrl: genLinkedin.trim() || undefined, youtubeUrl: genYoutube.trim() || undefined, slug: genSlug.trim() || undefined, location: genLocation.trim() || undefined, autoPublish: genAutoPublish }
 
       const res = await fetch('/api/admin/generate-business-profile', {
         method: 'POST',
@@ -542,7 +544,13 @@ export default function AdminBusinessPage() {
                 {genMode === 'single' ? (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">Website URL <span className="text-red-400">*</span></label>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Company Name <span className="text-gray-500">(AI will find the URL)</span></label>
+                      <input type="text" placeholder="e.g. McDonald's Australia, Marsdens Law Group" value={genCompanyName} onChange={e => setGenCompanyName(e.target.value)}
+                        className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                        style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Website URL <span className="text-gray-500">(optional if name above is provided)</span></label>
                       <input type="url" placeholder="https://www.example.com.au" value={genWebsite} onChange={e => setGenWebsite(e.target.value)}
                         className="w-full px-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                         style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
@@ -575,6 +583,12 @@ export default function AdminBusinessPage() {
                           style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }} />
                       </div>
                     </div>
+                    <label className="flex items-center gap-3 cursor-pointer select-none">
+                      <div className={`relative w-10 h-5 rounded-full transition-colors ${genAutoPublish ? 'bg-purple-600' : 'bg-slate-700'}`} onClick={() => setGenAutoPublish(v => !v)}>
+                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${genAutoPublish ? 'translate-x-5' : ''}`} />
+                      </div>
+                      <span className="text-sm text-gray-300">Auto-publish profile when complete</span>
+                    </label>
                     <div className="bg-slate-800/50 rounded-lg px-4 py-3 text-sm text-gray-400">
                       Generates <strong className="text-gray-200">10 DALL-E images</strong>, <strong className="text-gray-200">4 jobs</strong>, <strong className="text-gray-200">5 services</strong>. If a YouTube URL is detected, it is used as the intro video (skipping TTS). Takes ~3–5 minutes. Specify a location to profile a local branch.
                     </div>
@@ -612,7 +626,7 @@ export default function AdminBusinessPage() {
                   <button
                     type="button"
                     onClick={runGenerator}
-                    disabled={genMode === 'single' ? !genWebsite.trim() : (!genIndustry.trim() || !genLocation.trim())}
+                    disabled={genMode === 'single' ? (!genWebsite.trim() && !genCompanyName.trim()) : (!genIndustry.trim() || !genLocation.trim())}
                     className="px-6 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
                   >
                     {genMode === 'bulk' ? `Discover & Generate ${genMaxResults} Profiles` : 'Generate Profile'}

@@ -491,6 +491,14 @@ async function fetchMultiplePages(websiteUrl: string, targetLocation?: string): 
     `${homepage}/people`,
     `${homepage}/contact`,
     `${homepage}/contact-us`,
+    `${homepage}/news`,
+    `${homepage}/media`,
+    `${homepage}/blog`,
+    `${homepage}/leadership`,
+    `${homepage}/partners`,
+    `${homepage}/awards`,
+    `${homepage}/our-people`,
+    `${homepage}/why-us`,
   ]
 
   // If a target location/suburb is provided, try the most likely location-specific page only
@@ -802,6 +810,54 @@ async function findBestLogoUrl(html: string, origin: string, linkedinUrl?: strin
   if (!seen.has(faviconUrl)) candidates.push({ url: faviconUrl, score: 1, source: 'favicon.ico fallback' })
 
   return candidates
+}
+
+// ── Company name → URL discovery ─────────────────────────────────────────────
+
+async function discoverWebsiteFromName(
+  openai: OpenAI,
+  companyName: string,
+  location: string,
+  log: (msg: string) => void
+): Promise<string | null> {
+  log(`  Looking up website for "${companyName}"${location ? ` in ${location}` : ''}...`)
+  try {
+    const resp = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      temperature: 0,
+      max_tokens: 80,
+      messages: [{ role: 'user', content: `What is the official website URL for the company "${companyName}"${location ? ` located in ${location}, Australia` : ''}? Reply with ONLY the full URL starting with https://, nothing else. If unknown reply "unknown".` }]
+    })
+    const url = (resp.choices[0]?.message?.content || '').trim()
+    if (url && url !== 'unknown' && url.startsWith('http')) {
+      log(`  ✓ Discovered website: ${url}`)
+      return url
+    }
+    log('  ⚠ Could not auto-discover website URL')
+  } catch (e: any) {
+    log(`  ⚠ URL discovery error: ${e.message}`)
+  }
+  return null
+}
+
+// ── Mapbox geocoding ──────────────────────────────────────────────────────────
+
+async function mapboxGeocode(address: string): Promise<{ lat: number; lng: number } | null> {
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+  if (!token || !address) return null
+  try {
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${token}&country=AU&limit=1`
+    const resp = await withTimeout(
+      fetch(url).then(r => r.json()) as Promise<any>,
+      5000,
+      null as any
+    )
+    if (resp?.features?.[0]?.center) {
+      const [lng, lat] = resp.features[0].center
+      return { lat: lat as number, lng: lng as number }
+    }
+  } catch (_) {}
+  return null
 }
 
 // ── GPT-4o Research ───────────────────────────────────────────────────────────
@@ -1136,6 +1192,7 @@ async function generateSingleProfile(opts: {
   youtubeUrl?: string
   customSlug?: string
   targetLocation?: string
+  autoPublish?: boolean
   log: (msg: string) => void
   err: (msg: string) => void
 }): Promise<ProfileResult> {
@@ -1144,6 +1201,7 @@ async function generateSingleProfile(opts: {
   const linkedinUrl    = opts.linkedinUrl    || ''
   const youtubeUrl     = opts.youtubeUrl     || ''
   const customSlug     = opts.customSlug     || ''
+  const autoPublish    = opts.autoPublish    || false
   const targetLocation = opts.targetLocation || ''
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'creerlio-biz-'))
@@ -1547,6 +1605,21 @@ async function generateSingleProfile(opts: {
     const hqCountry = nfStr(data.profile?.hq_country) || 'Australia'
     const locationStr = [hqCity, hqState, hqCountry].filter(Boolean).join(', ')
 
+    // Auto-geocode with Mapbox if GPT didn't return coordinates
+    if (!nfNum(data.profile?.latitude) || !nfNum(data.profile?.longitude)) {
+      const geocodeStr = [nfStr(data.profile?.hq_address), hqCity, hqState, hqCountry].filter(Boolean).join(', ')
+      if (geocodeStr) {
+        log('  Geocoding address with Mapbox...')
+        const coords = await mapboxGeocode(geocodeStr)
+        if (coords) {
+          data.profile = data.profile || {}
+          data.profile.latitude = coords.lat
+          data.profile.longitude = coords.lng
+          log(`  ✓ Geocoded: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`)
+        }
+      }
+    }
+
     const { error: bpErr } = await supabase.from('business_profiles').upsert({
       id: userId, user_id: userId, business_id: userId,
       name: companyName, business_name: companyName,
@@ -1581,7 +1654,7 @@ async function generateSingleProfile(opts: {
     const logoUrl = imageResults.logo?.fileUrl || null
     const heroUrl = imageResults.hero?.fileUrl || null
     const { error: bppErr } = await supabase.from('business_profile_pages').upsert({
-      business_id: userId, slug, is_published: false, name: companyName,
+      business_id: userId, slug, is_published: autoPublish, name: companyName,
       logo_url: logoUrl, hero_image_url: heroUrl,
       tagline: nfStr(data.profile?.tagline),
       mission: nfStr(data.content?.mission),
@@ -1786,11 +1859,13 @@ export async function POST(req: NextRequest) {
     mode = 'single',
     websiteUrl: rawWebsiteUrl, linkedinUrl = '', youtubeUrl = '', slug: customSlug = '',
     industry = '', location = '', maxResults = 5,
+    companyName: rawCompanyName = '', autoPublish = false,
   } = body
   // Normalize URL: add https:// if no protocol present
-  const websiteUrl = rawWebsiteUrl && !rawWebsiteUrl.startsWith('http')
+  const rawNormalized = rawWebsiteUrl && !rawWebsiteUrl.startsWith('http')
     ? `https://${rawWebsiteUrl}`
     : rawWebsiteUrl
+  const companyName = (rawCompanyName || '').trim()
 
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! })
@@ -1810,6 +1885,17 @@ export async function POST(req: NextRequest) {
       }, 20000)
 
       try {
+        // If company name given but no URL, auto-discover the website
+        let websiteUrl = rawNormalized || ''
+        if (!websiteUrl && companyName && mode === 'single') {
+          websiteUrl = (await discoverWebsiteFromName(openai, companyName, location, log)) || ''
+          if (!websiteUrl) {
+            err(`❌ Could not discover website for "${companyName}". Please provide the URL manually.`)
+            controller.close()
+            return
+          }
+        }
+
         if (mode === 'bulk') {
           if (!industry || !location) throw new Error('industry and location are required for bulk mode')
           const cap = Math.min(Math.max(1, parseInt(String(maxResults)) || 2), 2)
@@ -1874,6 +1960,7 @@ export async function POST(req: NextRequest) {
             supabase, openai, SUPABASE_URL,
             websiteUrl, linkedinUrl, youtubeUrl, customSlug,
             targetLocation: location,
+            autoPublish,
             log, err,
           })
 

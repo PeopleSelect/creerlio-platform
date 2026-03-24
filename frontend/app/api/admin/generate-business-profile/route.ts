@@ -1784,9 +1784,13 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const {
     mode = 'single',
-    websiteUrl, linkedinUrl = '', youtubeUrl = '', slug: customSlug = '',
+    websiteUrl: rawWebsiteUrl, linkedinUrl = '', youtubeUrl = '', slug: customSlug = '',
     industry = '', location = '', maxResults = 5,
   } = body
+  // Normalize URL: add https:// if no protocol present
+  const websiteUrl = rawWebsiteUrl && !rawWebsiteUrl.startsWith('http')
+    ? `https://${rawWebsiteUrl}`
+    : rawWebsiteUrl
 
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! })

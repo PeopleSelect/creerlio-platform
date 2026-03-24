@@ -241,8 +241,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Filter out orphaned jobs whose business_profile no longer exists
+    const filteredData = (data || []).filter((job: any) => {
+      if (!job.business_profile_id) return false
+      return businessMap.has(String(job.business_profile_id))
+    })
+
     // Map jobs and geocode those without coordinates
-    let jobs = await Promise.all((data || []).map(async (job: any) => {
+    let jobs = await Promise.all(filteredData.map(async (job: any) => {
       // Get business name from separate query
       const business = businessMap.get(String(job.business_profile_id)) || {}
       const businessName = (business.business_name && String(business.business_name).trim()) ||

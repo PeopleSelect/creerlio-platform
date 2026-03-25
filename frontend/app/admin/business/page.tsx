@@ -294,9 +294,13 @@ export default function AdminBusinessPage() {
     if (!confirm(`Permanently delete "${name}"? This cannot be undone.`)) return
 
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No session token')
+
       const res = await fetch('/api/admin/users/delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ userId: business.user_id }),
       })
       const json = await res.json()

@@ -27,6 +27,7 @@ export default function AdminBusinessPage() {
   const [genMaxResults, setGenMaxResults] = useState(2)
   const [genCompanyName, setGenCompanyName] = useState('')
   const [genAutoPublish, setGenAutoPublish] = useState(false)
+  const [genIntelligence, setGenIntelligence] = useState<any>(null)
   const [genRunning, setGenRunning]       = useState(false)
   const [genLogs, setGenLogs]             = useState<{ text: string; isError?: boolean }[]>([])
   const [genDone, setGenDone]             = useState(false)
@@ -153,6 +154,7 @@ export default function AdminBusinessPage() {
     setGenLogs([])
     setGenDone(false)
     setGenError('')
+    setGenIntelligence(null)
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -200,6 +202,9 @@ export default function AdminBusinessPage() {
             }
             if (msg.claimLink) {
               setGenClaimLink(msg.claimLink)
+            }
+            if (msg.intelligence) {
+              setGenIntelligence(msg.intelligence)
             }
             if (msg.error) {
               setGenError(msg.error)
@@ -653,39 +658,109 @@ export default function AdminBusinessPage() {
 
             {/* Success state */}
             {genDone && (
-              <div className="px-6 py-6 flex flex-col items-center gap-4 text-center">
-                <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center text-3xl">✅</div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Profile Created Successfully!</h3>
-                  <p className="text-gray-400 text-sm mt-1">The profile is <strong className="text-amber-400">private</strong> — share the claim link with the business to let them take ownership.</p>
+              <div className="px-6 py-5 flex flex-col gap-4 overflow-y-auto max-h-[75vh]">
+                {/* Header */}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center text-xl shrink-0">✅</div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Business Intelligence Created</h3>
+                    <p className="text-xs text-gray-400">Profile is <strong className="text-amber-400">private</strong> — share the claim link with the business owner</p>
+                  </div>
                 </div>
+
+                {/* Hiring Intelligence Panel */}
+                {genIntelligence && (
+                  <div className="bg-slate-800/60 border border-white/10 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-gray-300 uppercase tracking-wide">Hiring Intelligence Snapshot</p>
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                        genIntelligence.hiring_status === 'active'    ? 'bg-green-500/20 text-green-400' :
+                        genIntelligence.hiring_status === 'passive'   ? 'bg-blue-500/20 text-blue-400' :
+                        genIntelligence.hiring_status === 'potential' ? 'bg-amber-500/20 text-amber-400' :
+                        'bg-slate-700 text-gray-400'
+                      }`}>
+                        {genIntelligence.hiring_status === 'active'    ? '● Active Hiring' :
+                         genIntelligence.hiring_status === 'passive'   ? '● Passive Hiring' :
+                         genIntelligence.hiring_status === 'potential' ? '● Potential Hiring' :
+                         '○ No Signal'}
+                      </span>
+                    </div>
+
+                    {/* Metrics row */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-slate-900/60 rounded-lg p-3 text-center">
+                        <div className="text-2xl font-bold text-white">{genIntelligence.jobs_found_count}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">Active Jobs</div>
+                      </div>
+                      <div className="bg-slate-900/60 rounded-lg p-3 text-center">
+                        <div className="text-2xl font-bold text-amber-400">{genIntelligence.hidden_jobs_count}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">Hidden Signals</div>
+                      </div>
+                      <div className="bg-slate-900/60 rounded-lg p-3 text-center">
+                        <div className="text-2xl font-bold text-purple-400">{genIntelligence.confidence_score}%</div>
+                        <div className="text-xs text-gray-400 mt-0.5">Confidence</div>
+                      </div>
+                    </div>
+
+                    {/* Confidence bar */}
+                    <div>
+                      <div className="flex justify-between text-xs text-gray-500 mb-1">
+                        <span>Signal Confidence</span>
+                        <span>{genIntelligence.confidence_score}%</span>
+                      </div>
+                      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            genIntelligence.confidence_score >= 70 ? 'bg-green-500' :
+                            genIntelligence.confidence_score >= 40 ? 'bg-amber-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: `${genIntelligence.confidence_score}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Top signals */}
+                    {genIntelligence.top_signals?.length > 0 && (
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1.5">Top Signals Detected</p>
+                        <div className="space-y-1">
+                          {genIntelligence.top_signals.map((s: string, i: number) => (
+                            <div key={i} className="flex items-start gap-2 text-xs text-gray-300">
+                              <span className="text-green-400 mt-0.5 shrink-0">↳</span>
+                              <span>{s}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Claim link */}
                 {genClaimLink && (
-                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-4 text-left w-full max-w-lg">
-                    <p className="text-xs text-amber-400 font-semibold mb-2 uppercase tracking-wide">Claim Link (share with business)</p>
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">
+                    <p className="text-xs text-amber-400 font-semibold mb-2 uppercase tracking-wide">Claim Link</p>
                     <div className="flex items-center gap-2">
-                      <code className="text-sm text-amber-200 break-all flex-1 font-mono">{genClaimLink}</code>
-                      <button
-                        type="button"
-                        onClick={() => navigator.clipboard.writeText(genClaimLink)}
-                        className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 text-xs rounded-lg border border-amber-500/30 transition-colors whitespace-nowrap"
-                      >
+                      <code className="text-xs text-amber-200 break-all flex-1 font-mono">{genClaimLink}</code>
+                      <button type="button" onClick={() => navigator.clipboard.writeText(genClaimLink)}
+                        className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 text-xs rounded-lg border border-amber-500/30 transition-colors whitespace-nowrap">
                         Copy
                       </button>
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">Link expires in 30 days.</p>
+                    <p className="text-xs text-gray-500 mt-1.5">Expires in 30 days. When claimed, unlocks full job visibility + applicant pipeline.</p>
                   </div>
                 )}
-                <div className="bg-slate-800 rounded-lg px-6 py-3 text-left w-full max-w-sm">
-                  <p className="text-xs text-gray-500 mb-1">Admin credentials (for testing)</p>
+
+                {/* Credentials */}
+                <div className="bg-slate-800 rounded-lg px-4 py-3">
+                  <p className="text-xs text-gray-500 mb-1">Admin credentials</p>
                   {genLogs.filter(l => l.text.includes('Login Email') || l.text.includes('Password')).map((l, i) => (
-                    <p key={i} className="text-sm font-mono text-gray-200">{l.text.trim()}</p>
+                    <p key={i} className="text-xs font-mono text-gray-200">{l.text.trim()}</p>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowGenerator(false)}
-                  className="px-6 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm transition-colors"
-                >
+
+                <button type="button" onClick={() => setShowGenerator(false)}
+                  className="w-full py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm transition-colors">
                   Close
                 </button>
               </div>

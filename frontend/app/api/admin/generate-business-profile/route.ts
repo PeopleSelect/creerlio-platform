@@ -1223,6 +1223,119 @@ Only include businesses whose URLs you are highly confident are real.` },
 
 // ── Per-business pipeline ─────────────────────────────────────────────────────
 
+// ── Hiring Intelligence Engine ────────────────────────────────────────────────
+
+interface HiringSignal {
+  type: 'explicit_job' | 'hiring_signal' | 'growth_signal'
+  source: string
+  text: string
+  confidence: number
+}
+
+interface HiringIntelligence {
+  hiring_status: 'active' | 'passive' | 'potential' | 'none'
+  confidence_score: number
+  jobs_found_count: number
+  hidden_jobs_count: number
+  top_signals: string[]
+  raw_signals: HiringSignal[]
+}
+
+function detectHiringSignals(
+  html: string,
+  careersUrl: string | null,
+  scrapedJobs: any[],
+  linkedinContent?: { description: string; employees: string; industry: string }
+): HiringSignal[] {
+  const signals: HiringSignal[] = []
+
+  if (scrapedJobs.length > 0) {
+    signals.push({ type: 'explicit_job', source: careersUrl || 'website',
+      text: `${scrapedJobs.length} active job listing${scrapedJobs.length !== 1 ? 's' : ''} found`, confidence: 1.0 })
+  }
+  if (careersUrl) {
+    signals.push({ type: 'hiring_signal', source: 'website', text: 'Careers page detected', confidence: 0.9 })
+  }
+
+  // ATS detection
+  const atsPatterns: [RegExp, string][] = [
+    [/greenhouse\.io/i, 'Greenhouse ATS integration detected'],
+    [/lever\.co/i, 'Lever ATS integration detected'],
+    [/smartrecruiters\.com/i, 'SmartRecruiters ATS integration detected'],
+    [/myworkdayjobs\.com/i, 'Workday ATS integration detected'],
+    [/bamboohr\.com/i, 'BambooHR ATS integration detected'],
+    [/taleo\.net/i, 'Taleo ATS integration detected'],
+    [/jobvite\.com/i, 'Jobvite ATS integration detected'],
+  ]
+  for (const [re, text] of atsPatterns) {
+    if (re.test(html)) signals.push({ type: 'hiring_signal', source: 'website', text, confidence: 0.95 })
+  }
+
+  // Hiring language patterns
+  const hiringPhrases: [RegExp, string, number][] = [
+    [/we'?re\s+hiring/i, '"We\'re hiring" mentioned on site', 0.9],
+    [/now\s+hiring/i, '"Now hiring" language found', 0.9],
+    [/join\s+our\s+team/i, '"Join our team" call-to-action', 0.75],
+    [/open\s+positions?/i, 'Open positions referenced', 0.8],
+    [/job\s+openings?/i, 'Job openings referenced', 0.8],
+    [/current\s+vacancies/i, 'Current vacancies page found', 0.85],
+    [/apply\s+now/i, '"Apply now" button/link detected', 0.75],
+    [/submit\s+(?:your\s+)?(?:resume|cv|application)/i, 'Application submission page detected', 0.8],
+    [/send\s+us\s+your\s+(?:resume|cv)/i, 'Speculative CV submission encouraged', 0.7],
+  ]
+  for (const [re, text, conf] of hiringPhrases) {
+    if (re.test(html)) signals.push({ type: 'hiring_signal', source: 'website', text, confidence: conf })
+  }
+
+  // Growth signals
+  const growthPhrases: [RegExp, string][] = [
+    [/expan(?:d|ding|sion)/i, 'Expansion language on website'],
+    [/growing\s+(?:team|company|business)/i, 'Growing team language detected'],
+    [/new\s+(?:office|location|branch)/i, 'New office/location mentioned'],
+    [/scaling\s+(?:up|our)/i, 'Scaling language detected'],
+    [/doubl(?:e|ing)\s+(?:our|the)\s+team/i, 'Doubling team language found'],
+  ]
+  for (const [re, text] of growthPhrases) {
+    if (re.test(html)) signals.push({ type: 'growth_signal', source: 'website', text, confidence: 0.65 })
+  }
+
+  // LinkedIn hiring signals
+  if (linkedinContent?.description) {
+    const li = linkedinContent.description.toLowerCase()
+    if (/hiring|opportunities|join us|open roles|we('re| are) growing/.test(li)) {
+      signals.push({ type: 'hiring_signal', source: 'linkedin', text: 'Hiring language in LinkedIn company description', confidence: 0.85 })
+    }
+  }
+
+  return signals
+}
+
+function computeIntelligence(signals: HiringSignal[], scrapedJobs: any[]): HiringIntelligence {
+  const explicit = signals.filter(s => s.type === 'explicit_job')
+  const hiring   = signals.filter(s => s.type === 'hiring_signal')
+  const growth   = signals.filter(s => s.type === 'growth_signal')
+
+  const relevant = [...explicit, ...hiring]
+  const confidence_score = relevant.length > 0
+    ? Math.min(98, Math.round(relevant.reduce((s, x) => s + x.confidence, 0) / relevant.length * 100))
+    : growth.length > 0 ? 28 : 10
+
+  const hiring_status: HiringIntelligence['hiring_status'] =
+    scrapedJobs.length > 0 ? 'active'
+    : hiring.length >= 2   ? 'passive'
+    : hiring.length >= 1 || growth.length >= 2 ? 'potential'
+    : 'none'
+
+  const hidden_jobs_count = scrapedJobs.length === 0 && (hiring.length + growth.length) > 0
+    ? Math.min(hiring.length + growth.length, 6) : 0
+
+  const top_signals = [...explicit, ...hiring, ...growth]
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 5).map(s => s.text)
+
+  return { hiring_status, confidence_score, jobs_found_count: scrapedJobs.length, hidden_jobs_count, top_signals, raw_signals: signals }
+}
+
 interface ProfileResult {
   companyName: string
   demoEmail: string
@@ -1231,6 +1344,7 @@ interface ProfileResult {
   svcCount: number
   videoUrl: string | null
   claimToken: string | null
+  intelligence: HiringIntelligence
 }
 
 async function generateSingleProfile(opts: {
@@ -1324,6 +1438,16 @@ async function generateSingleProfile(opts: {
       effectiveYoutube     ? scrapeYouTubeData(effectiveYoutube, log)     : Promise.resolve({ description: '', channelName: '', featuredVideoUrl: '' }),
       effectiveInstagramUrl ? scrapeInstagramData(effectiveInstagramUrl, log) : Promise.resolve({ bio: '', followers: '' }),
     ])
+
+    // ── Hiring Intelligence ───────────────────────────────────────────────
+    const hiringSignals = detectHiringSignals(websiteHtml, careersUrl, scrapedJobs, linkedinContent)
+    const intelligence  = computeIntelligence(hiringSignals, scrapedJobs)
+    log(`\n  ✦ Hiring status:    ${intelligence.hiring_status.toUpperCase()}`)
+    log(`  ✦ Confidence:       ${intelligence.confidence_score}%`)
+    log(`  ✦ Jobs found:       ${intelligence.jobs_found_count}`)
+    if (intelligence.hidden_jobs_count > 0)
+      log(`  ✦ Hidden signals:   ${intelligence.hidden_jobs_count} inferred opportunities`)
+    for (const s of intelligence.top_signals) log(`    ↳ ${s}`)
 
     // Collect real job titles for GPT context
     const scrapedJobTitles = scrapedJobs.map(j => j.title).filter(Boolean)
@@ -1890,8 +2014,24 @@ async function generateSingleProfile(opts: {
       await ins('business_product_permissions', [{ product_id: productId, business_id: userId, user_id: userId }])
     }
 
+    // Store hiring intelligence as a bank item
+    await supabase.from('business_bank_items').insert({
+      user_id: userId, item_type: 'hiring_intelligence',
+      title: `${companyName} — Hiring Intelligence`,
+      metadata: {
+        hiring_status: intelligence.hiring_status,
+        confidence_score: intelligence.confidence_score,
+        jobs_found_count: intelligence.jobs_found_count,
+        hidden_jobs_count: intelligence.hidden_jobs_count,
+        top_signals: intelligence.top_signals,
+        raw_signals: intelligence.raw_signals,
+        generated_at: new Date().toISOString(),
+      },
+      is_active: true,
+    })
+
     try { fs.rmSync(tmpDir, { recursive: true }) } catch (_) {}
-    return { companyName, demoEmail, demoPass, jobCount, svcCount, videoUrl: videoPublicUrl, claimToken }
+    return { companyName, demoEmail, demoPass, jobCount, svcCount, videoUrl: videoPublicUrl, claimToken, intelligence }
   } catch (e) {
     try { fs.rmSync(tmpDir, { recursive: true }) } catch (_) {}
     throw e
@@ -2034,7 +2174,7 @@ export async function POST(req: NextRequest) {
           if (claimLink) log(`  Claim Link:   ${claimLink}`)
           log('  Status:       Private — awaiting claim')
           log('══════════════════════════════════════════════════════════════')
-          send({ claimToken: result.claimToken, claimLink })
+          send({ claimToken: result.claimToken, claimLink, intelligence: result.intelligence })
         }
 
         send({ done: true })

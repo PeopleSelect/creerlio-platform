@@ -34,6 +34,13 @@ export default function AdminBusinessPage() {
   const [genError, setGenError]           = useState('')
   const [genClaimLink, setGenClaimLink]   = useState<string | null>(null)
 
+  // Seed Profile modal state
+  const [showSeed, setShowSeed]         = useState(false)
+  const [seedJson, setSeedJson]         = useState('')
+  const [seedRunning, setSeedRunning]   = useState(false)
+  const [seedResult, setSeedResult]     = useState<any>(null)
+  const [seedError, setSeedError]       = useState('')
+
   useEffect(() => {
     async function checkAdmin() {
       try {
@@ -311,6 +318,37 @@ export default function AdminBusinessPage() {
     }
   }
 
+  async function runSeed() {
+    setSeedRunning(true)
+    setSeedResult(null)
+    setSeedError('')
+    try {
+      const parsed = JSON.parse(seedJson)
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No session token')
+
+      // Build the payload — accept either raw sections[] format or a wrapped object
+      const payload = Array.isArray(parsed)
+        ? { sections: parsed }
+        : parsed
+
+      const res = await fetch('/api/admin/seed-business-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Seed failed')
+      setSeedResult(json)
+      loadBusiness(user!.id)
+    } catch (err: any) {
+      setSeedError(err.message || 'Unknown error')
+    } finally {
+      setSeedRunning(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white flex items-center justify-center">
@@ -371,6 +409,13 @@ export default function AdminBusinessPage() {
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold text-sm flex items-center gap-2 transition-colors"
             >
               <span>✨</span> Generate AI Profile
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowSeed(true); setSeedJson(''); setSeedResult(null); setSeedError('') }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm flex items-center gap-2 transition-colors"
+            >
+              <span>⬆</span> Seed Profile JSON
             </button>
           </div>
         </div>
@@ -825,6 +870,78 @@ export default function AdminBusinessPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Seed Profile JSON modal ────────────────────────────────────────── */}
+      {showSeed && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-8 flex flex-col gap-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white">Seed Business Profile from JSON</h2>
+              <button type="button" onClick={() => setShowSeed(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
+            </div>
+
+            <p className="text-sm text-gray-400">
+              Paste a profile JSON with <code className="text-blue-300">name</code>, <code className="text-blue-300">slug</code>,{' '}
+              <code className="text-blue-300">sections[]</code>, <code className="text-blue-300">jobs[]</code>, and{' '}
+              <code className="text-blue-300">socials[]</code>. The profile becomes visible at{' '}
+              <code className="text-blue-300">/business/[slug]/about</code> immediately.
+            </p>
+
+            <textarea
+              value={seedJson}
+              onChange={(e) => setSeedJson(e.target.value)}
+              placeholder={'{\n  "name": "Apple",\n  "slug": "apple",\n  "website_url": "https://www.apple.com",\n  "industry": "Technology",\n  "city": "Cupertino",\n  "state": "CA",\n  "country": "United States",\n  "sections": [...],\n  "jobs": [...],\n  "socials": [...],\n  "overall_confidence": 93\n}'}
+              rows={16}
+              className="w-full bg-black/40 border border-white/10 rounded-lg p-4 text-xs font-mono text-green-300 resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            />
+
+            {seedError && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-300 text-sm">{seedError}</div>
+            )}
+
+            {seedResult && (
+              <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-sm">
+                <p className="text-green-300 font-semibold mb-2">✓ Profile seeded successfully</p>
+                <p className="text-gray-300 text-xs mb-1">ID: {seedResult.profile_id}</p>
+                <p className="text-gray-300 text-xs mb-3">Slug: {seedResult.slug}</p>
+                <a
+                  href={seedResult.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                >
+                  View Profile →
+                </a>
+                {seedResult.errors?.length > 0 && (
+                  <div className="mt-3 text-red-300 text-xs">
+                    <p className="font-semibold mb-1">Warnings:</p>
+                    {seedResult.errors.map((e: string, i: number) => <p key={i}>{e}</p>)}
+                  </div>
+                )}
+                {seedResult.log?.length > 0 && (
+                  <div className="mt-3 text-gray-400 text-xs font-mono">
+                    {seedResult.log.map((l: string, i: number) => <p key={i}>{l}</p>)}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setShowSeed(false)} className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-gray-300 text-sm transition-colors">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={runSeed}
+                disabled={seedRunning || !seedJson.trim()}
+                className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold text-sm transition-colors"
+              >
+                {seedRunning ? 'Seeding…' : 'Seed Profile'}
+              </button>
+            </div>
           </div>
         </div>
       )}

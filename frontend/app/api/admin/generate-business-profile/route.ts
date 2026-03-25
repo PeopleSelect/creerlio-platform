@@ -1632,6 +1632,203 @@ Generate the talent-facing employer brand profile JSON:
   }
 }
 
+/**
+ * Dynamic Sections Engine — generates a talent-facing profile with flexible,
+ * data-driven sections rather than a fixed schema. Stored as 'dynamic_sections'.
+ */
+async function generateDynamicSections(
+  openai: OpenAI,
+  companyName: string,
+  masterContext: string,
+  structuredData: any,
+  talentProfile: any,
+  scrapedJobs: any[],
+  socialLinks: Record<string, string>,
+  log: (m: string) => void
+): Promise<any> {
+  log('\n  Generating dynamic sections profile...')
+
+  // Build a rich context summary from all available data
+  const dataContext = JSON.stringify({
+    profile: {
+      tagline: structuredData.profile?.tagline,
+      industry: structuredData.profile?.industry,
+      business_model: structuredData.profile?.business_model,
+      company_size: structuredData.profile?.company_size || structuredData.profile?.company_size_estimate,
+      hq_city: structuredData.profile?.hq_city,
+      hq_state: structuredData.profile?.hq_state,
+      founded_year: structuredData.profile?.founded_year,
+    },
+    company_summary: (structuredData.profile?.company_summary || '').slice(0, 800),
+    operations_overview: structuredData.intelligence?.operations_overview || '',
+    market_position: structuredData.intelligence?.market_position || '',
+    customer_segments: structuredData.intelligence?.customer_segments || [],
+    strengths: structuredData.intelligence?.strengths || [],
+    culture_values: structuredData.culture_values || [],
+    benefits: structuredData.benefits || [],
+    services: (structuredData.services || []).slice(0, 6).map((s: any) => ({
+      name: s.name,
+      short_description: s.short_description,
+      target_customers: s.target_customers,
+      how_it_is_delivered: s.how_it_is_delivered,
+      roles: s.roles,
+      skills: s.skills,
+    })),
+    impact_stats: structuredData.impact_stats || [],
+    programs: structuredData.programs || [],
+    hiring_interests: structuredData.hiring_interests || [],
+    talent: talentProfile ? {
+      company_overview: talentProfile.company_overview,
+      working_here: talentProfile.working_here,
+      opportunities: talentProfile.opportunities,
+      ideal_candidates: talentProfile.ideal_candidates,
+    } : null,
+  }, null, 0)
+
+  const systemPrompt = `You are an advanced AI research engine and business analyst building a talent-attracting business profile.
+
+You must behave like a human researcher — combining multiple sources into a unified, compelling profile.
+
+════════════════════════════════════════════════════════════
+CORE OBJECTIVE
+════════════════════════════════════════════════════════════
+Build the most complete, accurate, and compelling business profile possible.
+The output must feel like a human spent hours researching the company.
+It must be better than what the company presents on its own website.
+
+════════════════════════════════════════════════════════════
+SOURCE PRIORITY (follow this order)
+════════════════════════════════════════════════════════════
+1. Careers / "Life at Company" pages → DOMINATE the output if content exists
+2. Benefits and culture pages
+3. Job listings and role descriptions
+4. Main website content
+5. Social profiles and descriptions
+6. Structured analyst data provided
+
+If careers content exists in the scraped pages → it must drive the working_here, benefits, and culture sections.
+
+════════════════════════════════════════════════════════════
+DYNAMIC SECTION CREATION RULES
+════════════════════════════════════════════════════════════
+DO NOT force content into fixed sections.
+CREATE sections based on what data actually exists.
+
+Choose from these (only include if you have real content):
+- what_the_company_does
+- how_the_business_operates
+- teams_and_departments
+- life_at_the_company
+- benefits_and_perks
+- learning_and_development
+- ways_of_working
+- community_and_culture
+- opportunities_and_roles
+- why_join
+- client_and_market_context
+- technology_and_tools
+- company_story
+
+For each section:
+  key: snake_case identifier
+  title: human-readable heading (e.g. "Life at the Company", "Benefits & Perks")
+  content: rich string OR structured JSON object — choose whichever is more readable
+  priority: 1 (highest) – 5 (lowest). Careers/culture = 1–2. General info = 3–4.
+  confidence: 0–100 based on how much real source data supports this section
+
+════════════════════════════════════════════════════════════
+BENEFITS — CRITICAL
+════════════════════════════════════════════════════════════
+Extract detailed, specific benefits. Categories:
+  parental_leave, health, flexibility, development, perks, financial, wellbeing
+Be specific — "18 weeks paid parental leave" not "we support families".
+If benefits aren't explicitly stated → infer likely offerings for this company type/size/industry.
+
+════════════════════════════════════════════════════════════
+JOBS
+════════════════════════════════════════════════════════════
+If real jobs are provided → include them exactly.
+If none → infer likely roles based on services, industry, and company size.
+Mark inferred roles clearly with "inferred": true.
+
+════════════════════════════════════════════════════════════
+QUALITY STANDARDS
+════════════════════════════════════════════════════════════
+✔ Each section must be specific and informative — not a generic summary
+✔ working_here / life_at_the_company must feel realistic and grounded
+✔ benefits must be detailed, not "we offer competitive benefits"
+✔ Minimum 5 sections, target 7–10 where data allows
+✔ overall_confidence reflects true data quality
+
+FAIL CONDITION: If any section reads like a generic company bio, rewrite it.
+
+════════════════════════════════════════════════════════════
+RETURN ONLY valid JSON. No markdown, no explanation, no code fences.
+════════════════════════════════════════════════════════════`
+
+  const realJobsBlock = scrapedJobs.length > 0
+    ? `\n━━━ REAL JOB LISTINGS (${scrapedJobs.length}) ━━━\n${scrapedJobs.slice(0, 20).map(j => `• ${j.title}${j.city ? ` — ${j.city}` : ''}${j.employment_type ? ` (${j.employment_type})` : ''}`).join('\n')}`
+    : '\n━━━ JOBS: No real listings found — infer likely roles ━━━'
+
+  const socialsBlock = Object.entries(socialLinks)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n')
+
+  const userPrompt = `Company: ${companyName}
+
+━━━ STRUCTURED ANALYST DATA ━━━
+${dataContext}
+${realJobsBlock}
+
+━━━ SOCIAL PROFILES FOUND ━━━
+${socialsBlock || 'None detected'}
+
+━━━ SCRAPED WEBSITE + CAREERS CONTENT (prioritise careers/culture sections) ━━━
+${masterContext.slice(0, 25000)}
+
+Generate the dynamic sections profile JSON:
+
+{
+  "sections": [
+    {
+      "key": "",
+      "title": "",
+      "content": "",
+      "priority": 1,
+      "confidence": 85
+    }
+  ],
+  "socials": [
+    { "platform": "", "url": "" }
+  ],
+  "jobs": [
+    { "title": "", "location": "", "employment_type": "", "description": "", "inferred": false }
+  ],
+  "overall_confidence": 0
+}`
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      temperature: 0.4,
+      max_tokens: 6000,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt },
+      ],
+    })
+    const raw = completion.choices[0].message.content || ''
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+    const result = JSON.parse(cleaned)
+    log(`  ✓ Dynamic sections: ${result.sections?.length ?? 0} sections (confidence: ${result.overall_confidence ?? '?'}%)`)
+    return result
+  } catch (e: any) {
+    log(`  ⚠ Dynamic sections generation failed: ${e.message}`)
+    return null
+  }
+}
+
 /** GPT-4o: discover real businesses by industry + location */
 async function discoverBusinesses(
   openai: OpenAI,
@@ -1987,6 +2184,12 @@ async function generateSingleProfile(opts: {
     // Employer branding pass — talent-facing profile
     log('\n[1d/12] Generating employer brand profile...')
     const talentProfile = await generateTalentProfile(openai, companyName, data, log)
+
+    // Dynamic sections engine — research-grade talent-attracting profile
+    log('\n[1e/12] Generating dynamic sections profile...')
+    const dynamicSections = await generateDynamicSections(
+      openai, companyName, masterContext, data, talentProfile, scrapedJobs, detectedSocial, log
+    )
 
     // DIE: if YouTube was auto-discovered after GPT (using real company name now), re-search with accurate name
     if (!effectiveYoutube && !detectedSocial.youtube) {
@@ -2561,6 +2764,16 @@ async function generateSingleProfile(opts: {
       metadata: { ...qualityScore, sources_used: allSourcesUsed, generated_at: new Date().toISOString() },
       is_active: true,
     })
+
+    // Store dynamic sections as a bank item
+    if (dynamicSections) {
+      await supabase.from('business_bank_items').insert({
+        user_id: userId, item_type: 'dynamic_sections',
+        title: `${companyName} — Dynamic Profile`,
+        metadata: { ...dynamicSections, generated_at: new Date().toISOString() },
+        is_active: true,
+      })
+    }
 
     // Store talent/employer brand profile as a bank item
     if (talentProfile) {

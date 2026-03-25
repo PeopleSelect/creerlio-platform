@@ -117,8 +117,10 @@ export async function POST(req: NextRequest) {
   else log.push('✓ businesses')
 
   // ── 2. business_profiles ──────────────────────────────────────────────────
+  // user_id is intentionally omitted — seeded profiles have no auth.users row.
+  // The migration 20260325c_seed_profile_fixes.sql makes user_id nullable.
   const { error: bpErr } = await supabase.from('business_profiles').upsert({
-    id: profileId, user_id: profileId, business_id: profileId,
+    id: profileId, business_id: profileId,
     name, business_name: name,
     description: (sections[0]?.content && typeof sections[0].content === 'string'
       ? (sections[0].content as string).slice(0, 500) : null),
@@ -142,7 +144,6 @@ export async function POST(req: NextRequest) {
     website_url: website_url || null,
     linkedin_url: linkedinUrl,
     youtube_url: youtubeUrl,
-    instagram_url: instagramUrl,
     twitter_url: twitterUrl,
     culture_values: [],
     impact_stats: [], benefits: [], programs: [], social_proof: [],

@@ -96,14 +96,14 @@ export async function POST(req: Request) {
       await admin.from('business_bank_items').delete().eq('user_id', profileId)
       await admin.from('business_talent_requests').delete().eq('business_id', profileId)
       await admin.from('jobs').delete().eq('business_id', profileId)
-      await admin.from('business_products_services').delete().eq('business_id', profileId).catch(() => {})
-      await admin.from('business_products_services_overview').delete().eq('business_id', profileId).catch(() => {})
-      await admin.from('business_product_roadmap').delete().eq('business_id', profileId).catch(() => {})
+      try { await admin.from('business_products_services').delete().eq('business_id', profileId) } catch (_) {}
+      try { await admin.from('business_products_services_overview').delete().eq('business_id', profileId) } catch (_) {}
+      try { await admin.from('business_product_roadmap').delete().eq('business_id', profileId) } catch (_) {}
       const { error: pagesErr } = await admin.from('business_profile_pages').delete().eq('business_id', profileId)
       if (pagesErr) deleteErrors.push(`business_profile_pages: ${pagesErr.message}`)
       const { error: bizErr } = await admin.from('business_profiles').delete().eq('id', profileId)
       if (bizErr) deleteErrors.push(`business_profiles: ${bizErr.message}`)
-      await admin.from('businesses').delete().eq('id', profileId).catch(() => {})
+      try { await admin.from('businesses').delete().eq('id', profileId) } catch (_) {}
 
       if (deleteErrors.length > 0) {
         return NextResponse.json({ success: false, message: `Delete errors: ${deleteErrors.join('; ')}` }, { status: 500 })

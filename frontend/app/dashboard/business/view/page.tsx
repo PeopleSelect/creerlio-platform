@@ -386,6 +386,9 @@ function BusinessProfileViewPageInner() {
   const [refListExpanded, setRefListExpanded] = useState(false)
   const [refExpanded, setRefExpanded] = useState<Record<number, boolean>>({})
   const [cultureExpanded, setCultureExpanded] = useState<Record<string, boolean>>({})
+  const [aiSections, setAiSections] = useState<any[]>([])
+  const [aiBenefits, setAiBenefits] = useState<any | null>(null)
+  const [aiTalent, setAiTalent] = useState<any | null>(null)
 
   useEffect(() => {
     const params = Object.fromEntries(searchParams.entries())
@@ -818,7 +821,28 @@ function BusinessProfileViewPageInner() {
         if (!cancelled) {
           // Set metadata first
           setMeta(saved)
-          
+
+          // Load AI-generated bank items (dynamic_sections, structured_benefits, talent_profile)
+          if (queryUserId) {
+            supabase
+              .from('business_bank_items')
+              .select('item_type, metadata')
+              .eq('user_id', queryUserId)
+              .in('item_type', ['dynamic_sections', 'structured_benefits', 'talent_profile'])
+              .eq('is_active', true)
+              .then(({ data: aiItems }) => {
+                if (!Array.isArray(aiItems) || cancelled) return
+                for (const item of aiItems) {
+                  if (item.item_type === 'dynamic_sections' && item.metadata?.sections) {
+                    setAiSections(item.metadata.sections)
+                  }
+                  if (item.item_type === 'structured_benefits') setAiBenefits(item.metadata)
+                  if (item.item_type === 'talent_profile') setAiTalent(item.metadata)
+                }
+              })
+              .catch(() => {})
+          }
+
           // Then load images - always check business_bank_items for the authoritative file_url
           const loadImages = async () => {
             let bannerPath = String(saved.banner_path ?? '').trim()
@@ -2819,6 +2843,72 @@ function BusinessProfileViewPageInner() {
                     <div className="text-slate-400">No bio added yet.</div>
                   )}
                 </section>
+
+                {/* AI-Generated Profile Sections */}
+                {aiSections.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 px-1">
+                      <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">AI Research</span>
+                      <span className="text-xs text-slate-500">— generated from public sources</span>
+                    </div>
+                    {[...aiSections]
+                      .sort((a: any, b: any) => (a.priority ?? 5) - (b.priority ?? 5))
+                      .map((section: any) => (
+                        <section key={section.key} className="rounded-2xl border border-purple-500/20 bg-slate-950/40 p-6">
+                          <h2 className="text-lg font-semibold mb-3 text-white flex items-center gap-2">
+                            {section.title}
+                            <span className="text-[10px] font-normal text-purple-400 border border-purple-500/30 rounded-full px-2 py-0.5">
+                              AI · {section.confidence ?? 0}% confidence
+                            </span>
+                          </h2>
+                          {typeof section.content === 'string' ? (
+                            section.content.split('\n').filter(Boolean).map((para: string, i: number) => (
+                              <p key={i} className="text-slate-300 leading-relaxed mt-2 first:mt-0">{para}</p>
+                            ))
+                          ) : (
+                            <div className="space-y-2">
+                              {Object.entries(section.content as Record<string, any>).map(([k, v]) => (
+                                <div key={k}>
+                                  <span className="text-white font-medium capitalize">{k.replace(/_/g, ' ')}: </span>
+                                  <span className="text-slate-300">{Array.isArray(v) ? v.join(', ') : String(v)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </section>
+                      ))}
+                  </div>
+                )}
+
+                {/* AI Benefits */}
+                {aiBenefits && Object.keys(aiBenefits).some(k => k !== 'summary' && k !== 'generated_at' && Array.isArray(aiBenefits[k]) && aiBenefits[k].length > 0) && (
+                  <section className="rounded-2xl border border-purple-500/20 bg-slate-950/40 p-6">
+                    <h2 className="text-lg font-semibold mb-1 text-white flex items-center gap-2">
+                      Benefits & Perks
+                      <span className="text-[10px] font-normal text-purple-400 border border-purple-500/30 rounded-full px-2 py-0.5">AI Researched</span>
+                    </h2>
+                    {aiBenefits.summary && <p className="text-slate-400 text-sm mb-4">{aiBenefits.summary}</p>}
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {(['parental_leave','health','flexibility','development','perks','financial','wellbeing'] as const).map(cat => {
+                        const items: string[] = aiBenefits[cat] || []
+                        if (!items.length) return null
+                        const labels: Record<string, string> = { parental_leave: 'Parental Leave', health: 'Health', flexibility: 'Flexibility', development: 'Development', perks: 'Perks', financial: 'Financial', wellbeing: 'Wellbeing' }
+                        return (
+                          <div key={cat} className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+                            <p className="text-white font-medium text-sm mb-2">{labels[cat]}</p>
+                            <ul className="space-y-1">
+                              {items.map((item, i) => (
+                                <li key={i} className="text-slate-400 text-xs flex items-start gap-1.5">
+                                  <span className="text-slate-600 mt-0.5">•</span>{item}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
+                )}
 
                 {/* Intro video (below About, like your reference) */}
                 {/* Show intro video section if introVideoId exists in saved profile, even if URL loading failed */}

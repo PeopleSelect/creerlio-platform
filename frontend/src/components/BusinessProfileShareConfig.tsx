@@ -212,16 +212,16 @@ export default function BusinessProfileShareConfig({
           Share Configuration
         </h3>
         <p className="text-sm text-gray-400 mb-6">
-          Control what sections and media businesses can see. All content is saved regardless of sharing settings.
+          Control what sections and media are visible on your public profile. All content is saved regardless of sharing settings.
         </p>
 
         {/* Section Toggles */}
         <div className="space-y-4 mb-6">
           <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Sections</h4>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <ToggleItem
-              label="Introduction"
+              label="Introduction Video"
               checked={config.share_intro}
               onChange={() => toggleSection('share_intro')}
               disabled={saving}
@@ -233,25 +233,25 @@ export default function BusinessProfileShareConfig({
               disabled={saving}
             />
             <ToggleItem
-              label="Skills"
+              label="Products & Services"
               checked={config.share_skills}
               onChange={() => toggleSection('share_skills')}
               disabled={saving}
             />
             <ToggleItem
-              label="Experience"
+              label="Culture & Values"
               checked={config.share_experience}
               onChange={() => toggleSection('share_experience')}
               disabled={saving}
             />
             <ToggleItem
-              label="Education"
+              label="Basic Information"
               checked={config.share_education}
               onChange={() => toggleSection('share_education')}
               disabled={saving}
             />
             <ToggleItem
-              label="Referees"
+              label="Jobs & Vacancies"
               checked={config.share_referees}
               onChange={() => toggleSection('share_referees')}
               disabled={saving}

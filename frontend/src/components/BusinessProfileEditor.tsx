@@ -458,8 +458,18 @@ type BusinessProductRoadmap = {
 
 export default function BusinessProfileEditor() {
   const router = useRouter()
-  const DEFAULT_SECTION_ORDER = ['intro', 'social', 'skills', 'experience', 'projects', 'attachments'] as const
+  const DEFAULT_SECTION_ORDER = ['intro', 'social', 'skills', 'experience', 'education', 'projects', 'attachments'] as const
   type SectionKey = (typeof DEFAULT_SECTION_ORDER)[number]
+
+  const SECTION_LABELS: Record<string, { label: string; description: string }> = {
+    intro:       { label: 'Introduction Video',   description: 'Optional video introduction at the top of your profile' },
+    social:      { label: 'Social Links',         description: 'LinkedIn, GitHub, YouTube, X, Instagram and more' },
+    skills:      { label: 'Products & Services',  description: 'Describe what you offer, including case studies or testimonials' },
+    experience:  { label: 'Culture & Values',     description: 'How decisions, feedback, and success are handled' },
+    education:   { label: 'Basic Information',    description: 'Company name, industry, location and about section' },
+    projects:    { label: 'Projects',             description: 'Featured work and business projects' },
+    attachments: { label: 'Attachments',          description: 'Business Bank documents, images and media' },
+  }
   const SOCIAL_PLATFORMS = [
     'LinkedIn',
     'GitHub',
@@ -585,7 +595,7 @@ export default function BusinessProfileEditor() {
   >(null)
 
   const [layoutDragIndex, setLayoutDragIndex] = useState<number | null>(null)
-  const [layoutExpanded, setLayoutExpanded] = useState(false)
+  const [layoutExpanded, setLayoutExpanded] = useState(true)
   const [introModalOpen, setIntroModalOpen] = useState(false)
   
   // Track expanded state for textareas (key format: "section-index" or "section")
@@ -5728,21 +5738,11 @@ export default function BusinessProfileEditor() {
                         ↕
                       </div>
                       <div className="min-w-0">
-                        <div className="font-semibold capitalize">
-                          {k === 'intro' 
-                            ? 'Business Introduction' 
-                            : k === 'skills'
-                              ? 'Products and Services'
-                              : k}
+                        <div className="font-semibold">
+                          {SECTION_LABELS[k]?.label ?? k}
                         </div>
                         <div className="text-xs text-slate-400">
-                          {k === 'intro'
-                            ? 'Optional: video introduction near the start'
-                            : k === 'skills'
-                              ? 'Provide a detailed description of what you offer, including customer testimonials or case studies'
-                            : k === 'attachments'
-                              ? 'Business Bank items in profile'
-                              : ''}
+                          {SECTION_LABELS[k]?.description ?? ''}
                         </div>
                       </div>
                     </div>

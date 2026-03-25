@@ -308,10 +308,13 @@ export default function AdminBusinessPage() {
       const res = await fetch('/api/admin/users/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ userId: business.user_id }),
+        body: JSON.stringify({
+          userId: business.user_id || undefined,
+          profileId: business.id || business.business_profile_id || undefined,
+        }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Delete failed')
+      if (!res.ok) throw new Error(json.error || json.message || 'Delete failed')
       loadBusiness(user!.id)
     } catch (err: any) {
       alert(`Failed to delete: ${err.message}`)

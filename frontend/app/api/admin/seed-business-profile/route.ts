@@ -2,9 +2,11 @@
  * Admin API — Seed a Business Profile from structured JSON
  * POST /api/admin/seed-business-profile
  *
- * Accepts a body with { profile_id?, slug, name, website_url, sections[], jobs[], socials[] }
- * and writes it into business_profiles, business_profile_pages, business_bank_items, and
- * business_talent_requests so that /business/[slug]/about renders it immediately.
+ * Accepts a body with { profile_id?, slug, name, website_url, sections[], jobs[], socials[], products[] }
+ * and writes it into business_profiles, business_profile_pages, business_bank_items,
+ * business_talent_requests, business_products_services*, and jobs so that both
+ * /business/[slug]/about (public page) and /dashboard/business/view (internal editor)
+ * render content immediately.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -36,6 +38,16 @@ function generateClaimToken(): string {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** Extract plain-text bio from sections array. Prefers company_overview / about key. */
+function deriveBio(sections: any[], mission?: string): string {
+  const overviewSection = sections.find((s: any) =>
+    /company_overview|about|mission|overview/i.test(s.key || '')
+  )
+  const content = overviewSection?.content || sections[0]?.content
+  if (typeof content === 'string' && content.trim()) return content.trim().slice(0, 2000)
+  return mission || ''
 }
 
 export async function POST(req: NextRequest) {
@@ -71,6 +83,7 @@ export async function POST(req: NextRequest) {
     sections = [],
     jobs = [],
     socials = [],
+    products = [],       // optional: array of product/service cards
     overall_confidence,
   } = body
 
@@ -90,20 +103,9 @@ export async function POST(req: NextRequest) {
 
   const location = [city, state, country].filter(Boolean).join(', ')
 
-  // Extract social URLs
-  const linkedinUrl = socials.find((s: any) => s.platform?.toLowerCase() === 'linkedin')?.url || null
-  const youtubeUrl  = socials.find((s: any) => s.platform?.toLowerCase() === 'youtube')?.url   || null
-  const instagramUrl= socials.find((s: any) => s.platform?.toLowerCase() === 'instagram')?.url || null
-  const twitterUrl  = socials.find((s: any) => /^x$|twitter/i.test(s.platform || ''))?.url    || null
-
   // Separate dynamic sections from the benefits section
   const benefitsSection = sections.find((s: any) => s.key === 'benefits_and_perks')
   const dynamicSections = sections.filter((s: any) => s.key !== 'benefits_and_perks')
-
-  // Derive culture values from the community/culture section (or default)
-  const cultureSection = sections.find((s: any) =>
-    s.key === 'community_and_culture' || s.key === 'life_at_the_company'
-  )
 
   const errors: string[] = []
   const log: string[] = []
@@ -157,9 +159,34 @@ export async function POST(req: NextRequest) {
   await supabase.from('business_bank_items')
     .delete()
     .eq('user_id', profileId)
-    .in('item_type', ['dynamic_sections', 'structured_benefits', 'profile_quality_score'])
+    .in('item_type', ['dynamic_sections', 'structured_benefits', 'profile_quality_score', 'profile'])
 
-  // ── 5. dynamic_sections bank item ─────────────────────────────────────────
+  // ── 5. profile bank item (bio for dashboard view) ─────────────────────────
+  // The dashboard view (/dashboard/business/view) reads bio from the 'profile' bank item.
+  const bio = deriveBio(sections, mission)
+  if (bio) {
+    const socialLinks = socials.map((s: any) => ({ platform: s.platform || 'Website', url: s.url }))
+    const { error: profileItemErr } = await supabase.from('business_bank_items').insert({
+      user_id: profileId,
+      item_type: 'profile',
+      title: `${name} — Profile`,
+      metadata: {
+        bio,
+        name,
+        businessName: name,
+        industry: industry || null,
+        website: website_url || null,
+        location,
+        tagline: tagline || null,
+        socialLinks,
+      },
+      is_active: true,
+    })
+    if (profileItemErr) errors.push('profile bank item: ' + profileItemErr.message)
+    else log.push('✓ profile bank item (bio)')
+  }
+
+  // ── 6. dynamic_sections bank item ─────────────────────────────────────────
   if (dynamicSections.length > 0) {
     const { error: dsErr } = await supabase.from('business_bank_items').insert({
       user_id: profileId,
@@ -176,7 +203,7 @@ export async function POST(req: NextRequest) {
     else log.push(`✓ dynamic_sections (${dynamicSections.length} sections)`)
   }
 
-  // ── 6. structured_benefits bank item ─────────────────────────────────────
+  // ── 7. structured_benefits bank item ─────────────────────────────────────
   if (benefitsSection?.content && typeof benefitsSection.content === 'object') {
     const { error: sbErr } = await supabase.from('business_bank_items').insert({
       user_id: profileId,
@@ -192,7 +219,7 @@ export async function POST(req: NextRequest) {
     else log.push('✓ structured_benefits')
   }
 
-  // ── 7. profile quality score ──────────────────────────────────────────────
+  // ── 8. profile quality score ──────────────────────────────────────────────
   if (overall_confidence) {
     await supabase.from('business_bank_items').insert({
       user_id: profileId,
@@ -210,12 +237,60 @@ export async function POST(req: NextRequest) {
     log.push('✓ profile_quality_score')
   }
 
-  // ── 8. Jobs → business_talent_requests ────────────────────────────────────
+  // ── 9. Products & Services → dashboard view ────────────────────────────────
+  // Requires migration 20260325d_seed_dashboard_fills.sql (user_id nullable in products tables).
+  if (products.length > 0 || sections.some((s: any) => /products|services/i.test(s.key || ''))) {
+    // Clear old products for this profile
+    await supabase.from('business_products_services').delete().eq('business_id', profileId)
+    await supabase.from('business_products_services_overview').delete().eq('business_id', profileId)
+
+    // Overview
+    const overviewSection = sections.find((s: any) => /products|services|overview/i.test(s.key || ''))
+    const overviewSummary = typeof overviewSection?.content === 'string'
+      ? overviewSection.content.slice(0, 1000)
+      : tagline || `${name} products and services`
+
+    const { error: ovrErr } = await supabase.from('business_products_services_overview').insert({
+      business_id: profileId,
+      // user_id intentionally omitted — made nullable by migration 20260325d
+      short_headline: tagline || `${name} Products & Services`,
+      summary: overviewSummary,
+      primary_industries: industry ? [industry] : [],
+      business_model: 'Other',
+      is_public: true,
+    })
+    if (ovrErr) errors.push('products_overview: ' + ovrErr.message)
+    else log.push('✓ products_services_overview')
+
+    // Individual product cards (from optional products[] array)
+    if (products.length > 0) {
+      const productRows = products.map((p: any, i: number) => ({
+        business_id: profileId,
+        // user_id intentionally omitted — made nullable by migration 20260325d
+        name: p.name || `Product ${i + 1}`,
+        category: p.category || 'Product',
+        short_description: p.short_description || p.description || '',
+        who_it_is_for: p.who_it_is_for || p.target_audience || 'Everyone',
+        problem_it_solves: p.problem_it_solves || p.value_prop || '',
+        external_link: p.url || p.link || null,
+        lifecycle_stage: p.lifecycle_stage || 'Live',
+        order_index: i,
+        is_published: true,
+        is_active: true,
+      }))
+
+      const { error: prodErr } = await supabase.from('business_products_services').insert(productRows)
+      if (prodErr) errors.push('products_services: ' + prodErr.message)
+      else log.push(`✓ products_services (${products.length} cards)`)
+    }
+  }
+
+  // ── 10. Jobs → business_talent_requests + jobs table ──────────────────────
   if (jobs.length > 0) {
-    // Clear old requests first
-    await supabase.from('business_talent_requests')
-      .delete()
-      .eq('business_id', profileId)
+    // Clear old talent requests
+    await supabase.from('business_talent_requests').delete().eq('business_id', profileId)
+    // Clear old seeded jobs (identified by business_id UUID column)
+    await supabase.from('jobs').delete().eq('business_id', profileId)
 
     const requestRows = jobs.map((j: any) => ({
       business_id: profileId,
@@ -225,10 +300,25 @@ export async function POST(req: NextRequest) {
       notes: j.inferred ? '(inferred from company context)' : null,
       is_active: true,
     }))
-
     const { error: jErr } = await supabase.from('business_talent_requests').insert(requestRows)
     if (jErr) errors.push('business_talent_requests: ' + jErr.message)
     else log.push(`✓ business_talent_requests (${jobs.length} roles)`)
+
+    // Also write to jobs table so /dashboard/business/view shows them
+    // Requires migration 20260325d_seed_dashboard_fills.sql (business_id uuid column on jobs).
+    const jobRows = jobs.map((j: any) => ({
+      business_id: profileId,   // UUID column added by migration
+      business_profile_id: 0,   // BIGINT NOT NULL placeholder (no real BIGINT id exists)
+      title: j.title,
+      description: j.description || null,
+      location: j.location || null,
+      employment_type: j.employment_type || null,
+      status: 'published',
+      is_active: true,
+    }))
+    const { error: jobsErr } = await supabase.from('jobs').insert(jobRows)
+    if (jobsErr) errors.push('jobs table: ' + jobsErr.message)
+    else log.push(`✓ jobs table (${jobs.length} published)`)
   }
 
   return NextResponse.json({
@@ -236,6 +326,7 @@ export async function POST(req: NextRequest) {
     profile_id: profileId,
     slug,
     url: `/business/${slug}/about`,
+    dashboard_url: `/dashboard/business/view?id=${profileId}`,
     log,
     errors: errors.length > 0 ? errors : undefined,
   })

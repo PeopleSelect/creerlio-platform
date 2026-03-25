@@ -81,13 +81,37 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => null)
-    const userId = typeof body?.userId === 'string' ? body.userId.trim() : ''
-    if (!userId) {
-      return NextResponse.json({ success: false, message: 'Missing userId.' }, { status: 400 })
+    const userId   = typeof body?.userId   === 'string' ? body.userId.trim()   : ''
+    const profileId = typeof body?.profileId === 'string' ? body.profileId.trim() : ''
+
+    if (!userId && !profileId) {
+      return NextResponse.json({ success: false, message: 'Missing userId or profileId.' }, { status: 400 })
     }
 
     const deleteErrors: string[] = []
 
+    // ── Seeded-profile-only path (no auth user) ──────────────────────────────
+    if (!userId && profileId) {
+      // Delete bank items, talent requests, jobs, profile pages, products, profile
+      await admin.from('business_bank_items').delete().eq('user_id', profileId)
+      await admin.from('business_talent_requests').delete().eq('business_id', profileId)
+      await admin.from('jobs').delete().eq('business_id', profileId)
+      await admin.from('business_products_services').delete().eq('business_id', profileId).catch(() => {})
+      await admin.from('business_products_services_overview').delete().eq('business_id', profileId).catch(() => {})
+      await admin.from('business_product_roadmap').delete().eq('business_id', profileId).catch(() => {})
+      const { error: pagesErr } = await admin.from('business_profile_pages').delete().eq('business_id', profileId)
+      if (pagesErr) deleteErrors.push(`business_profile_pages: ${pagesErr.message}`)
+      const { error: bizErr } = await admin.from('business_profiles').delete().eq('id', profileId)
+      if (bizErr) deleteErrors.push(`business_profiles: ${bizErr.message}`)
+      await admin.from('businesses').delete().eq('id', profileId).catch(() => {})
+
+      if (deleteErrors.length > 0) {
+        return NextResponse.json({ success: false, message: `Delete errors: ${deleteErrors.join('; ')}` }, { status: 500 })
+      }
+      return NextResponse.json({ success: true, message: 'Seeded profile deleted.' })
+    }
+
+    // ── Full user + profile delete path ──────────────────────────────────────
     const { error: talentError } = await admin.from('talent_profiles').delete().eq('user_id', userId)
     if (talentError) deleteErrors.push(`talent_profiles: ${talentError.message}`)
 

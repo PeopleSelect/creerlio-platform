@@ -1225,6 +1225,159 @@ Requirements:
   return completion.choices[0].message.content?.trim() || `Welcome to ${companyName}. ${about}`
 }
 
+/**
+ * Employer Branding Pass — transforms analyst data into talent-facing content.
+ * Runs after researchCompany so it has the full business picture to work from.
+ */
+async function generateTalentProfile(
+  openai: OpenAI,
+  companyName: string,
+  data: any,
+  log: (msg: string) => void
+): Promise<any> {
+  log('\n  Generating employer branding profile...')
+
+  // Feed the key analyst outputs as context — keep within ~4000 tokens
+  const context = JSON.stringify({
+    name: companyName,
+    industry: data.profile?.industry || '',
+    about: (data.profile?.about || '').slice(0, 1200),
+    company_summary: (data.profile?.company_summary || '').slice(0, 1000),
+    business_model: data.profile?.business_model || '',
+    operations_overview: data.intelligence?.operations_overview || '',
+    market_position: data.intelligence?.market_position || '',
+    customer_segments: data.intelligence?.customer_segments || [],
+    strengths: data.intelligence?.strengths || [],
+    services: (data.services || []).slice(0, 6).map((s: any) => ({
+      name: s.name,
+      short_description: s.short_description,
+      roles: s.roles,
+      skills: s.skills,
+      target_customers: s.target_customers,
+      how_it_is_delivered: s.how_it_is_delivered,
+    })),
+    culture_values: (data.culture_values || []).slice(0, 5),
+    benefits: (data.benefits || []).slice(0, 5),
+    hiring_interests: (data.hiring_interests || []).slice(0, 8),
+    company_size: data.profile?.company_size || data.profile?.company_size_estimate || '',
+    hq_city: data.profile?.hq_city || '',
+    hq_state: data.profile?.hq_state || '',
+    hq_country: data.profile?.hq_country || '',
+    founded_year: data.profile?.founded_year || null,
+  }, null, 0)
+
+  const systemPrompt = `You are an expert employer branding specialist.
+
+Your task is to transform business research data into compelling talent-facing content.
+
+Every section must answer: "Why would a smart, capable person want to work here?"
+
+════════════════════════════════════════════════════════════
+CRITICAL RULES
+════════════════════════════════════════════════════════════
+• DO NOT produce generic marketing language
+• DO NOT use phrases like "great place to work", "dynamic environment", "passionate team"
+• Every claim must be grounded in the actual business data provided
+• Be specific, concrete, and honest — top candidates are skeptical of hype
+• Write in a clear, professional, human voice
+
+FAIL CONDITION: If any section reads like a generic company bio, it is wrong.
+
+════════════════════════════════════════════════════════════
+OUTPUT FIELDS
+════════════════════════════════════════════════════════════
+
+company_overview (3–4 paragraphs):
+  What this company actually does, what makes it interesting or genuinely different,
+  its real role in the market. Written for a candidate who has never heard of them.
+  NO marketing copy. Think: smart recruiter briefing a shortlisted candidate.
+
+what_they_do (string, 2–3 paragraphs):
+  Break down the company into clear service areas. Explain in practical terms what
+  they deliver, who they serve, and what kind of work happens inside.
+
+working_here (string, 3–4 paragraphs):
+  Based on business type, size, and services — describe what working here likely
+  looks like day-to-day. Type of environment, how teams operate, pace, client
+  exposure, structure. Must feel realistic and specific, not promotional.
+
+opportunities (string, 2–3 paragraphs):
+  Growth opportunities, client/project exposure, learning potential, career
+  progression paths. Tied to the actual business — not generic perks.
+
+ideal_candidates (object):
+  mindset: the thinking style and attitude that fits this company (2–3 sentences)
+  experience_level: what level of experience makes sense here and why
+  working_style: how people who thrive here approach their work
+  background_fit: industries or backgrounds that translate well
+
+services_talent_view (array — one entry per service):
+  For each service: { name, what_you_do_here, skills_you_build, career_value }
+  what_you_do_here: what a person in this service actually does day-to-day
+  skills_you_build: tangible skills and knowledge gained working in this area
+  career_value: how this experience positions them for future roles
+
+company_snapshot (object):
+  industry, business_model_summary, locations, company_size, what_sets_them_apart
+
+confidence_score (0–100): how confident are you in the quality of this output
+
+════════════════════════════════════════════════════════════
+RETURN ONLY valid JSON. No markdown, no explanation, no code fences.
+════════════════════════════════════════════════════════════`
+
+  const userPrompt = `Company: ${companyName}
+
+Business research data:
+${context}
+
+Generate the talent-facing employer brand profile JSON:
+
+{
+  "company_overview": "",
+  "what_they_do": "",
+  "working_here": "",
+  "opportunities": "",
+  "ideal_candidates": {
+    "mindset": "",
+    "experience_level": "",
+    "working_style": "",
+    "background_fit": ""
+  },
+  "services_talent_view": [
+    { "name": "", "what_you_do_here": "", "skills_you_build": "", "career_value": "" }
+  ],
+  "company_snapshot": {
+    "industry": "",
+    "business_model_summary": "",
+    "locations": [],
+    "company_size": "",
+    "what_sets_them_apart": ""
+  },
+  "confidence_score": 0
+}`
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      temperature: 0.45,
+      max_tokens: 4000,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt },
+      ],
+    })
+    const raw = completion.choices[0].message.content || ''
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+    const result = JSON.parse(cleaned)
+    log(`  ✓ Talent profile generated (confidence: ${result.confidence_score ?? '?'}%)`)
+    return result
+  } catch (e: any) {
+    log(`  ⚠ Talent profile generation failed: ${e.message}`)
+    return null
+  }
+}
+
 /** GPT-4o: discover real businesses by industry + location */
 async function discoverBusinesses(
   openai: OpenAI,
@@ -1511,6 +1664,10 @@ async function generateSingleProfile(opts: {
       log('\n[1b/12] Running service enrichment pass...')
       data.services = await enrichServiceSections(openai, data.services, companyName, data.profile?.industry || '', log)
     }
+
+    // Employer branding pass — talent-facing profile
+    log('\n[1c/12] Generating employer brand profile...')
+    const talentProfile = await generateTalentProfile(openai, companyName, data, log)
 
     // DIE: if YouTube was auto-discovered after GPT (using real company name now), re-search with accurate name
     if (!effectiveYoutube && !detectedSocial.youtube) {
@@ -2067,6 +2224,16 @@ async function generateSingleProfile(opts: {
       },
       is_active: true,
     })
+
+    // Store talent/employer brand profile as a bank item
+    if (talentProfile) {
+      await supabase.from('business_bank_items').insert({
+        user_id: userId, item_type: 'talent_profile',
+        title: `${companyName} — Employer Brand Profile`,
+        metadata: { ...talentProfile, generated_at: new Date().toISOString() },
+        is_active: true,
+      })
+    }
 
     try { fs.rmSync(tmpDir, { recursive: true }) } catch (_) {}
     return { companyName, demoEmail, demoPass, jobCount, svcCount, videoUrl: videoPublicUrl, claimToken, intelligence }

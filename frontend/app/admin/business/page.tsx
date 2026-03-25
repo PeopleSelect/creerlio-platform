@@ -446,11 +446,16 @@ export default function AdminBusinessPage() {
                   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://creerlio.com'
                   const claimLink = business.claim_token ? `${siteUrl}/business/claim/${business.claim_token}` : null
                   
+                  // Seeded profiles (no auth user) go direct to profile view
+                  const viewUrl = business.user_id
+                    ? `/admin/users/${business.user_id}`
+                    : `/dashboard/business/view?id=${encodeURIComponent(business.id)}&from=admin&admin_user_id=${encodeURIComponent(business.id)}`
+
                   return (
-                  <tr 
-                    key={business.id} 
+                  <tr
+                    key={business.id}
                     className="border-b border-white/5 hover:bg-slate-800/30 cursor-pointer"
-                    onClick={() => router.push(`/admin/users/${business.user_id || business.id}`)}
+                    onClick={() => router.push(viewUrl)}
                   >
                     <td className="px-6 py-4 text-white">{name}</td>
                     <td className="px-6 py-4 text-gray-300">{email}</td>
@@ -501,10 +506,7 @@ export default function AdminBusinessPage() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            router.push(`/admin/users/${business.user_id || business.id}`)
-                          }}
+                          onClick={(e) => { e.stopPropagation(); router.push(viewUrl) }}
                           className="px-3 py-1 rounded text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/50 hover:bg-blue-500/30 transition-colors"
                         >
                           View

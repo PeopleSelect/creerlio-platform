@@ -567,15 +567,17 @@ function BusinessProfileViewPageInner() {
           if (!cancelled) setUserId(uid)
         }
 
-        // Determine which user_id to query (either logged-in user or the business being viewed)
-        const queryUserId = targetUserId || uid
+        // Determine which user_id to query (either logged-in user or the business being viewed).
+        // For seeded/AI profiles there is no auth user — fall back to targetBusinessId so the
+        // profile's own data is loaded rather than the logged-in admin's profile.
+        const queryUserId = targetUserId || targetBusinessId || uid
         if (!queryUserId) {
           setError('Unable to determine which profile to load.')
           return
         }
-        
+
         // Check if the logged-in user is the owner of this business profile
-        const userIsOwner = !!(uid && queryUserId === uid)
+        const userIsOwner = !!(uid && targetUserId && queryUserId === uid)
         if (!cancelled) {
           setUserId(queryUserId)
           setIsOwner(userIsOwner)

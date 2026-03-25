@@ -161,29 +161,56 @@ export async function POST(req: NextRequest) {
     .eq('user_id', profileId)
     .in('item_type', ['dynamic_sections', 'structured_benefits', 'profile_quality_score', 'profile'])
 
-  // ── 5. profile bank item (bio for dashboard view) ─────────────────────────
-  // The dashboard view (/dashboard/business/view) reads bio from the 'profile' bank item.
+  // ── 5. profile bank item (editor form state) ──────────────────────────────
+  // The BusinessProfileEditor reads ALL form fields from the 'profile' bank item metadata.
   const bio = deriveBio(sections, mission)
-  if (bio) {
-    const socialLinks = socials.map((s: any) => ({ platform: s.platform || 'Website', url: s.url }))
+  const socialLinks = socials.map((s: any) => ({ platform: s.platform || 'Website', url: s.url }))
+
+  // Map culture sections from sections[] by key pattern matching
+  const findSection = (pattern: RegExp) =>
+    sections.find((s: any) => pattern.test(s.key || ''))
+  const cultureDecisions = (() => {
+    const s = findSection(/decision/i)
+    return typeof s?.content === 'string' ? s.content : ''
+  })()
+  const cultureFeedback = (() => {
+    const s = findSection(/feedback/i)
+    return typeof s?.content === 'string' ? s.content : ''
+  })()
+  const cultureConflict = (() => {
+    const s = findSection(/conflict/i)
+    return typeof s?.content === 'string' ? s.content : ''
+  })()
+  const cultureSuccess = (() => {
+    const s = findSection(/success|celebrat/i)
+    return typeof s?.content === 'string' ? s.content : ''
+  })()
+
+  // Always insert the profile bank item (even if bio is empty) so the editor loads data
+  {
     const { error: profileItemErr } = await supabase.from('business_bank_items').insert({
       user_id: profileId,
       item_type: 'profile',
       title: `${name} — Profile`,
       metadata: {
-        bio,
+        bio: bio || '',
         name,
+        title: tagline || '',
         businessName: name,
         industry: industry || null,
         website: website_url || null,
         location,
         tagline: tagline || null,
         socialLinks,
+        cultureDecisions,
+        cultureFeedback,
+        cultureConflict,
+        cultureSuccess,
       },
       is_active: true,
     })
     if (profileItemErr) errors.push('profile bank item: ' + profileItemErr.message)
-    else log.push('✓ profile bank item (bio)')
+    else log.push('✓ profile bank item (editor fields)')
   }
 
   // ── 6. dynamic_sections bank item ─────────────────────────────────────────

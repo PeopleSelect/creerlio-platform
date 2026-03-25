@@ -150,7 +150,10 @@ export default function AdminUsersPage() {
           email,
           type: 'business',
           created_at: bp.created_at || existing.created_at || null,
-          is_active: bp.is_active ?? existing.is_active ?? true
+          is_active: bp.is_active ?? existing.is_active ?? true,
+          // Track whether this is a real auth user or a seeded/AI profile
+          has_auth_user: !!bp.user_id,
+          business_profile_id: bp.id,
         })
       }
 
@@ -361,10 +364,14 @@ export default function AdminUsersPage() {
         <div className="bg-slate-900/70 border border-white/10 rounded-xl overflow-hidden">
           {/* Mobile cards */}
           <div className="block sm:hidden">
-            {usersList.map((usr) => (
+            {usersList.map((usr) => {
+              const viewUrl = (usr.has_auth_user !== false)
+                ? `/admin/users/${usr.user_id}`
+                : `/dashboard/business/view?id=${encodeURIComponent(usr.business_profile_id || usr.user_id)}&from=admin&admin_user_id=${encodeURIComponent(usr.business_profile_id || usr.user_id)}`
+              return (
               <button
                 key={usr.user_id}
-                onClick={() => router.push(`/admin/users/${usr.user_id}`)}
+                onClick={() => router.push(viewUrl)}
                 className="w-full text-left border-b border-white/5 px-4 py-4 hover:bg-slate-800/30 transition-colors"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -403,7 +410,7 @@ export default function AdminUsersPage() {
                   <span className="text-blue-400 text-xs">View</span>
                 </div>
               </button>
-            ))}
+            )})}
           </div>
 
           {/* Desktop table */}
@@ -421,11 +428,15 @@ export default function AdminUsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {usersList.map((usr) => (
-                  <tr 
-                    key={usr.user_id} 
+                {usersList.map((usr) => {
+                  const viewUrl = (usr.has_auth_user !== false)
+                    ? `/admin/users/${usr.user_id}`
+                    : `/dashboard/business/view?id=${encodeURIComponent(usr.business_profile_id || usr.user_id)}&from=admin&admin_user_id=${encodeURIComponent(usr.business_profile_id || usr.user_id)}`
+                  return (
+                  <tr
+                    key={usr.user_id}
                     className="border-b border-white/5 hover:bg-slate-800/30 cursor-pointer"
-                    onClick={() => router.push(`/admin/users/${usr.user_id}`)}
+                    onClick={() => router.push(viewUrl)}
                   >
                     <td className="px-6 py-4 text-gray-400 text-sm font-mono">{usr.user_id?.substring(0, 8)}...</td>
                     <td className="px-6 py-4 text-white">{usr.name || 'N/A'}</td>
@@ -462,10 +473,8 @@ export default function AdminUsersPage() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            router.push(`/admin/users/${usr.user_id}`)
-                          }}
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); router.push(viewUrl) }}
                           className="px-3 py-1 rounded text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/50 hover:bg-blue-500/30 transition-colors"
                         >
                           View
@@ -492,7 +501,7 @@ export default function AdminUsersPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>

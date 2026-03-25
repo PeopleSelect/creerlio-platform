@@ -527,59 +527,313 @@ Rules:
   return services
 }
 
-/** Scrape homepage + comprehensive subpages — all in parallel, hard 12s total cap */
-async function fetchMultiplePages(websiteUrl: string, targetLocation?: string): Promise<string> {
+// ── Phase 2: Careers subdomain discovery ─────────────────────────────────────
+
+/** Try careers.domain.com / jobs.domain.com — returns first reachable subdomain URL */
+async function discoverCareersSubdomain(origin: string, log: (m: string) => void): Promise<string | null> {
+  const host = new URL(origin).hostname.replace(/^www\./, '')
+  const candidates = [
+    `https://careers.${host}`,
+    `https://jobs.${host}`,
+    `https://work.${host}`,
+    `https://join.${host}`,
+    `https://talent.${host}`,
+  ]
+  for (const url of candidates) {
+    try {
+      const text = await withTimeout(fetchWebsiteText(url, 3000), 5000, '')
+      if (text.length > 500) {
+        log(`  ✓ Careers subdomain found: ${url}`)
+        return url
+      }
+    } catch (_) {}
+  }
+  return null
+}
+
+// ── Phase 3: Dynamic internal link discovery ──────────────────────────────────
+
+/** Extract internal links from a page's HTML — returns paths matching high-value patterns */
+function extractHighValueLinks(html: string, origin: string): string[] {
+  const HIGH_VALUE = /career|job|people|team|culture|benefit|life-at|working|join|why-work|about|values|service|solution|expertise|practice|what-we-do/i
+  const seen = new Set<string>()
+  const links: string[] = []
+  const hrefRe = /href=["']([^"'#?]+)["']/gi
+  let m: RegExpExecArray | null
+  while ((m = hrefRe.exec(html)) !== null) {
+    const href = m[1].trim()
+    if (!href || href.startsWith('mailto:') || href.startsWith('tel:') || href.endsWith('.pdf')) continue
+    try {
+      const abs = href.startsWith('http') ? href : new URL(href, origin).href
+      if (!abs.startsWith(origin)) continue   // external — skip
+      if (seen.has(abs)) continue
+      if (HIGH_VALUE.test(abs)) { seen.add(abs); links.push(abs) }
+    } catch (_) {}
+  }
+  return links.slice(0, 12)   // cap at 12 discovered links
+}
+
+// ── Phase 4: Interactive extraction via Browserless.io (optional) ─────────────
+
+/**
+ * If BROWSERLESS_API_URL is set, fetch page with a headless browser and extract
+ * text from expanded accordions/tabs. Degrades gracefully when not configured.
+ * Set BROWSERLESS_API_URL=https://chrome.browserless.io and BROWSERLESS_TOKEN=your_key
+ */
+async function fetchInteractiveContent(pageUrl: string, log: (m: string) => void): Promise<string> {
+  const apiUrl  = process.env.BROWSERLESS_API_URL
+  const token   = process.env.BROWSERLESS_TOKEN
+  if (!apiUrl || !token) return ''
+
+  log(`  [Interactive] Fetching ${pageUrl} via Browserless...`)
+  try {
+    const script = `
+      module.exports = async ({ page }) => {
+        await page.goto(${JSON.stringify(pageUrl)}, { waitUntil: 'networkidle2', timeout: 15000 });
+        // Click common expand patterns
+        const selectors = [
+          '[data-toggle]', '[aria-expanded="false"]', '.accordion-button',
+          '.expand', '.read-more', '[class*="accordion"]', '[class*="toggle"]',
+        ];
+        for (const sel of selectors) {
+          try {
+            const els = await page.$$(sel);
+            for (const el of els.slice(0, 8)) { await el.click().catch(() => {}); await page.waitForTimeout(300); }
+          } catch (_) {}
+        }
+        return page.evaluate(() => document.body?.innerText || '');
+      };
+    `
+    const res = await withTimeout(
+      fetch(`${apiUrl}/function?token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/javascript' },
+        body: script,
+      }).then(r => r.text()),
+      20000,
+      ''
+    )
+    if (res && res.length > 200) {
+      log(`  ✓ Interactive content: ${res.length} chars from ${pageUrl}`)
+      return res.slice(0, 15000)
+    }
+  } catch (e: any) {
+    log(`  ⚠ Interactive fetch failed: ${e.message}`)
+  }
+  return ''
+}
+
+// ── Phase 1: Secondary source scraping (Glassdoor, Indeed) ───────────────────
+
+/** Scrape Glassdoor company overview page for rating, reviews, benefits mentions */
+async function scrapeGlassdoor(companyName: string, domain: string, log: (m: string) => void): Promise<string> {
+  const slug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  // Try direct working-at URL first; fall back to search page
+  const candidates = [
+    `https://www.glassdoor.com.au/Overview/Working-at-${slug}-EI.htm`,
+    `https://www.glassdoor.com/Reviews/${slug}-Reviews-E.htm`,
+  ]
+  for (const url of candidates) {
+    try {
+      const html = await withTimeout(fetchWebsiteText(url, 30000), 8000, '')
+      if (html.length > 500 && !html.toLowerCase().includes('enable javascript')) {
+        log(`  ✓ Glassdoor content: ${html.length} chars`)
+        return html.slice(0, 8000)
+      }
+    } catch (_) {}
+  }
+  log('  ⚠ Glassdoor: blocked or not found (JS-rendered — expected)')
+  return ''
+}
+
+/** Scrape Indeed company page for reviews and benefits */
+async function scrapeIndeed(companyName: string, log: (m: string) => void): Promise<string> {
+  const slug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+  const url = `https://au.indeed.com/cmp/${slug}`
+  try {
+    const html = await withTimeout(fetchWebsiteText(url, 30000), 8000, '')
+    if (html.length > 500 && !html.toLowerCase().includes('enable javascript')) {
+      log(`  ✓ Indeed content: ${html.length} chars`)
+      return html.slice(0, 8000)
+    }
+  } catch (_) {}
+  log('  ⚠ Indeed: blocked or not found (JS-rendered — expected)')
+  return ''
+}
+
+// ── Phase 8: Profile quality scoring ─────────────────────────────────────────
+
+interface QualityScore {
+  total: number       // 0–100
+  completeness: number
+  depth: number
+  source_diversity: number
+  breakdown: Record<string, boolean>
+}
+
+function scoreProfileQuality(data: any, sourcesUsed: string[]): QualityScore {
+  const checks: Record<string, boolean> = {
+    has_about:          (data.profile?.about || '').length > 300,
+    has_company_summary:(data.profile?.company_summary || '').length > 200,
+    has_business_model: (data.profile?.business_model || '').length > 50,
+    has_tagline:        !!data.profile?.tagline && data.profile.tagline !== 'not_found',
+    has_services_4plus: Array.isArray(data.services) && data.services.length >= 4,
+    services_have_detail: Array.isArray(data.services) && data.services.some((s: any) => (s.short_description || '').length > 80),
+    has_culture_values: Array.isArray(data.culture_values) && data.culture_values.length >= 2,
+    has_benefits:       Array.isArray(data.benefits) && data.benefits.length >= 1,
+    has_location:       !!data.profile?.hq_city && data.profile.hq_city !== 'not_found',
+    has_jobs:           Array.isArray(data.jobs) && data.jobs.length > 0,
+    has_intelligence:   !!data.intelligence?.operations_overview,
+    has_market_position:!!data.intelligence?.market_position,
+    has_hiring_interests: Array.isArray(data.hiring_interests) && data.hiring_interests.length > 0,
+    has_impact_stats:   Array.isArray(data.impact_stats) && data.impact_stats.length > 0,
+    has_mission:        (data.content?.mission || '').length > 30,
+  }
+
+  const trueCount = Object.values(checks).filter(Boolean).length
+  const completeness = Math.round((trueCount / Object.keys(checks).length) * 100)
+
+  // Depth: reward longer about + more services
+  const aboutLen = (data.profile?.about || '').length
+  const svcCount = (data.services || []).length
+  const depth = Math.min(100, Math.round((Math.min(aboutLen, 3000) / 3000) * 50 + (Math.min(svcCount, 8) / 8) * 50))
+
+  // Source diversity: how many distinct data sources were used
+  const diversity = Math.min(100, sourcesUsed.length * 20)
+
+  const total = Math.round(completeness * 0.5 + depth * 0.3 + diversity * 0.2)
+  return { total, completeness, depth, source_diversity: diversity, breakdown: checks }
+}
+
+// ── Phase 7: Structured benefits extraction ───────────────────────────────────
+
+async function extractStructuredBenefits(
+  openai: OpenAI,
+  allContent: string,
+  companyName: string,
+  log: (m: string) => void
+): Promise<any> {
+  if (!allContent || allContent.length < 200) return null
+  log('  Extracting structured benefits...')
+  try {
+    const resp = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      temperature: 0,
+      max_tokens: 1500,
+      response_format: { type: 'json_object' },
+      messages: [{
+        role: 'system',
+        content: `You are an HR benefits analyst. Extract ALL employee benefits mentioned in the text.
+Return JSON with these categories (use [] if nothing found for a category):
+{
+  "parental_leave": [],
+  "health": [],
+  "flexibility": [],
+  "development": [],
+  "perks": [],
+  "financial": [],
+  "wellbeing": [],
+  "summary": ""
+}
+Each item is a short string. summary is 1-2 sentences about the overall benefits offering.
+If the content has no benefits information, return all empty arrays and summary: "No benefits information found".`
+      }, {
+        role: 'user',
+        content: `Company: ${companyName}\n\nContent:\n${allContent.slice(0, 12000)}`
+      }]
+    })
+    const result = JSON.parse(resp.choices[0]?.message?.content || '{}')
+    const hasData = Object.entries(result).some(([k, v]) => k !== 'summary' && Array.isArray(v) && (v as any[]).length > 0)
+    if (hasData) log(`  ✓ Structured benefits extracted`)
+    return hasData ? result : null
+  } catch (e: any) {
+    log(`  ⚠ Benefits extraction failed: ${e.message}`)
+    return null
+  }
+}
+
+/** Scrape homepage + comprehensive subpages — all in parallel, hard 15s total cap */
+async function fetchMultiplePages(
+  websiteUrl: string,
+  targetLocation?: string,
+  log?: (m: string) => void,
+  extraUrls: string[] = []
+): Promise<{ content: string; sourcesUsed: string[] }> {
   const base = new URL(websiteUrl)
-  // Always scrape the actual homepage (origin), not a deep-link or search results page
   const homepage = base.origin
-  const urls = [
+
+  // Priority 1 — careers/culture pages (highest value for talent profiles)
+  const priorityUrls = [
+    `${homepage}/careers`,
+    `${homepage}/jobs`,
+    `${homepage}/life-at-${base.hostname.replace(/^www\./, '').split('.')[0]}`,
+    `${homepage}/working-here`,
+    `${homepage}/join-us`,
+    `${homepage}/join-our-team`,
+    `${homepage}/culture`,
+    `${homepage}/our-culture`,
+    `${homepage}/benefits`,
+    `${homepage}/employee-benefits`,
+    `${homepage}/why-join-us`,
+    `${homepage}/why-work-with-us`,
+    `${homepage}/people`,
+    `${homepage}/our-people`,
+    `${homepage}/team`,
+    `${homepage}/our-team`,
+  ]
+
+  // Priority 2 — company info
+  const infoUrls = [
     homepage,
     `${homepage}/about`,
     `${homepage}/about-us`,
     `${homepage}/our-story`,
-    `${homepage}/careers`,
     `${homepage}/services`,
     `${homepage}/what-we-do`,
     `${homepage}/practice-areas`,
     `${homepage}/expertise`,
     `${homepage}/solutions`,
-    `${homepage}/team`,
-    `${homepage}/our-team`,
-    `${homepage}/people`,
     `${homepage}/contact`,
     `${homepage}/contact-us`,
     `${homepage}/news`,
-    `${homepage}/media`,
     `${homepage}/blog`,
     `${homepage}/leadership`,
     `${homepage}/partners`,
     `${homepage}/awards`,
-    `${homepage}/our-people`,
     `${homepage}/why-us`,
+    `${homepage}/media`,
   ]
 
-  // If a target location/suburb is provided, try the most likely location-specific page only
   if (targetLocation) {
     const suburb = targetLocation.split(/[,\s]+/)[0].toLowerCase().replace(/\s+/g, '-')
-    urls.push(`${homepage}/locations/${suburb}`)
-    urls.push(`${homepage}/offices/${suburb}`)
+    infoUrls.push(`${homepage}/locations/${suburb}`, `${homepage}/offices/${suburb}`)
   }
 
+  // Merge: priority first, then info, then dynamically discovered, deduped, capped at 32
   const seen = new Set<string>()
-  const uniqueUrls = urls.filter(url => { if (seen.has(url)) return false; seen.add(url); return true })
+  const allUrls: string[] = []
+  for (const u of [...priorityUrls, ...extraUrls, ...infoUrls]) {
+    if (!seen.has(u)) { seen.add(u); allUrls.push(u) }
+    if (allUrls.length >= 32) break
+  }
 
-  // Fetch all pages in parallel with a hard 12s wall-clock cap on the entire batch
-  const batchPromise = Promise.allSettled(uniqueUrls.map(url => fetchWebsiteText(url, 20000)))
-  const results = await withTimeout(batchPromise, 12000, uniqueUrls.map(() => ({ status: 'fulfilled' as const, value: '' })))
+  log?.(`  Crawling ${allUrls.length} pages (priority: careers/culture first)...`)
+
+  const batchPromise = Promise.allSettled(allUrls.map(url => fetchWebsiteText(url, 20000)))
+  const results = await withTimeout(batchPromise, 15000, allUrls.map(() => ({ status: 'fulfilled' as const, value: '' })))
 
   const parts: string[] = []
-  for (let i = 0; i < uniqueUrls.length; i++) {
+  const sourcesUsed: string[] = []
+  for (let i = 0; i < allUrls.length; i++) {
     const r = results[i]
     if (r.status === 'fulfilled' && r.value.length > 300) {
-      parts.push(`=== ${uniqueUrls[i]} ===\n${r.value.slice(0, 8000)}`)
+      parts.push(`=== ${allUrls[i]} ===\n${r.value.slice(0, 8000)}`)
+      sourcesUsed.push(allUrls[i])
     }
   }
-  return parts.join('\n\n').slice(0, 50000)
+  const content = parts.join('\n\n').slice(0, 60000)
+  log?.(`  ✓ Crawled ${sourcesUsed.length}/${allUrls.length} pages successfully`)
+  return { content, sourcesUsed }
 }
 
 // ── HTML parsers ──────────────────────────────────────────────────────────────
@@ -1565,21 +1819,74 @@ async function generateSingleProfile(opts: {
     // ── Step 1: Research ─────────────────────────────────────────────────
     log('\n[1/12] Researching company...')
     if (targetLocation) log(`  Target location: ${targetLocation}`)
+    const origin = new URL(websiteUrl).origin
+
+    // Phase 2: Discover careers subdomain before main crawl
+    log('  Checking for careers subdomain...')
+    const careersSubdomain = await discoverCareersSubdomain(origin, log)
+
+    // Phase 3: Fetch homepage first to extract dynamic link targets
+    log('  Fetching homepage for link discovery...')
+    const homepageHtml = await withTimeout(fetchWebsiteText(websiteUrl, 40000), 8000, '')
+    const discoveredLinks = extractHighValueLinks(homepageHtml, origin)
+    if (discoveredLinks.length > 0) log(`  ✓ Discovered ${discoveredLinks.length} high-value internal links`)
+
+    // Add careers subdomain pages to extra URL list
+    const extraUrls: string[] = [...discoveredLinks]
+    if (careersSubdomain) {
+      extraUrls.unshift(careersSubdomain, `${careersSubdomain}/benefits`, `${careersSubdomain}/life`, `${careersSubdomain}/culture`)
+    }
+
+    // Fetch all pages with priority ordering
     log('  Scanning website for social links and logo...')
-    const websiteHtml    = await fetchMultiplePages(websiteUrl, targetLocation)
+    const { content: websiteHtml, sourcesUsed } = await fetchMultiplePages(websiteUrl, targetLocation, log, extraUrls)
+
+    // Phase 4: Interactive extraction via Browserless (if configured)
+    const domainName = origin.replace(/^https?:\/\/(?:www\.)?/, '').split('.')[0]
+    let interactiveContent = ''
+    if (process.env.BROWSERLESS_API_URL) {
+      log('\n  [Phase 4] Interactive content extraction...')
+      const careersPageForInteractive = careersSubdomain || `${origin}/careers`
+      interactiveContent = await fetchInteractiveContent(careersPageForInteractive, log)
+    } else {
+      log('  [Phase 4] Browserless not configured — skipping interactive extraction')
+      log('    To enable: set BROWSERLESS_API_URL + BROWSERLESS_TOKEN env vars')
+    }
+
+    // Phase 1: Secondary source scraping (parallel with logo discovery)
+    log('\n  [Phase 1] Fetching secondary sources (Glassdoor, Indeed)...')
     const detectedSocial = extractSocialLinks(websiteHtml)
-    const origin         = new URL(websiteUrl).origin
-    log('  Discovering logo...')
     const effectiveLinkedin = (detectedSocial.linkedin || linkedinUrl) || undefined
-    const logoCandidates = await withTimeout(findBestLogoUrl(websiteHtml, origin, effectiveLinkedin), 10000, [])
+
+    const [logoCandidates, glassdoorContent, indeedContent] = await Promise.all([
+      withTimeout(findBestLogoUrl(websiteHtml, origin, effectiveLinkedin), 10000, []),
+      scrapeGlassdoor(domainName, domainName, log),
+      scrapeIndeed(domainName, log),
+    ])
 
     if (Object.keys(detectedSocial).length > 0) {
       log(`  ✓ Found social links: ${Object.keys(detectedSocial).join(', ')}`)
     }
 
+    // Phase 5: Build MASTER_CONTEXT from all sources
+    const secondaryContent = [
+      glassdoorContent ? `=== GLASSDOOR ===\n${glassdoorContent}` : '',
+      indeedContent    ? `=== INDEED ===\n${indeedContent}` : '',
+      interactiveContent ? `=== INTERACTIVE CONTENT ===\n${interactiveContent}` : '',
+    ].filter(Boolean).join('\n\n')
+
+    const masterContext = [websiteHtml, secondaryContent].filter(Boolean).join('\n\n').slice(0, 65000)
+    const allSourcesUsed = [
+      ...sourcesUsed,
+      glassdoorContent  ? 'glassdoor'   : '',
+      indeedContent     ? 'indeed'      : '',
+      interactiveContent ? 'browserless' : '',
+    ].filter(Boolean)
+    log(`  ✓ MASTER_CONTEXT: ${masterContext.length} chars from ${allSourcesUsed.length} sources`)
+
     // Detect ATS / careers URL and scrape real jobs before calling GPT
-    log('  Scanning for real job listings...')
-    const careersUrl = detectCareersUrl(websiteHtml, origin)
+    log('\n  Scanning for real job listings...')
+    const careersUrl = detectCareersUrl(websiteHtml, origin) || (careersSubdomain ? careersSubdomain : null)
     let scrapedJobs: any[] = []
     if (careersUrl) {
       log(`  Detected careers URL: ${careersUrl}`)
@@ -1589,7 +1896,6 @@ async function generateSingleProfile(opts: {
     // ZGE: SEEK search for more real jobs if ATS returned few
     if (scrapedJobs.length < 5) {
       log('  Searching SEEK for additional real job listings...')
-      const domainName = origin.replace(/^https?:\/\/(?:www\.)?/, '').split('.')[0]
       const seekJobs = await seekJobSearch(domainName, log)
       if (seekJobs.length > 0) {
         const existingTitles = new Set(scrapedJobs.map(j => j.title.toLowerCase()))
@@ -1614,7 +1920,6 @@ async function generateSingleProfile(opts: {
     // ZGE: resolve effective YouTube URL
     let effectiveYoutube = detectedSocial.youtube || youtubeUrl || ''
     if (!effectiveYoutube) {
-      const domainName = origin.replace(/^https?:\/\/(?:www\.)?/, '').split('.')[0]
       const discovered = await findYouTubeChannel(domainName, log)
       if (discovered) effectiveYoutube = discovered
     }
@@ -1630,8 +1935,12 @@ async function generateSingleProfile(opts: {
       effectiveInstagramUrl ? scrapeInstagramData(effectiveInstagramUrl, log) : Promise.resolve({ bio: '', followers: '' }),
     ])
 
+    if (linkedinContent.description) allSourcesUsed.push('linkedin')
+    if (youtubeContent.description)  allSourcesUsed.push('youtube')
+    if (instagramContent.bio)        allSourcesUsed.push('instagram')
+
     // ── Hiring Intelligence ───────────────────────────────────────────────
-    const hiringSignals = detectHiringSignals(websiteHtml, careersUrl, scrapedJobs, linkedinContent)
+    const hiringSignals = detectHiringSignals(masterContext, careersUrl, scrapedJobs, linkedinContent)
     const intelligence  = computeIntelligence(hiringSignals, scrapedJobs)
     log(`\n  ✦ Hiring status:    ${intelligence.hiring_status.toUpperCase()}`)
     log(`  ✦ Confidence:       ${intelligence.confidence_score}%`)
@@ -1643,9 +1952,10 @@ async function generateSingleProfile(opts: {
     // Collect real job titles for GPT context
     const scrapedJobTitles = scrapedJobs.map(j => j.title).filter(Boolean)
 
+    // Pass MASTER_CONTEXT (website + Glassdoor + Indeed + interactive) to GPT
     const data = await researchCompany(
       openai, websiteUrl, linkedinUrl, effectiveYoutube,
-      detectedSocial, websiteHtml, targetLocation, log,
+      detectedSocial, masterContext, targetLocation, log,
       scrapedJobTitles, effectiveYoutube || undefined,
       linkedinContent, youtubeContent, instagramContent
     )
@@ -1659,14 +1969,23 @@ async function generateSingleProfile(opts: {
     log(`  ✓ Slug:    ${slug}`)
     log(`  ✓ Email:   ${demoEmail}`)
 
+    // Phase 8: Quality scoring (pre-enrichment baseline)
+    const qualityScore = scoreProfileQuality(data, allSourcesUsed)
+    log(`\n  ✦ Profile quality:  ${qualityScore.total}/100 (completeness: ${qualityScore.completeness}%, depth: ${qualityScore.depth}%)`)
+    if (qualityScore.total < 50) log('  ⚠ Low quality score — profile may need manual review')
+
+    // Phase 7: Structured benefits extraction from MASTER_CONTEXT
+    log('\n[1b/12] Extracting structured benefits...')
+    const structuredBenefits = await extractStructuredBenefits(openai, masterContext, companyName, log)
+
     // DIE: enrichment pass — fill empty service sub-sections with targeted GPT call
     if (Array.isArray(data.services) && data.services.length > 0) {
-      log('\n[1b/12] Running service enrichment pass...')
+      log('\n[1c/12] Running service enrichment pass...')
       data.services = await enrichServiceSections(openai, data.services, companyName, data.profile?.industry || '', log)
     }
 
     // Employer branding pass — talent-facing profile
-    log('\n[1c/12] Generating employer brand profile...')
+    log('\n[1d/12] Generating employer brand profile...')
     const talentProfile = await generateTalentProfile(openai, companyName, data, log)
 
     // DIE: if YouTube was auto-discovered after GPT (using real company name now), re-search with accurate name
@@ -2222,6 +2541,24 @@ async function generateSingleProfile(opts: {
         raw_signals: intelligence.raw_signals,
         generated_at: new Date().toISOString(),
       },
+      is_active: true,
+    })
+
+    // Store structured benefits as a bank item
+    if (structuredBenefits) {
+      await supabase.from('business_bank_items').insert({
+        user_id: userId, item_type: 'structured_benefits',
+        title: `${companyName} — Benefits & Perks`,
+        metadata: { ...structuredBenefits, generated_at: new Date().toISOString() },
+        is_active: true,
+      })
+    }
+
+    // Store quality score as a bank item
+    await supabase.from('business_bank_items').insert({
+      user_id: userId, item_type: 'profile_quality_score',
+      title: `${companyName} — Profile Quality`,
+      metadata: { ...qualityScore, sources_used: allSourcesUsed, generated_at: new Date().toISOString() },
       is_active: true,
     })
 

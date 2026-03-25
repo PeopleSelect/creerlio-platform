@@ -64,6 +64,13 @@ function getFfmpegBin(): string {
     try { if (fs.existsSync(p)) return p } catch (_) {}
   }
 
+  // Try resolving via system PATH (works on Windows with choco/winget installs)
+  try {
+    const cmd = process.platform === 'win32' ? 'where' : 'which'
+    const result = execFileSync(cmd, ['ffmpeg'], { encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }).trim().split('\n')[0].trim()
+    if (result && fs.existsSync(result)) return result
+  } catch (_) {}
+
   // ffmpeg-static works in local dev but path breaks when Next.js bundles the route
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -71,7 +78,7 @@ function getFfmpegBin(): string {
     if (staticPath && fs.existsSync(staticPath)) return staticPath
   } catch (_) {}
 
-  throw new Error('ffmpeg not found on this system')
+  throw new Error('ffmpeg not found — install it (https://ffmpeg.org/download.html) or set FFMPEG_PATH env var to enable video generation')
 }
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
@@ -945,11 +952,14 @@ Target location requested: "${targetLocation}"
     || !!(linkedinContent?.description)
     || !!(youtubeContent?.description)
 
-  const systemPrompt = `You are the ZGE — Creerlio Zero-Guess Extraction Engine.
-You build complete, accurate business profiles by READING real source data and structuring it intelligently.
+  const systemPrompt = `You are the ZGE — Creerlio Business Intelligence Engine.
+
+Your task is NOT to summarise a website. Your task is to RECONSTRUCT this company as if preparing a high-quality internal analyst briefing.
+
+The output must be richer, clearer, and more useful than the company's own website.
 ${branchInstructions}
 ════════════════════════════════════════════════════════════
-⚖️ TWO-TIER APPROACH
+⚖️ TWO-TIER DATA APPROACH
 ════════════════════════════════════════════════════════════
 TIER 1 — HARD EXTRACTION (strict — never fabricate):
   • Company name, address, phone, email — extract exactly as written; "not_found" if absent
@@ -958,13 +968,14 @@ TIER 1 — HARD EXTRACTION (strict — never fabricate):
   • LinkedIn employee count, industry — extract exactly; "" if not found
   • URLs (careers, social) — extract exactly; null if not found
 
-TIER 2 — INTELLIGENT EXTRACTION (read & structure real content):
-  • About, services, culture values, benefits, mission — READ the provided website/LinkedIn/YouTube
-    text and extract the real content; structure it clearly into the required fields
-  • If the content EXISTS in the sources (even indirectly) — extract and structure it
-  • If the website text is sparse (JS-rendered) — use your training knowledge about this specific
-    company to produce accurate, representative content, but prioritise any real text available
-  • NEVER add fake testimonials, invented statistics, or wrong addresses
+TIER 2 — ANALYST RECONSTRUCTION (your primary mode):
+  • DO NOT just repeat or summarise website text
+  • DO NOT produce generic statements like "offers a range of services"
+  • EXPAND and clarify weak or vague information using real-world business knowledge
+  • INFER missing detail based on strong signals (industry, size, job titles, service names)
+  • Write as if a senior analyst has read all the sources and is briefing an executive
+  • If the website is sparse (JS-rendered) — use your knowledge of this specific company
+  • NEVER add fake testimonials, invented addresses, or wrong phone numbers
 
 ════════════════════════════════════════════════════════════
 🔑 SOURCE PRIORITY
@@ -977,6 +988,51 @@ TIER 2 — INTELLIGENT EXTRACTION (read & structure real content):
 ${isSourceRich ? '✓ Rich source content available — prioritise extraction from provided text.' : '⚠ Sparse source content — use knowledge of this specific company to produce accurate content.'}
 
 ════════════════════════════════════════════════════════════
+📋 ANALYTICAL STEPS (follow in order)
+════════════════════════════════════════════════════════════
+
+STEP 1 — UNDERSTAND THE BUSINESS:
+Determine with specificity:
+• What the company actually does (in plain, practical terms — not marketing language)
+• How they make money (fee-for-service, retainer, project, SaaS, transaction, etc.)
+• Who their real customers are (industry, size, geography, buying role)
+• What makes them genuinely different (evidence-based — not "we put clients first")
+Write this as company_summary: a 4–6 paragraph analyst overview, not a company brochure.
+
+STEP 2 — SERVICES (minimum 4, target 6–10):
+Most websites under-describe services. You must identify ALL services — explicit AND implied.
+For each service:
+• name: exact name from website or derived from context
+• short_description: what this service actually does — no fluff
+• target_customers: specific customer type (not "businesses of all sizes")
+• typical_use_cases: 2–3 real-world scenarios where a client would engage this service
+• how_it_is_delivered: project-based / retainer / on-site / platform / consultation / etc.
+• problem_it_solves: the specific pain point — be concrete
+• roles: job titles involved in delivering this service
+• skills: technical/professional skills required
+• growth_areas: relevant trends or emerging demand for this service
+• business_value: measurable or tangible outcome for the client
+
+STEP 3 — COMPANY PROFILE (DEEP VERSION):
+• about: 4–6 paragraphs. Topics: origin & founding → core services & differentiators → clients & scale → team & culture → growth trajectory
+  DO NOT write marketing copy. Write like an analyst who has read the website and knows the industry.
+• business_model: how revenue is generated — be specific (e.g. "hourly legal fees + fixed-fee packages for conveyancing + retainer for corporate clients")
+• customer_segments: list of distinct customer types with brief descriptions
+• industry: specific (e.g. "Commercial & Property Law" not just "Legal Services")
+• company_size_estimate: estimate headcount range if not stated (e.g. "50–150 staff" based on office count, service breadth, LinkedIn data)
+• operations_overview: key departments, delivery model, how the business operates day-to-day
+
+STEP 4 — MARKET POSITIONING:
+• market_position: where this company sits in its market (e.g. "mid-market specialist", "national challenger", "dominant regional player")
+• competitors: types of direct competitors (not specific names unless well-known)
+• strengths: evidence-based (extracted from real signals — client type, case studies, team depth, location, specialisations)
+
+STEP 5 — HIRING CONTEXT:
+• If real jobs exist: summarise what they signal about growth and team structure
+• If no jobs: infer likely roles based on services and company stage
+• hiring_context: 2–3 sentence narrative about hiring posture
+
+════════════════════════════════════════════════════════════
 📋 FIELD RULES
 ════════════════════════════════════════════════════════════
 
@@ -984,34 +1040,9 @@ COMPANY NAME: Extract from title/h1/og:title. Preserve exact capitalisation.
 
 TAGLINE: Extract from homepage if present as a standalone headline/slogan. If truly absent → "not_found".
 
-ABOUT (profile.about — 3–5 paragraphs):
-• Priority 1: extract and lightly restructure from website about/company page text
-• Priority 2: use LinkedIn description if website about is absent
-• Priority 3: write an accurate, specific description based on what you know about this company
-• Paragraph topics: origin & founding → core services & differentiators → scale & clients → culture & team → growth & opportunity
-
-INDUSTRY: From LinkedIn data or website context. Required — do not mark not_found.
-
-LOCATIONS: Extract hq_city/state/country/address from contact page or footer EXACTLY. "not_found" only if genuinely absent.
-
-SERVICES (extract 3–6 from website; structure intelligently):
-• Use exact service names from the website where present
-• short_description: based on website service page text; expand with real knowledge if sparse
-• who_it_is_for: describe the real client type for this service
-• problem_it_solves: describe the real pain point this service addresses
-• teams: internal teams that deliver this service (extract from text or infer from role of service)
-• roles: job titles required to deliver this service (from job listings or service context)
-• skills: technical/professional skills required (from text or service context)
-• growth_areas: emerging trends relevant to this service area
-• impact fields: extract if stated; otherwise describe real-world value this service delivers
-
-JOBS (HARD EXTRACTION — never invent):
-• Use ONLY the real job listings from ATS/SEEK provided
-• If none provided → return []
-
 CULTURE VALUES:
 • Extract from any values/culture section if present on website
-• If not explicitly stated but company culture is described → infer 3–5 values from the text
+• If not explicitly stated but culture is described → infer 3–5 values from the text
 • If no cultural content at all → return []
 
 BENEFITS: Extract from website if stated. If not stated → return []
@@ -1022,8 +1053,7 @@ SOCIAL PROOF (HARD EXTRACTION):
 
 PROGRAMS: Named programs/initiatives from the website. If none → return []
 
-IMPACT STATS: Real numbers from website (years, team size, clients, offices).
-• If not stated → return []
+IMPACT STATS: Real numbers from website (years, team size, clients, offices). If not stated → return []
 
 MISSION / VALUE PROP: Extract from "mission", "vision", or "what we do" content. Lightly structure.
 
@@ -1032,6 +1062,8 @@ HIRING INTERESTS: From job listings or careers content. If none → derive from 
 SKILLS: From job listings or website. Populate with real skills for this industry if not stated.
 
 SPECIALISATIONS: From services/practice areas. Populate from what you know if website is sparse.
+
+LOCATIONS: Extract hq_city/state/country/address from contact page or footer EXACTLY. "not_found" only if genuinely absent.
 
 DALL-E IMAGE PROMPTS: Generate vivid, cinematic, industry-specific image prompts based on extracted facts.
 • Reference the company's actual industry, city, office type, and client type
@@ -1042,13 +1074,18 @@ CREDENTIALS: email: demo.[slug]@creerlio.com, password: Demo[CompanyNameNoSpaces
 ════════════════════════════════════════════════════════════
 ✅ OUTPUT VALIDATION
 ════════════════════════════════════════════════════════════
-• All text fields populated (or "not_found" for TIER 1 facts only)
+• company_summary: minimum 4 substantive paragraphs — analyst voice, no marketing fluff
+• about: minimum 4 paragraphs — specific, informative
+• business_model: specific revenue mechanism — not "provides services to clients"
+• operations_overview: describes real departments and delivery model
+• market_position: specific placement in market — not generic
+• services: minimum 4, with ALL sub-fields populated
 • Job array: ONLY real scraped jobs or []
 • Social proof: ONLY verbatim quotes or []
-• Services: at least 3, names match website where available
-• About: at minimum 3 substantive paragraphs
 • No fake addresses, no invented testimonials, no wrong phone numbers
 • JSON is valid
+
+FAIL CONDITION: If any section reads like a generic website summary, rewrite it.
 
 ════════════════════════════════════════════════════════════
 RETURN ONLY valid JSON. No markdown, no explanation, no code fences.
@@ -1098,8 +1135,9 @@ Generate the complete Creerlio Business Profile JSON:
 
 {
   "business": { "name": "", "slug": "", "website_url": "${websiteUrl}", "linkedin_url": "${linkedinUrl}", "youtube_url": "${youtubeUrl}", "careers_url": "", "phone": "", "email": "" },
-  "profile": { "tagline": "", "about": "", "industry": "", "business_type": "", "hq_city": "", "hq_state": "", "hq_country": "", "hq_address": "", "latitude": 0, "longitude": 0, "company_size": "", "founded_year": 0, "ownership_type": "" },
+  "profile": { "tagline": "", "about": "", "company_summary": "", "business_model": "", "industry": "", "business_type": "", "hq_city": "", "hq_state": "", "hq_country": "", "hq_address": "", "latitude": 0, "longitude": 0, "company_size": "", "company_size_estimate": "", "founded_year": 0, "ownership_type": "" },
   "content": { "mission": "", "value_prop_headline": "", "value_prop_body": "", "acknowledgement_of_country": "" },
+  "intelligence": { "operations_overview": "", "market_position": "", "hiring_context": "", "customer_segments": [], "competitor_types": [], "strengths": [] },
   "impact_stats": [{ "label": "", "value": "" }],
   "culture_values": [{ "title": "", "description": "" }],
   "business_areas": [{ "name": "", "description": "" }],
@@ -1111,7 +1149,7 @@ Generate the complete Creerlio Business Profile JSON:
   "specialisations": [],
   "skills": [],
   "badges": [],
-  "services": [{ "name": "", "category": "Service", "short_description": "", "who_it_is_for": "", "problem_it_solves": "", "teams": [], "roles": [], "skills": [], "growth_areas": [], "impact": { "who_it_helps": "", "what_it_improves": "", "real_world_outcomes": "" }, "we_are_hiring": true, "open_to_partnerships": false, "currently_scaling": false }],
+  "services": [{ "name": "", "category": "Service", "short_description": "", "target_customers": "", "typical_use_cases": [], "how_it_is_delivered": "", "who_it_is_for": "", "problem_it_solves": "", "business_value": "", "teams": [], "roles": [], "skills": [], "growth_areas": [], "impact": { "who_it_helps": "", "what_it_improves": "", "real_world_outcomes": "" }, "we_are_hiring": true, "open_to_partnerships": false, "currently_scaling": false }],
   "jobs": [{ "title": "", "description": "", "city": "", "state": "", "country": "Australia", "location": "", "employment_type": "Full-time", "experience_level": "", "salary_min": 0, "salary_max": 0, "salary_currency": "AUD", "required_skills": [], "preferred_skills": [], "requirements": "", "apply_url": "" }],
   "dal_le_images": [
     { "key": "logo",        "filename": "logo.jpg",        "bank_type": "logo",     "title": "", "prompt": "", "size": "1024x1024" },
@@ -1132,7 +1170,7 @@ Generate the complete Creerlio Business Profile JSON:
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o',
     temperature: 0.4,
-    max_tokens: 8000,
+    max_tokens: 12000,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user',   content: userPrompt },

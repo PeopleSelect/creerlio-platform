@@ -272,7 +272,7 @@ export default function AdminBusinessPage() {
 
   async function toggleActive(businessId: string, currentStatus: boolean) {
     if (!user) return
-    
+
     try {
       const { error } = await supabase
         .from('business_profiles')
@@ -286,6 +286,24 @@ export default function AdminBusinessPage() {
     } catch (error: any) {
       console.error('Error updating business:', error)
       alert(`Failed to update business status: ${error?.message || 'Unknown error'}`)
+    }
+  }
+
+  async function deleteProfile(business: any) {
+    const name = business.business_name || business.name || 'this business'
+    if (!confirm(`Permanently delete "${name}"? This cannot be undone.`)) return
+
+    try {
+      const res = await fetch('/api/admin/users/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: business.user_id }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Delete failed')
+      loadBusiness(user!.id)
+    } catch (err: any) {
+      alert(`Failed to delete: ${err.message}`)
     }
   }
 
@@ -463,6 +481,16 @@ export default function AdminBusinessPage() {
                           }`}
                         >
                           {business.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteProfile(business)
+                          }}
+                          className="px-3 py-1 rounded text-xs font-semibold bg-red-700/20 text-red-300 border border-red-700/50 hover:bg-red-700/40 transition-colors"
+                        >
+                          Delete
                         </button>
                       </div>
                     </td>

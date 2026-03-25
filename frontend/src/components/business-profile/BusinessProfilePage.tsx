@@ -3,11 +3,129 @@
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { fadeIn, fadeUp, stagger } from './motionPresets'
-import type { BusinessProfilePageData } from './types'
+import type { BusinessProfilePageData, AIDynamicSection, AIStructuredBenefits } from './types'
 import { ImpactMetrics } from './ImpactMetrics'
-import { Briefcase, HeartHandshake, Sparkles, ShieldCheck, Users } from 'lucide-react'
+import { Briefcase, HeartHandshake, Sparkles, ShieldCheck, Users, Building2, Heart, Clock, BookOpen, Gift, DollarSign, Smile } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+
+// ── AI Section renderers ───────────────────────────────────────────────────────
+
+const SECTION_ICONS: Record<string, React.ReactNode> = {
+  life_at_the_company:   <Heart className="w-5 h-5 text-rose-400" />,
+  working_here:          <Building2 className="w-5 h-5 text-blue-400" />,
+  benefits_and_perks:    <Gift className="w-5 h-5 text-emerald-400" />,
+  learning_and_development: <BookOpen className="w-5 h-5 text-purple-400" />,
+  ways_of_working:       <Clock className="w-5 h-5 text-amber-400" />,
+  community_and_culture: <Users className="w-5 h-5 text-pink-400" />,
+  opportunities_and_roles: <Briefcase className="w-5 h-5 text-blue-300" />,
+  why_join:              <Sparkles className="w-5 h-5 text-yellow-400" />,
+  what_the_company_does: <Building2 className="w-5 h-5 text-slate-300" />,
+  teams_and_departments: <Users className="w-5 h-5 text-cyan-400" />,
+}
+
+function renderSectionContent(content: string | Record<string, any>): React.ReactNode {
+  if (typeof content === 'string') {
+    return content.split('\n').filter(Boolean).map((para, i) => (
+      <p key={i} className="text-slate-300 leading-relaxed mt-3 first:mt-0">{para}</p>
+    ))
+  }
+  // Structured JSON content — render as definition list
+  return (
+    <div className="space-y-3">
+      {Object.entries(content).map(([k, v]) => (
+        <div key={k}>
+          <span className="text-white font-medium capitalize">{k.replace(/_/g, ' ')}: </span>
+          <span className="text-slate-300">{Array.isArray(v) ? v.join(', ') : String(v)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function AISections({ sections }: { sections: AIDynamicSection[] }) {
+  const sorted = [...sections].sort((a, b) => (a.priority ?? 5) - (b.priority ?? 5))
+  // Skip benefits section here — rendered separately in the benefits block
+  const displaySections = sorted.filter(s => s.key !== 'benefits_and_perks')
+
+  if (displaySections.length === 0) return null
+
+  return (
+    <section className="py-16 border-t border-white/10">
+      <div className="max-w-7xl mx-auto px-8 space-y-12">
+        {displaySections.map((section) => (
+          <motion.div
+            key={section.key}
+            variants={stagger}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.15 }}
+          >
+            <motion.div variants={fadeUp} className="flex items-center gap-3 mb-5">
+              <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                {SECTION_ICONS[section.key] ?? <Sparkles className="w-5 h-5 text-slate-300" />}
+              </div>
+              <h2 className="text-2xl font-bold text-white">{section.title}</h2>
+              {section.confidence >= 80 && (
+                <span className="ml-auto text-xs text-slate-500 border border-white/10 rounded-full px-2 py-0.5">
+                  AI Researched
+                </span>
+              )}
+            </motion.div>
+            <motion.div variants={fadeUp} className="rounded-2xl border border-white/10 bg-slate-950/35 p-8">
+              {renderSectionContent(section.content)}
+            </motion.div>
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+const BENEFIT_CATEGORY_ICONS: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
+  parental_leave: { icon: <Heart className="w-5 h-5" />,     label: 'Parental Leave',  color: 'text-rose-400' },
+  health:         { icon: <Smile className="w-5 h-5" />,      label: 'Health',          color: 'text-green-400' },
+  flexibility:    { icon: <Clock className="w-5 h-5" />,      label: 'Flexibility',     color: 'text-amber-400' },
+  development:    { icon: <BookOpen className="w-5 h-5" />,   label: 'Development',     color: 'text-purple-400' },
+  perks:          { icon: <Gift className="w-5 h-5" />,       label: 'Perks',           color: 'text-blue-400' },
+  financial:      { icon: <DollarSign className="w-5 h-5" />, label: 'Financial',       color: 'text-emerald-400' },
+  wellbeing:      { icon: <Heart className="w-5 h-5" />,      label: 'Wellbeing',       color: 'text-pink-400' },
+}
+
+function AIBenefitsSection({ benefits }: { benefits: AIStructuredBenefits }) {
+  const categories = Object.entries(BENEFIT_CATEGORY_ICONS)
+    .filter(([key]) => Array.isArray((benefits as any)[key]) && (benefits as any)[key].length > 0)
+
+  if (categories.length === 0) return null
+
+  return (
+    <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {categories.map(([key, meta]) => {
+        const items: string[] = (benefits as any)[key]
+        return (
+          <motion.div
+            key={key}
+            variants={fadeUp}
+            className="rounded-2xl border border-white/10 bg-slate-950/35 p-6"
+          >
+            <div className={`flex items-center gap-2 mb-3 ${meta.color}`}>
+              {meta.icon}
+              <span className="font-semibold text-white text-sm">{meta.label}</span>
+            </div>
+            <ul className="space-y-1.5">
+              {items.map((item, i) => (
+                <li key={i} className="text-slate-300 text-sm flex items-start gap-2">
+                  <span className="text-slate-500 mt-0.5">•</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+        )
+      })}
+    </div>
+  )
+}
 
 function Pillar({ title, body }: { title: string; body: string }) {
   return (
@@ -317,6 +435,11 @@ export function BusinessProfilePage({ data }: { data: BusinessProfilePageData })
         </div>
       </section>
 
+      {/* AI DYNAMIC SECTIONS */}
+      {Array.isArray(data.ai_sections) && data.ai_sections.length > 0 && (
+        <AISections sections={data.ai_sections} />
+      )}
+
       {/* IMPACT METRICS */}
       <ImpactMetrics stats={data.impact_stats} />
 
@@ -423,26 +546,44 @@ export function BusinessProfilePage({ data }: { data: BusinessProfilePageData })
       {/* BENEFITS */}
       <section className="py-16 border-t border-white/10">
         <div className="max-w-7xl mx-auto px-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-white mb-6">Benefits & wellbeing</h2>
-          <div className="flex gap-4 overflow-x-auto pb-2">
-            {benefits.map((b, idx) => (
-              <div
-                key={`${b.title}-${idx}`}
-                className="min-w-[280px] max-w-[320px] rounded-2xl border border-white/10 bg-slate-950/35 p-6"
-              >
-                <p className="text-white font-semibold">{b.title}</p>
-                <p className="text-slate-300 mt-3 text-sm leading-relaxed">{b.description}</p>
-                <button type="button" className="mt-5 text-blue-300 hover:text-blue-200 text-sm font-medium" onClick={() => {}}>
-                  Explore more →
-                </button>
+          <motion.div variants={stagger} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.15 }}>
+            <motion.div variants={fadeUp} className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl md:text-3xl font-bold text-white">Benefits & wellbeing</h2>
+              {data.ai_benefits?.summary && (
+                <span className="text-xs text-slate-500 border border-white/10 rounded-full px-2 py-0.5">AI Researched</span>
+              )}
+            </motion.div>
+
+            {/* AI summary sentence */}
+            {data.ai_benefits?.summary && (
+              <motion.p variants={fadeUp} className="text-slate-300 mb-6 leading-relaxed max-w-3xl">
+                {data.ai_benefits.summary}
+              </motion.p>
+            )}
+
+            {/* AI categorised benefits — show when available */}
+            {data.ai_benefits ? (
+              <AIBenefitsSection benefits={data.ai_benefits} />
+            ) : (
+              /* Fallback: manual benefits from profile */
+              <div className="flex gap-4 overflow-x-auto pb-2">
+                {benefits.map((b, idx) => (
+                  <div
+                    key={`${b.title}-${idx}`}
+                    className="min-w-[280px] max-w-[320px] rounded-2xl border border-white/10 bg-slate-950/35 p-6"
+                  >
+                    <p className="text-white font-semibold">{b.title}</p>
+                    <p className="text-slate-300 mt-3 text-sm leading-relaxed">{b.description}</p>
+                  </div>
+                ))}
+                {benefits.length === 0 && !isAnon ? (
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-6 text-slate-400">
+                    Add benefits in your Dashboard (e.g., flexibility, wellness, parental leave).
+                  </div>
+                ) : null}
               </div>
-            ))}
-            {benefits.length === 0 && !isAnon ? (
-              <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-6 text-slate-400">
-                Add benefits in your Dashboard (e.g., flexibility, wellness, parental leave).
-              </div>
-            ) : null}
-          </div>
+            )}
+          </motion.div>
         </div>
       </section>
 

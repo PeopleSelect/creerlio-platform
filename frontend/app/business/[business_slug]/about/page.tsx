@@ -117,7 +117,33 @@ export default async function BusinessAboutPage({ params }: { params: { business
 
   if (!data) return notFound()
 
-  // Render the same BusinessProfilePage component
-  // The component will show the full profile, and users can navigate to the about section
-  return <BusinessProfilePage data={data} />
+  // Fetch AI-generated bank items for this business
+  let ai_sections = null
+  let ai_benefits = null
+  let ai_talent   = null
+
+  if (data.business_id) {
+    const { data: bankItems } = await supabase
+      .from('business_bank_items')
+      .select('item_type, metadata')
+      .eq('user_id', data.business_id)
+      .in('item_type', ['dynamic_sections', 'structured_benefits', 'talent_profile'])
+      .eq('is_active', true)
+
+    if (Array.isArray(bankItems)) {
+      for (const item of bankItems) {
+        if (item.item_type === 'dynamic_sections' && item.metadata?.sections) {
+          ai_sections = item.metadata.sections
+        }
+        if (item.item_type === 'structured_benefits') {
+          ai_benefits = item.metadata
+        }
+        if (item.item_type === 'talent_profile') {
+          ai_talent = item.metadata
+        }
+      }
+    }
+  }
+
+  return <BusinessProfilePage data={{ ...data, ai_sections, ai_benefits, ai_talent }} />
 }

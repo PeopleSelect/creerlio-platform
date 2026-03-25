@@ -75,11 +75,57 @@ export interface BusinessProfilePageData {
   enquiry_enabled?: boolean
   badges?: string[]
 
-  // FUTURE-READY HOOKS (stubs only)
-  // AI_MATCH_SCORE
-  // TALENT_RECOMMENDATIONS
-  // BUSINESS_BRAND_HEALTH
-  // DIVERSITY_PIPELINE_INSIGHTS
+  // AI-generated intelligence (from business_bank_items)
+  ai_sections?:  AIDynamicSection[] | null
+  ai_benefits?:  AIStructuredBenefits | null
+  ai_talent?:    AITalentProfile | null
+}
+
+// ── AI-generated types ─────────────────────────────────────────────────────
+
+export interface AIDynamicSection {
+  key: string
+  title: string
+  content: string | Record<string, any>
+  priority: number
+  confidence: number
+}
+
+export interface AIStructuredBenefits {
+  parental_leave?: string[]
+  health?:         string[]
+  flexibility?:    string[]
+  development?:    string[]
+  perks?:          string[]
+  financial?:      string[]
+  wellbeing?:      string[]
+  summary?:        string
+}
+
+export interface AITalentProfile {
+  company_overview?:   string
+  what_they_do?:       string
+  working_here?:       string
+  opportunities?:      string
+  ideal_candidates?: {
+    mindset?:        string
+    experience_level?: string
+    working_style?:  string
+    background_fit?: string
+  }
+  services_talent_view?: Array<{
+    name: string
+    what_you_do_here: string
+    skills_you_build: string
+    career_value: string
+  }>
+  company_snapshot?: {
+    industry?: string
+    business_model_summary?: string
+    locations?: string[]
+    company_size?: string
+    what_sets_them_apart?: string
+  }
 }
 
 

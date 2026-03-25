@@ -446,10 +446,10 @@ export default function AdminBusinessPage() {
                   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://creerlio.com'
                   const claimLink = business.claim_token ? `${siteUrl}/business/claim/${business.claim_token}` : null
                   
-                  // Seeded profiles (no auth user) go direct to profile view
+                  // Seeded profiles (no auth user) go to public profile page which shows AI content
                   const viewUrl = business.user_id
                     ? `/admin/users/${business.user_id}`
-                    : `/dashboard/business/view?id=${encodeURIComponent(business.id)}&from=admin&admin_user_id=${encodeURIComponent(business.id)}`
+                    : `/business/${business.slug}/about`
 
                   return (
                   <tr

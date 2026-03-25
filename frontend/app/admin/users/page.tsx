@@ -154,6 +154,7 @@ export default function AdminUsersPage() {
           // Track whether this is a real auth user or a seeded/AI profile
           has_auth_user: !!bp.user_id,
           business_profile_id: bp.id,
+          slug: bp.slug || null,
         })
       }
 
@@ -367,7 +368,7 @@ export default function AdminUsersPage() {
             {usersList.map((usr) => {
               const viewUrl = (usr.has_auth_user !== false)
                 ? `/admin/users/${usr.user_id}`
-                : `/dashboard/business/view?id=${encodeURIComponent(usr.business_profile_id || usr.user_id)}&from=admin&admin_user_id=${encodeURIComponent(usr.business_profile_id || usr.user_id)}`
+                : usr.slug ? `/business/${usr.slug}/about` : `/business/${usr.business_profile_id || usr.user_id}/about`
               return (
               <button
                 key={usr.user_id}

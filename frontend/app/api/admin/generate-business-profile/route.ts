@@ -189,8 +189,8 @@ function detectCareersUrl(html: string, baseOrigin: string): string | null {
     const m = html.match(re)
     if (m) return m[0].replace(/['">\s]+$/, '')
   }
-  // Internal careers page href
-  const hrefRe = /href=["']([^"']*(?:\/careers|\/jobs|\/join-us|\/work-with-us)[^"']*)["']/i
+  // Internal careers page href — broad pattern covering nested paths
+  const hrefRe = /href=["']([^"']*(?:career|\/jobs|join-us|work-with-us|employment|vacancies|opportunities|hiring)[^"']*)["']/i
   const hm = html.match(hrefRe)
   if (hm) {
     const href = hm[1]
@@ -198,6 +198,56 @@ function detectCareersUrl(html: string, baseOrigin: string): string | null {
     try { return new URL(href, baseOrigin).href } catch (_) {}
   }
   return null
+}
+
+/** Generic HTML careers page scraper — uses GPT-4o-mini to extract job listings from any custom careers page */
+async function scrapeJobsFromHTML(
+  careersUrl: string,
+  openai: OpenAI,
+  log: (m: string) => void
+): Promise<any[]> {
+  log(`  Scraping HTML careers page: ${careersUrl}`)
+  try {
+    const html = await withTimeout(fetchWebsiteText(careersUrl, 20000), 15000, '')
+    if (!html || html.length < 100) { log('  ⚠ Could not fetch careers page HTML'); return [] }
+    const text = html.slice(0, 14000)
+    log(`  Got ${text.length} chars — extracting jobs with GPT...`)
+    const resp = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      temperature: 0,
+      max_tokens: 2500,
+      response_format: { type: 'json_object' },
+      messages: [{
+        role: 'system',
+        content: 'Extract job listings from this careers page. Return JSON: { "jobs": [ { "title": "", "city": "", "state": "", "employment_type": "", "description": "" } ] }. Country is always Australia. Use empty string if unknown.'
+      }, {
+        role: 'user',
+        content: `Extract ALL job listings from this careers page content:\n\n${text}`
+      }]
+    })
+    const parsed = JSON.parse(resp.choices[0]?.message?.content || '{}')
+    const jobs: any[] = Array.isArray(parsed.jobs) ? parsed.jobs : []
+    if (jobs.length > 0) {
+      log(`  ✓ GPT extracted ${jobs.length} jobs from careers page`)
+      return jobs.map(j => ({
+        title: j.title || '',
+        description: j.description || '',
+        city: j.city || '',
+        state: j.state || '',
+        country: 'Australia',
+        location: [j.city, j.state].filter(Boolean).join(', '),
+        employment_type: j.employment_type || 'Full-time',
+        experience_level: '',
+        salary_min: null, salary_max: null, salary_currency: 'AUD',
+        required_skills: [], preferred_skills: [], requirements: '',
+        apply_url: careersUrl,
+      }))
+    }
+    log('  ⚠ GPT found no jobs on careers page')
+  } catch (e: any) {
+    log(`  ⚠ HTML job scraping error: ${e.message}`)
+  }
+  return []
 }
 
 /** Scrape real jobs from a known ATS URL. Returns [] on failure so caller can fall back to GPT. */
@@ -1243,6 +1293,13 @@ async function generateSingleProfile(opts: {
         log(`  ✓ Total after SEEK merge: ${scrapedJobs.length} jobs`)
       }
     }
+    // Fallback: GPT extraction from the plain HTML careers page (catches sites not using an ATS)
+    if (scrapedJobs.length === 0 && careersUrl) {
+      log('  Falling back to GPT HTML job extraction...')
+      const htmlJobs = await scrapeJobsFromHTML(careersUrl, openai, log)
+      if (htmlJobs.length > 0) scrapedJobs = htmlJobs
+    }
+
     if (scrapedJobs.length > 0) {
       log(`  ✓ ${scrapedJobs.length} real jobs found — will be used verbatim`)
     } else {

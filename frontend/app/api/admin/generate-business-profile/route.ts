@@ -2569,8 +2569,6 @@ async function generateSingleProfile(opts: {
       hiring_interests: nfArr(data.hiring_interests),
       industries_served: nfArr(data.industries_served),
       contact_email: nfStr(data.business?.email), website_url: websiteUrl,
-      linkedin_url: mergedLinkedin, youtube_url: mergedYoutube,
-      facebook_url: mergedFacebook, instagram_url: mergedInstagram, twitter_url: mergedTwitter,
       enquiry_enabled: true,
       media_assets: { intro_video_url: videoPublicUrl, logo_url: logoUrl, hero_image_url: heroUrl },
       badges: nfArr(data.badges),

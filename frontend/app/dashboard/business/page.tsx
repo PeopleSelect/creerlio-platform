@@ -3049,6 +3049,12 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
               )}
             </div>
             <Link
+              href="/dashboard/business/qr"
+              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
+            >
+              QR Connect Code ↗
+            </Link>
+            <Link
               href="/dashboard/business/bank"
               className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
             >

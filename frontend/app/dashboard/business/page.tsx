@@ -1784,19 +1784,26 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
             }
           }
           
-          // Fetch logo from bank items (file_url is the direct public URL)
+          // Fetch logo from bank items — check both file_url (direct) and file_path (storage)
           if (bpRes.data?.user_id && !cancelled) {
             const { data: logoItem } = await supabase
               .from('business_bank_items')
-              .select('file_url')
+              .select('file_url, file_path, title')
               .eq('user_id', bpRes.data.user_id)
-              .eq('item_type', 'logo')
+              .or('item_type.eq.logo,title.ilike.%logo%')
+              .not('file_url', 'is', null)
               .maybeSingle()
-            if (logoItem?.file_url && !cancelled) {
-              setBusinessLogoUrl(logoItem.file_url)
-            } else if (bpRes.data?.logo_url && !cancelled) {
-              setBusinessLogoUrl(bpRes.data.logo_url)
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+            let resolvedLogo: string | null = null
+            if (logoItem?.file_url) {
+              resolvedLogo = logoItem.file_url
+            } else if (logoItem?.file_path && supabaseUrl) {
+              const cleanPath = logoItem.file_path.startsWith('/') ? logoItem.file_path.slice(1) : logoItem.file_path
+              resolvedLogo = `${supabaseUrl}/storage/v1/object/public/business-bank/${cleanPath.split('/').map(encodeURIComponent).join('/')}`
+            } else if (bpRes.data?.logo_url) {
+              resolvedLogo = bpRes.data.logo_url
             }
+            if (resolvedLogo && !cancelled) setBusinessLogoUrl(resolvedLogo)
           }
 
           // Check if business has a profile built (in business_bank_items)

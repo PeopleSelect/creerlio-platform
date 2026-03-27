@@ -85,17 +85,29 @@ export default async function BusinessAboutPage({ params }: { params: { business
       .from('jobs')
       .select('id, title, employment_type, location, description')
       .eq('business_id', businessId)
+      .eq('status', 'published')
     if (Array.isArray(j1) && j1.length > 0) {
       jobs = j1
     } else {
-      // numeric id fallback for real businesses
-      const numericId = bp.numeric_id ?? bp.legacy_id ?? null
-      if (numericId) {
-        const { data: j2 } = await supabase
-          .from('jobs')
-          .select('id, title, employment_type, location, description')
-          .eq('business_profile_id', numericId)
-        if (Array.isArray(j2)) jobs = j2
+      // fallback: try business_profile_id (seeded profiles store both as the user UUID)
+      const { data: j2 } = await supabase
+        .from('jobs')
+        .select('id, title, employment_type, location, description')
+        .eq('business_profile_id', businessId)
+        .eq('status', 'published')
+      if (Array.isArray(j2) && j2.length > 0) {
+        jobs = j2
+      } else {
+        // final fallback: numeric id for legacy businesses
+        const numericId = bp.numeric_id ?? bp.legacy_id ?? null
+        if (numericId) {
+          const { data: j3 } = await supabase
+            .from('jobs')
+            .select('id, title, employment_type, location, description')
+            .eq('business_profile_id', numericId)
+            .eq('status', 'published')
+          if (Array.isArray(j3)) jobs = j3
+        }
       }
     }
   }

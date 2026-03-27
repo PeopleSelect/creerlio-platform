@@ -53,38 +53,28 @@ export async function GET(request: NextRequest) {
     }
     console.log('[API /map/jobs] Table access test passed, total jobs:', testQuery.count || 0)
 
-    // DIAGNOSTIC: Fetch ALL jobs to see what exists in the database
-    const allJobsDiag = await supabase
-      .from('jobs')
-      .select('id, title, status, city, state, country, location, latitude, longitude, created_at, business_profile_id')
-      .order('created_at', { ascending: false })
-      .limit(20)
-
-    console.log('[API /map/jobs] DIAGNOSTIC - All recent jobs (any status):', {
-      count: allJobsDiag.data?.length || 0,
-      error: allJobsDiag.error?.message,
-      jobs: allJobsDiag.data?.map(j => ({
-        id: j.id?.substring(0, 8),
-        title: j.title,
+    // DIAGNOSTIC: count all jobs + count published ones (safe columns only)
+    const diagAll   = await supabase.from('jobs').select('id,status,business_id,business_profile_id,city,state,country', { count: 'exact' }).limit(200)
+    const diagPub   = await supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'published')
+    console.log('[API /map/jobs] DIAGNOSTIC jobs in DB:', {
+      all: diagAll.count ?? diagAll.data?.length ?? 0,
+      allErr: diagAll.error?.message,
+      published: diagPub.count ?? 0,
+      pubErr: diagPub.error?.message,
+      sample: diagAll.data?.slice(0, 5).map((j: any) => ({
+        id: String(j.id).substring(0, 8),
         status: j.status,
-        city: j.city,
-        state: j.state,
-        location: j.location,
-        hasLatLng: !!(j.latitude && j.longitude),
-        created: j.created_at
+        biz_id: j.business_id ? String(j.business_id).substring(0, 8) : null,
+        city: j.city, state: j.state, country: j.country
       }))
     })
 
-    // Fetch jobs - need latitude/longitude for map markers
-    // Match the exact select string format (no spaces after commas)
-    // NOTE: RLS policy only allows reading published+active jobs, so we always filter by status
-    // Use ilike to tolerate case differences or trailing whitespace (e.g. "Published ").
-    // "show_all" means "show all published jobs" not "show all jobs regardless of status"
+    // Fetch published jobs — service role bypasses RLS so no is_active filter needed.
+    // Keep the SELECT minimal (no latitude/longitude) to avoid column-not-found errors.
     let query = supabase
       .from('jobs')
-      .select('id,title,description,location,city,state,country,employment_type,status,business_profile_id,business_id,latitude,longitude')
-      .ilike('status', 'published%') // tolerate case differences or trailing whitespace
-      .or('is_active.is.true,is_active.is.null')
+      .select('id,title,description,location,city,state,country,employment_type,status,business_profile_id,business_id')
+      .eq('status', 'published')
       .limit(500)
 
     // If show_all is false, only show jobs that match filters
@@ -102,74 +92,23 @@ export async function GET(request: NextRequest) {
 
     let { data, error } = await query
 
-    console.log('[API /map/jobs] DIAGNOSTIC - Query result (status=published):', {
+    console.log('[API /map/jobs] Jobs fetched:', {
       count: data?.length || 0,
       error: error?.message,
-      jobs: data?.slice(0, 10).map((j: any) => ({
-        id: j.id?.substring(0, 8),
+      showAll,
+      sample: (data || []).slice(0, 5).map((j: any) => ({
+        id: String(j.id).substring(0, 8),
         title: j.title,
         status: j.status,
         city: j.city,
-        location: j.location
+        biz_id: j.business_id ? String(j.business_id).substring(0, 8) : null
       }))
     })
 
-    // If error is about undefined column (likely latitude/longitude), try without them
-    if (error && (error.code === '42703' || error.message?.includes('column') || error.message?.includes('does not exist'))) {
-      console.log('[API /map/jobs] Column error detected (likely latitude/longitude), trying without them:', error.message)
-      query = supabase
-        .from('jobs')
-        .select('id,title,description,location,city,state,country,employment_type,status,business_profile_id,business_id')
-        .ilike('status', 'published%')
-        .or('is_active.is.true,is_active.is.null')
-        .limit(500)
-      
-      if (!showAll && q.trim()) {
-        const searchTerm = q.trim()
-        query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
-      }
-      
-      const retryResult = await query
-      data = retryResult.data
-      error = retryResult.error
-    }
-
     if (error) {
-      const errorDetails = {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-        fullError: JSON.stringify(error, null, 2)
-      }
-      console.error('[API /map/jobs] Database error:', errorDetails)
-      console.error('[API /map/jobs] Full error object:', error)
-      console.error('[API /map/jobs] Query that failed:', { showAll, hasStatusFilter: !showAll })
-      
-      // Return detailed error to help debug
-      return NextResponse.json({ 
-        error: 'Database query failed',
-        errorMessage: error.message,
-        errorCode: error.code,
-        errorDetails: error.details,
-        errorHint: error.hint,
-        queryInfo: {
-          showAll,
-          columns: 'id,title,description,location,city,country,employment_type,status,business_profile_id'
-        }
-      }, { status: 500 })
+      console.error('[API /map/jobs] Jobs query error:', error.message, error.code)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
-
-    console.log('[API /map/jobs] Jobs fetched:', {
-      count: data?.length || 0,
-      showAll,
-      sample: data?.[0] ? {
-        id: data[0].id,
-        title: data[0].title,
-        hasStatus: 'status' in (data[0] || {}),
-        status: data[0]?.status
-      } : null
-    })
 
     // Fetch business profiles separately to avoid join issues.
     // Collect every UUID variant (business_profile_id, business_id) so we can find
@@ -266,13 +205,12 @@ export async function GET(request: NextRequest) {
                           (business.name && String(business.name).trim()) ||
                           'Unknown Company'
 
-      // Get coordinates from database columns
-      let lat = job.latitude ?? null
-      let lng = job.longitude ?? null
+      // Geocode from job location text (no lat/lng columns selected)
+      let lat: number | null = null
+      let lng: number | null = null
       let approx = false
 
-      // If no coordinates but has location data, try to geocode
-      if ((lat == null || lng == null) && (job.location || job.city || job.state || job.country)) {
+      if (job.location || job.city || job.state || job.country) {
         const locationParts = [job.location, job.city, job.state, job.country].filter(Boolean)
         if (locationParts.length > 0) {
           const locationString = locationParts.join(', ')

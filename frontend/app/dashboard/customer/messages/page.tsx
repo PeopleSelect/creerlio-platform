@@ -223,7 +223,7 @@ function MessagesInner() {
               <form onSubmit={sendReply} className="border-t border-gray-200 p-4 flex gap-3">
                 <input value={reply} onChange={e => setReply(e.target.value)}
                   placeholder="Type a message..."
-                  className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 <button type="submit" disabled={sending || !reply.trim()}
                   className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 transition-colors">
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

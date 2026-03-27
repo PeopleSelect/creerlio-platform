@@ -199,18 +199,30 @@ export async function GET(request: NextRequest) {
 
     if (rawIds.size > 0) {
       const idList = Array.from(rawIds)
-      const BP_SELECT = 'id, user_id, business_id, name, business_name, lat, lng, location, city, state, country'
+      // Safe select — only columns that have always existed in business_profiles.
+      // business_id is optional (added later); querying it separately avoids
+      // a silent null-data failure that would wipe out businessMap entirely.
+      const BP_SAFE = 'id, user_id, name, business_name, lat, lng, location, city, state, country'
 
-      // Run three separate queries (OR across different columns with IN is unreliable in PostgREST)
-      const [byId, byUserId, byBizId] = await Promise.all([
-        supabase.from('business_profiles').select(BP_SELECT).in('id', idList),
-        supabase.from('business_profiles').select(BP_SELECT).in('user_id', idList),
-        supabase.from('business_profiles').select(BP_SELECT).in('business_id', idList),
+      // Always-safe queries: by primary key and by user_id
+      const [byId, byUserId] = await Promise.all([
+        supabase.from('business_profiles').select(BP_SAFE).in('id', idList),
+        supabase.from('business_profiles').select(BP_SAFE).in('user_id', idList),
       ])
+
+      // Optional query: by business_id column (may not exist — ignore error)
+      const byBizId = await supabase
+        .from('business_profiles')
+        .select(BP_SAFE + ', business_id')
+        .in('business_id', idList)
 
       // Deduplicate by profile id before registering
       const seen = new Set<string>()
-      const allBizRows = [...(byId.data || []), ...(byUserId.data || []), ...(byBizId.data || [])]
+      const allBizRows = [
+        ...(byId.data || []),
+        ...(byUserId.data || []),
+        ...(byBizId.error ? [] : (byBizId.data || [])),
+      ]
       const businesses = allBizRows.filter((b: any) => {
         const key = String(b.id)
         if (seen.has(key)) return false
@@ -221,8 +233,9 @@ export async function GET(request: NextRequest) {
       console.log('[API /map/jobs] Business profiles fetched:', businesses.length, {
         byId: byId.data?.length || 0,
         byUserId: byUserId.data?.length || 0,
-        byBizId: byBizId.data?.length || 0,
-        errors: [byId.error?.message, byUserId.error?.message, byBizId.error?.message].filter(Boolean)
+        byBizId: byBizId.error ? `err:${byBizId.error.message}` : (byBizId.data?.length || 0),
+        byIdErr: byId.error?.message,
+        byUserIdErr: byUserId.error?.message,
       })
 
       businesses.forEach((biz: any) => {
@@ -236,15 +249,22 @@ export async function GET(request: NextRequest) {
           state: biz.state,
           country: biz.country
         }
-        // Register the profile under every ID variant so job lookups always hit
+        // Register under every ID variant so job lookups always hit
         if (biz.id) businessMap.set(String(biz.id), profile)
         if (biz.user_id) businessMap.set(String(biz.user_id), profile)
         if (biz.business_id) businessMap.set(String(biz.business_id), profile)
       })
     }
 
-    // Filter out orphaned jobs — keep any job whose business_profile_id or business_id is in the map
+    // If businessMap is still empty (all profile lookups failed), fall back to
+    // passing ALL fetched jobs through without the orphan filter. This ensures
+    // jobs always appear even if we can't resolve business names/coords.
+    const useOrphanFilter = businessMap.size > 0
+
+    // Filter out orphaned jobs — keep any job whose business_profile_id or business_id is in the map.
+    // If businessMap is empty (all profile lookups failed), skip the filter so jobs still appear.
     const filteredData = (data || []).filter((job: any) => {
+      if (!useOrphanFilter) return true
       const byBpId = job.business_profile_id && businessMap.has(String(job.business_profile_id))
       const byBizId = job.business_id && businessMap.has(String(job.business_id))
       return byBpId || byBizId

@@ -1784,25 +1784,51 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
             }
           }
           
-          // Fetch logo from bank items — check both file_url (direct) and file_path (storage)
+          // Fetch logo: read profile bank item avatar_path, then check logo bank items
           if (bpRes.data?.user_id && !cancelled) {
-            const { data: logoItem } = await supabase
-              .from('business_bank_items')
-              .select('file_url, file_path, title')
-              .eq('user_id', bpRes.data.user_id)
-              .or('item_type.eq.logo,title.ilike.%logo%')
-              .not('file_url', 'is', null)
-              .maybeSingle()
+            const uid2 = bpRes.data.user_id
             const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-            let resolvedLogo: string | null = null
-            if (logoItem?.file_url) {
-              resolvedLogo = logoItem.file_url
-            } else if (logoItem?.file_path && supabaseUrl) {
-              const cleanPath = logoItem.file_path.startsWith('/') ? logoItem.file_path.slice(1) : logoItem.file_path
-              resolvedLogo = `${supabaseUrl}/storage/v1/object/public/business-bank/${cleanPath.split('/').map(encodeURIComponent).join('/')}`
-            } else if (bpRes.data?.logo_url) {
-              resolvedLogo = bpRes.data.logo_url
+
+            function toPublicUrl(path: string): string | null {
+              if (!path) return null
+              if (path.startsWith('http://') || path.startsWith('https://')) return path
+              if (!supabaseUrl) return null
+              const clean = path.startsWith('/') ? path.slice(1) : path
+              return `${supabaseUrl}/storage/v1/object/public/business-bank/${clean.split('/').map(encodeURIComponent).join('/')}`
             }
+
+            let resolvedLogo: string | null = null
+
+            // 1. Profile bank item metadata → avatar_path
+            const { data: profileItem } = await supabase
+              .from('business_bank_items')
+              .select('metadata')
+              .eq('user_id', uid2)
+              .eq('item_type', 'profile')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+            const avatarPath = String(profileItem?.metadata?.avatar_path ?? '').trim()
+            if (avatarPath) resolvedLogo = toPublicUrl(avatarPath)
+
+            // 2. Logo bank item → file_url or file_path
+            if (!resolvedLogo) {
+              const { data: bankItems } = await supabase
+                .from('business_bank_items')
+                .select('item_type, file_url, file_path, title')
+                .eq('user_id', uid2)
+                .in('item_type', ['logo', 'image'])
+              if (Array.isArray(bankItems)) {
+                const logoItem = bankItems.find(i => i.item_type === 'logo')
+                  ?? bankItems.find(i => i.title?.toLowerCase().includes('logo') || i.file_path?.toLowerCase().includes('logo'))
+                if (logoItem?.file_url) resolvedLogo = logoItem.file_url
+                else if (logoItem?.file_path) resolvedLogo = toPublicUrl(logoItem.file_path)
+              }
+            }
+
+            // 3. business_profiles.logo_url last resort
+            if (!resolvedLogo && bpRes.data?.logo_url) resolvedLogo = bpRes.data.logo_url
+
             if (resolvedLogo && !cancelled) setBusinessLogoUrl(resolvedLogo)
           }
 

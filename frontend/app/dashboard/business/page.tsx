@@ -50,6 +50,7 @@ export default function BusinessDashboard() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [businessProfile, setBusinessProfile] = useState<any>(null)
+  const [businessLogoUrl, setBusinessLogoUrl] = useState<string | null>(null)
   const [hasBuiltProfile, setHasBuiltProfile] = useState<boolean>(false)
   const [applications, setApplications] = useState<any[]>([])
   const [appFilter, setAppFilter] = useState<'all' | 'applied' | 'shortlisted' | 'interview' | 'hired' | 'rejected'>('all')
@@ -1783,6 +1784,21 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
             }
           }
           
+          // Fetch logo from bank items (file_url is the direct public URL)
+          if (bpRes.data?.user_id && !cancelled) {
+            const { data: logoItem } = await supabase
+              .from('business_bank_items')
+              .select('file_url')
+              .eq('user_id', bpRes.data.user_id)
+              .eq('item_type', 'logo')
+              .maybeSingle()
+            if (logoItem?.file_url && !cancelled) {
+              setBusinessLogoUrl(logoItem.file_url)
+            } else if (bpRes.data?.logo_url && !cancelled) {
+              setBusinessLogoUrl(bpRes.data.logo_url)
+            }
+          }
+
           // Check if business has a profile built (in business_bank_items)
           // This determines if they've actually used the profile builder
           if (bpRes.data && !cancelled) {
@@ -2769,9 +2785,9 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                 className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
               >
                 <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg overflow-hidden">
-                  {businessProfile?.logo_url ? (
+                  {businessLogoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={businessProfile.logo_url} alt="Logo" className="w-full h-full object-contain p-1" />
+                    <img src={businessLogoUrl} alt="Logo" className="w-full h-full object-contain p-1 bg-white" />
                   ) : (
                     (businessProfile?.business_name || businessProfile?.name || user?.full_name || 'B').charAt(0).toUpperCase()
                   )}

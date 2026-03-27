@@ -39,6 +39,19 @@ function CustomerLoginPageInner() {
   const [resetEmail, setResetEmail] = useState('')
   const [resetSent, setResetSent]   = useState(false)
 
+  // Auto-fill location from IP geolocation
+  useEffect(() => {
+    fetch('https://ipapi.co/json/')
+      .then(r => r.json())
+      .then((d: any) => {
+        if (d?.city) {
+          const parts = [d.city, d.region_code || d.region, d.country_name].filter(Boolean)
+          setLocation(parts.join(', '))
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   useEffect(() => {
     if (initialMode === 'signup') setMode('signup')
     else if (initialMode === 'signin') setMode('signin')

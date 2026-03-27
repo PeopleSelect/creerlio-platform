@@ -3049,6 +3049,18 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
               )}
             </div>
             <Link
+              href="/dashboard/business/pipeline"
+              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
+            >
+              Customer Pipeline ↗
+            </Link>
+            <Link
+              href="/dashboard/business/products"
+              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
+            >
+              Products &amp; Services ↗
+            </Link>
+            <Link
               href="/dashboard/business/qr"
               className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-[#20C997] transition-colors"
             >

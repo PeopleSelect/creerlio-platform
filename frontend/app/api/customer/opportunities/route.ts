@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))
-  const { type, title, description, budget, deadline, business_ids } = body
+  const { type, title, description, product_name, budget, deadline, business_ids } = body
 
   if (!type || !title?.trim() || !Array.isArray(business_ids) || business_ids.length === 0) {
     return NextResponse.json({ error: 'type, title, and at least one business_id are required' }, { status: 400 })
@@ -50,10 +50,11 @@ export async function POST(req: NextRequest) {
     .insert({
       sender_id:   user.id,
       type,
-      title:       title.trim(),
-      description: description?.trim() || null,
-      budget:      budget?.trim() || null,
-      deadline:    deadline || null,
+      title:        title.trim(),
+      description:  description?.trim()  || null,
+      product_name: product_name?.trim() || null,
+      budget:       budget?.trim()       || null,
+      deadline:     deadline             || null,
       status:      'sent',
     })
     .select()

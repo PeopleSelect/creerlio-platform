@@ -72,6 +72,7 @@ export default function OpportunityModal({ connections, token, onClose, onSent }
   const [type, setType]               = useState<OppType | null>(null)
   const [title, setTitle]             = useState('')
   const [description, setDescription] = useState('')
+  const [productName, setProductName] = useState('')
   const [budget, setBudget]           = useState('')
   const [deadline, setDeadline]       = useState('')
   const [selectedBizIds, setSelected] = useState<Set<string>>(new Set())
@@ -108,10 +109,11 @@ export default function OpportunityModal({ connections, token, onClose, onSent }
         },
         body: JSON.stringify({
           type,
-          title:       title.trim(),
-          description: description.trim() || null,
-          budget:      budget.trim() || null,
-          deadline:    deadline || null,
+          title:        title.trim(),
+          description:  description.trim()  || null,
+          product_name: productName.trim()  || null,
+          budget:       budget.trim()       || null,
+          deadline:     deadline            || null,
           business_ids: Array.from(selectedBizIds),
         }),
       })
@@ -140,7 +142,7 @@ export default function OpportunityModal({ connections, token, onClose, onSent }
               Step {step} of 3 — {step === 1 ? 'Choose type' : step === 2 ? 'Add details' : 'Select recipients'}
             </p>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+          <button type="button" aria-label="Close" onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -208,6 +210,16 @@ export default function OpportunityModal({ connections, token, onClose, onSent }
               />
             </div>
             <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Product or Service <span className="text-gray-400 font-normal">(optional)</span></label>
+              <input
+                type="text"
+                value={productName}
+                onChange={e => setProductName(e.target.value)}
+                placeholder="e.g. Office Furniture, Legal Consultation, Web Development"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
               <textarea
                 rows={3}
@@ -234,6 +246,8 @@ export default function OpportunityModal({ connections, token, onClose, onSent }
                   type="date"
                   value={deadline}
                   onChange={e => setDeadline(e.target.value)}
+                  title="Deadline"
+                  placeholder="YYYY-MM-DD"
                   className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>

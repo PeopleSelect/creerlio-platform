@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import {
   Building2, MessageSquare, Bookmark, User,
   LogOut, ChevronRight, Loader2, MapPin, Briefcase, ArrowRight, Sparkles,
+  Search, FileText, Star,
 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -146,12 +147,36 @@ export default function CustomerDashboardPage() {
             </div>
           </div>
 
-          {/* Trade context notice */}
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 flex items-start gap-3">
-            <Building2 className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-blue-800">You are a Trade Customer</p>
-              <p className="text-sm text-blue-600 mt-0.5">Your account is set up for retail and wholesale trade — connect with suppliers, request quotes, and manage your business sourcing all in one place.</p>
+          {/* Trade actions */}
+          <div className="mb-6">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Trade Customer — What would you like to do?</p>
+            <div className="grid grid-cols-3 gap-4">
+              <Link href="/businesses"
+                className="group bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:border-blue-300 hover:shadow-md transition-all">
+                <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center mb-3 group-hover:bg-blue-100 transition-colors">
+                  <Search className="h-5 w-5 text-blue-600" />
+                </div>
+                <p className="font-semibold text-gray-900 text-sm">Find Suppliers</p>
+                <p className="text-xs text-gray-400 mt-1">Browse and connect with businesses in your industry</p>
+              </Link>
+
+              <Link href="/dashboard/customer/messages"
+                className="group bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:border-emerald-300 hover:shadow-md transition-all">
+                <div className="h-10 w-10 rounded-lg bg-emerald-50 flex items-center justify-center mb-3 group-hover:bg-emerald-100 transition-colors">
+                  <FileText className="h-5 w-5 text-emerald-600" />
+                </div>
+                <p className="font-semibold text-gray-900 text-sm">Request a Quote</p>
+                <p className="text-xs text-gray-400 mt-1">Message a connected supplier to request pricing</p>
+              </Link>
+
+              <Link href="/dashboard/customer/saved"
+                className="group bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:border-amber-300 hover:shadow-md transition-all">
+                <div className="h-10 w-10 rounded-lg bg-amber-50 flex items-center justify-center mb-3 group-hover:bg-amber-100 transition-colors">
+                  <Star className="h-5 w-5 text-amber-500" />
+                </div>
+                <p className="font-semibold text-gray-900 text-sm">Saved Suppliers</p>
+                <p className="text-xs text-gray-400 mt-1">View businesses you've bookmarked for later</p>
+              </Link>
             </div>
           </div>
 

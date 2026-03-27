@@ -111,6 +111,12 @@ export default function CustomerDashboardPage() {
             className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
             <Building2 className="h-4 w-4" /> Find Businesses
           </Link>
+          {alsoTalent && (
+            <Link href="/dashboard/talent"
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-violet-600 hover:bg-violet-50 transition-colors">
+              <Briefcase className="h-4 w-4" /> Talent Dashboard
+            </Link>
+          )}
           <button type="button" onClick={signOut}
             className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors">
             <LogOut className="h-4 w-4" /> Sign Out

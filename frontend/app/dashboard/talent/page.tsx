@@ -80,6 +80,7 @@ export default function TalentDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [userType, setUserType] = useState<string>('talent')
   const [userFirstName, setUserFirstName] = useState<string | null>(null)
+  const [isAlsoCustomer, setIsAlsoCustomer] = useState(false)
 
   // Connection state
   const [connectionMode, setConnectionMode] = useState<'career' | 'requests' | 'consent'>('career')
@@ -641,6 +642,11 @@ export default function TalentDashboard() {
         if (isCustomer && !alsoTalent && !cancelled) {
           router.replace('/dashboard/customer')
           return
+        }
+
+        // If this user also has a customer account, show the "Customer Portal" back-link in header
+        if (!cancelled && isCustomer && alsoTalent) {
+          setIsAlsoCustomer(true)
         }
 
         if (!cancelled && !tpRes.error) {
@@ -2169,6 +2175,14 @@ export default function TalentDashboard() {
           >
             View Profile
           </Link>
+          {isAlsoCustomer && (
+            <Link
+              href="/dashboard/customer"
+              className="px-4 py-2 border border-blue-200 text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+            >
+              Customer Portal
+            </Link>
+          )}
           <button
             onClick={handleLogout}
             className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"

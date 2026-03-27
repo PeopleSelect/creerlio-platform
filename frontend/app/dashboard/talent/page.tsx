@@ -635,6 +635,14 @@ export default function TalentDashboard() {
           return
         }
 
+        // Redirect pure customers to the customer dashboard unless they have also_talent: true
+        const isCustomer = userMetadata.registration_type === 'customer' || userMetadata.registered_as === 'customer'
+        const alsoTalent = !!userMetadata.also_talent
+        if (isCustomer && !alsoTalent && !cancelled) {
+          router.replace('/dashboard/customer')
+          return
+        }
+
         if (!cancelled && !tpRes.error) {
           setTalentProfile(tpRes.data || null)
           if (tpRes.data?.name && typeof tpRes.data.name === 'string') {

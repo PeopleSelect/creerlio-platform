@@ -22,7 +22,7 @@ interface Connection {
   id: string
   status: string
   customer_profiles: { name: string } | null
-  business_profiles: { name: string; industry: string | null } | null
+  business_profiles: { name: string | null; business_name: string | null; industry: string | null } | null
   business_profile_pages: { slug: string; logo_url: string | null } | null
 }
 
@@ -165,7 +165,7 @@ function MessagesInner() {
                         : <Building2 className="h-4 w-4 text-blue-400" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{biz?.name || 'Business'}</p>
+                      <p className="text-sm font-medium text-gray-900 truncate">{biz?.name || biz?.business_name || 'Business'}</p>
                       <p className="text-xs text-gray-400 truncate">{biz?.industry || ''}</p>
                     </div>
                   </div>
@@ -189,7 +189,7 @@ function MessagesInner() {
               {/* Chat header */}
               <div className="border-b border-gray-200 px-6 py-4 flex items-center gap-4">
                 <div>
-                  <p className="font-semibold text-gray-900">{active.business_profiles?.name}</p>
+                  <p className="font-semibold text-gray-900">{active.business_profiles?.name || active.business_profiles?.business_name}</p>
                   <p className="text-xs text-gray-400">{active.business_profiles?.industry}</p>
                 </div>
                 {active.business_profile_pages?.slug && (

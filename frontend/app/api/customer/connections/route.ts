@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     .select(`
       id, status, created_at, updated_at,
       customer_profiles ( id, name, email, phone, company, location ),
-      business_profiles ( id, name, industry, city, state, country )
+      business_profiles ( id, name, business_name, industry, city, state, country )
     `)
     .order('updated_at', { ascending: false })
 

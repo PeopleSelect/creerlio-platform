@@ -155,7 +155,7 @@ export default function CustomerDashboardPage() {
                           : <Building2 className="h-5 w-5 text-blue-400" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 truncate">{biz?.name || 'Business'}</p>
+                        <p className="font-medium text-gray-900 truncate">{biz?.name || (biz as any)?.business_name || 'Business'}</p>
                         <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
                           {biz?.industry && <span>{biz.industry}</span>}
                           {biz?.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{biz.city}</span>}

@@ -490,7 +490,7 @@ export default function TalentDashboard() {
     talentMapRouteAbortRef.current?.abort()
     const ac = new AbortController()
     talentMapRouteAbortRef.current = ac
-    fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&types=address,place,locality,neighborhood,postcode,region&country=AU`, { signal: ac.signal })
+    fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&types=address,place,locality,neighborhood,postcode,region`, { signal: ac.signal })
       .then(r => r.json()).catch(() => null)
       .then(json => {
         const feats = Array.isArray(json?.features) ? json.features : []
@@ -518,7 +518,7 @@ export default function TalentDashboard() {
     talentMapLocAbortRef.current?.abort()
     const ac = new AbortController()
     talentMapLocAbortRef.current = ac
-    fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&country=AU`, { signal: ac.signal })
+    fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}`, { signal: ac.signal })
       .then(r => r.json()).catch(() => null)
       .then(json => {
         const feats = Array.isArray(json?.features) ? json.features : []

@@ -12,7 +12,7 @@ import DeleteAccountSection from '@/components/DeleteAccountSection'
 async function geocodeLocation(location: string): Promise<{ lat: number; lng: number } | null> {
   if (!location.trim()) return null
   try {
-    const response = await fetch(`/api/map/geocode?q=${encodeURIComponent(location)}&limit=1&country=AU`)
+    const response = await fetch(`/api/map/geocode?q=${encodeURIComponent(location)}&limit=1`)
     const data = await response.json()
     if (data.features && data.features.length > 0) {
       const [lng, lat] = data.features[0].center

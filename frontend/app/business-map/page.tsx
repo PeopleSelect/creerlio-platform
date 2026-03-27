@@ -177,7 +177,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
 
     ;(async () => {
       try {
-        const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(locDebounced)}&country=AU`, { signal: ac.signal })
+        const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(locDebounced)}`, { signal: ac.signal })
         if (ac.signal.aborted) return
         const json: any = await res.json()
         const feats = Array.isArray(json?.features) ? json.features : []
@@ -313,7 +313,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
           const locationString = locationParts.join(', ')
 
           try {
-            const response = await fetch(`/api/map/geocode?q=${encodeURIComponent(locationString)}&limit=1&country=AU`)
+            const response = await fetch(`/api/map/geocode?q=${encodeURIComponent(locationString)}&limit=1`)
             const geocodeData = await response.json()
 
             if (geocodeData.features && geocodeData.features.length > 0) {

@@ -622,7 +622,7 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
 
     ;(async () => {
       try {
-        const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(locDebounced)}&country=AU`, { signal: ac.signal })
+        const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(locDebounced)}`, { signal: ac.signal })
         if (ac.signal.aborted) return
         const json: any = await res.json().catch(() => null)
         const feats = Array.isArray(json?.features) ? json.features : []

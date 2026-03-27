@@ -270,7 +270,7 @@ function TalentMapPageInner() {
     const ac = new AbortController()
     routeAbortRef.current = ac
     try {
-      const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&types=address,place,locality,neighborhood,postcode,region&country=AU`, { signal: ac.signal })
+      const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&types=address,place,locality,neighborhood,postcode,region`, { signal: ac.signal })
       const json: any = await res.json().catch(() => null)
       const feats = Array.isArray(json?.features) ? json.features : []
       const next: LocSuggestion[] = feats
@@ -307,7 +307,7 @@ function TalentMapPageInner() {
     const ac = new AbortController()
     locAbort.current = ac
     try {
-      const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&country=AU`, { signal: ac.signal })
+      const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}`, { signal: ac.signal })
       const json: any = await res.json().catch(() => null)
       const feats = Array.isArray(json?.features) ? json.features : []
       const next: LocSuggestion[] = feats
@@ -503,7 +503,7 @@ function TalentMapPageInner() {
     setLocBusy(true)
     setLocError(null)
     try {
-      const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(q)}&country=AU&limit=1&types=place,locality,neighborhood,postcode,region`)
+      const res = await fetch(`/api/map/geocode?q=${encodeURIComponent(q)}&limit=1&types=place,locality,neighborhood,postcode,region`)
       const json: any = await res.json().catch(() => null)
       const center = json?.features?.[0]?.center
       const lng = Array.isArray(center) ? center[0] : null

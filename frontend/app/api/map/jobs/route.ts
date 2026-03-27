@@ -82,8 +82,8 @@ export async function GET(request: NextRequest) {
     // "show_all" means "show all published jobs" not "show all jobs regardless of status"
     let query = supabase
       .from('jobs')
-      .select('id,title,description,location,city,state,country,employment_type,status,business_profile_id,latitude,longitude')
-      .ilike('status', 'published%') // RLS requires published; tolerate trailing spaces
+      .select('id,title,description,location,city,state,country,employment_type,status,business_profile_id,business_id,latitude,longitude')
+      .ilike('status', 'published%') // tolerate case differences or trailing whitespace
       .or('is_active.is.true,is_active.is.null')
       .limit(500)
 
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
       console.log('[API /map/jobs] Column error detected (likely latitude/longitude), trying without them:', error.message)
       query = supabase
         .from('jobs')
-        .select('id,title,description,location,city,state,country,employment_type,status,business_profile_id')
+        .select('id,title,description,location,city,state,country,employment_type,status,business_profile_id,business_id')
         .ilike('status', 'published%')
         .or('is_active.is.true,is_active.is.null')
         .limit(500)
@@ -172,12 +172,12 @@ export async function GET(request: NextRequest) {
     })
 
     // Fetch business profiles separately to avoid join issues
+    // Collect IDs from both business_profile_id and business_id columns
     const businessIds = new Set<string>()
     if (data && Array.isArray(data)) {
       data.forEach((job: any) => {
-        if (job.business_profile_id) {
-          businessIds.add(String(job.business_profile_id))
-        }
+        if (job.business_profile_id) businessIds.add(String(job.business_profile_id))
+        if (job.business_id) businessIds.add(String(job.business_id))
       })
     }
 
@@ -241,16 +241,19 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Filter out orphaned jobs whose business_profile no longer exists
+    // Filter out orphaned jobs — keep any job whose business_profile_id or business_id is in the map
     const filteredData = (data || []).filter((job: any) => {
-      if (!job.business_profile_id) return false
-      return businessMap.has(String(job.business_profile_id))
+      const byBpId = job.business_profile_id && businessMap.has(String(job.business_profile_id))
+      const byBizId = job.business_id && businessMap.has(String(job.business_id))
+      return byBpId || byBizId
     })
 
     // Map jobs and geocode those without coordinates
     let jobs = await Promise.all(filteredData.map(async (job: any) => {
-      // Get business name from separate query
-      const business = businessMap.get(String(job.business_profile_id)) || {}
+      // Get business info — try business_profile_id first, fall back to business_id
+      const business = (job.business_profile_id && businessMap.get(String(job.business_profile_id)))
+                    || (job.business_id && businessMap.get(String(job.business_id)))
+                    || {}
       const businessName = (business.business_name && String(business.business_name).trim()) ||
                           (business.name && String(business.name).trim()) ||
                           'Unknown Company'
@@ -276,7 +279,8 @@ export async function GET(request: NextRequest) {
 
       // If still no coordinates, fall back to business location
       if (lat == null || lng == null) {
-        const business = businessMap.get(String(job.business_profile_id))
+        const business = (job.business_profile_id && businessMap.get(String(job.business_profile_id)))
+                      || (job.business_id && businessMap.get(String(job.business_id)))
         if (business) {
           // First try business coordinates directly
           if (business.lat != null && business.lng != null) {
@@ -315,7 +319,8 @@ export async function GET(request: NextRequest) {
         id: job.id,
         title: job.title,
         description: job.description,
-        business_profile_id: job.business_profile_id,
+        business_profile_id: job.business_profile_id || job.business_id,
+        business_id: job.business_id,
         business_name: businessName,
         lat,
         lng,

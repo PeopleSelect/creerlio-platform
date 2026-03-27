@@ -5,8 +5,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import {
-  Building2, MessageSquare, Bookmark, ClipboardList, User,
-  Bell, LogOut, ChevronRight, Loader2, MapPin,
+  Building2, MessageSquare, Bookmark, User,
+  LogOut, ChevronRight, Loader2, MapPin, Briefcase, ArrowRight, Sparkles,
 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -26,6 +26,8 @@ export default function CustomerDashboardPage() {
   const [connections, setConnections] = useState<Connection[]>([])
   const [loading, setLoading]         = useState(true)
   const [token, setToken]             = useState<string | null>(null)
+  const [alsoTalent, setAlsoTalent]   = useState<boolean | null>(null)
+  const [becomingTalent, setBecomingTalent] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -38,6 +40,7 @@ export default function CustomerDashboardPage() {
       }
       setName(meta.full_name || meta.name || session.user.email?.split('@')[0] || 'Customer')
       setToken(session.access_token)
+      setAlsoTalent(!!meta.also_talent)
 
       const res = await fetch('/api/customer/connections', {
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -49,6 +52,24 @@ export default function CustomerDashboardPage() {
       setLoading(false)
     }).catch(() => router.replace('/login/customer'))
   }, [router])
+
+  async function handleBecomeTalent() {
+    if (!token || becomingTalent) return
+    setBecomingTalent(true)
+    try {
+      const res = await fetch('/api/customer/become-talent', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        // Refresh session so user_metadata reflects also_talent: true
+        await supabase.auth.refreshSession()
+        setAlsoTalent(true)
+      }
+    } finally {
+      setBecomingTalent(false)
+    }
+  }
 
   async function signOut() {
     await supabase.auth.signOut()
@@ -102,7 +123,7 @@ export default function CustomerDashboardPage() {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-gray-900">Welcome, {name}</h1>
-            <p className="text-gray-500 mt-1">Manage your business connections and enquiries.</p>
+            <p className="text-gray-500 mt-1">Manage your supplier and trade connections — buy, source, and enquire from businesses in your industry.</p>
           </div>
 
           {/* Stats row */}
@@ -122,6 +143,15 @@ export default function CustomerDashboardPage() {
                 {connections.filter(c => c.status === 'in_progress').length}
               </p>
               <p className="text-sm text-gray-500 mt-1">In progress</p>
+            </div>
+          </div>
+
+          {/* Trade context notice */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 flex items-start gap-3">
+            <Building2 className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-blue-800">You are a Trade Customer</p>
+              <p className="text-sm text-blue-600 mt-0.5">Your account is set up for retail and wholesale trade — connect with suppliers, request quotes, and manage your business sourcing all in one place.</p>
             </div>
           </div>
 
@@ -194,6 +224,47 @@ export default function CustomerDashboardPage() {
                 })}
               </div>
             )}
+          </div>
+          {/* Talent upgrade card */}
+          <div className="mt-6 bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-100 rounded-2xl p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="h-10 w-10 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                  <Briefcase className="h-5 w-5 text-violet-600" />
+                </div>
+                <div>
+                  {alsoTalent ? (
+                    <>
+                      <p className="font-semibold text-gray-900">You also have a Talent profile</p>
+                      <p className="text-sm text-gray-500 mt-0.5">Access your talent dashboard to manage your career, showcase your skills, and find opportunities.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-semibold text-gray-900">Looking for career opportunities too?</p>
+                      <p className="text-sm text-gray-500 mt-0.5">Creerlio also connects talented professionals with employers. Activate a Talent profile to explore jobs and showcase your skills — your trade account stays unchanged.</p>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="shrink-0">
+                {alsoTalent ? (
+                  <Link href="/dashboard/talent"
+                    className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 transition-colors whitespace-nowrap">
+                    Talent Dashboard <ArrowRight className="h-4 w-4" />
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleBecomeTalent}
+                    disabled={becomingTalent}
+                    className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60 transition-colors whitespace-nowrap">
+                    {becomingTalent
+                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Activating…</>
+                      : <><Sparkles className="h-4 w-4" /> Become a Talent</>}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>

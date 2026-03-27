@@ -26,8 +26,7 @@ export async function GET(req: NextRequest) {
     .select(`
       id, status, created_at, updated_at,
       customer_profiles ( id, name, email, phone, company, location ),
-      business_profiles ( id, name, industry, city, state, country ),
-      business_profile_pages ( slug, name, logo_url, tagline )
+      business_profiles ( id, name, industry, city, state, country )
     `)
     .order('updated_at', { ascending: false })
 
@@ -44,6 +43,21 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // Collect all business_ids and fetch business_profile_pages in one query
+  const bizIds = [...new Set((data || []).map((c: any) => c.business_profiles?.id).filter(Boolean))]
+  let pagesByBizId: Record<string, { slug: string; logo_url: string | null }> = {}
+  if (bizIds.length > 0) {
+    const { data: pages } = await svc
+      .from('business_profile_pages')
+      .select('business_id, slug, logo_url')
+      .in('business_id', bizIds)
+    if (Array.isArray(pages)) {
+      for (const p of pages) {
+        pagesByBizId[p.business_id] = { slug: p.slug, logo_url: p.logo_url }
+      }
+    }
+  }
+
   // For each connection, get the latest message
   const connections = await Promise.all(
     (data || []).map(async (conn: any) => {
@@ -54,7 +68,12 @@ export async function GET(req: NextRequest) {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
-      return { ...conn, latest_message: latest }
+      const bizId = conn.business_profiles?.id
+      return {
+        ...conn,
+        business_profile_pages: bizId ? (pagesByBizId[bizId] ?? null) : null,
+        latest_message: latest,
+      }
     })
   )
 

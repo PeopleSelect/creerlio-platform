@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   let query = svc
     .from('customer_connections')
     .select(`
-      id, status, created_at, updated_at,
+      id, status, relationship_status, tags, last_interaction_at, created_at, updated_at,
       customer_profiles ( id, name, email, phone, company, location ),
       business_profiles ( id, name, business_name, industry, city, state, country )
     `)

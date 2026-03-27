@@ -173,16 +173,21 @@ export default function CustomerDashboardPage() {
                           conn.status === 'in_progress' ? 'bg-amber-50 text-amber-600' :
                           'bg-gray-100 text-gray-500'
                         }`}>{conn.status.replace('_', ' ')}</span>
-                        <Link href={`/dashboard/customer/messages?connection_id=${conn.id}`}
-                          className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
-                          View <ChevronRight className="h-3 w-3" />
-                        </Link>
-                        {slug && (
-                          <Link href={`/businesses/${slug}`} target="_blank"
-                            className="text-xs text-gray-400 hover:text-gray-600">
-                            Page
+                        {slug ? (
+                          <Link href={`/businesses/${slug}`}
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                            View Profile <ChevronRight className="h-3 w-3" />
+                          </Link>
+                        ) : (
+                          <Link href={`/dashboard/customer/messages?connection_id=${conn.id}`}
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                            Messages <ChevronRight className="h-3 w-3" />
                           </Link>
                         )}
+                        <Link href={`/dashboard/customer/messages?connection_id=${conn.id}`}
+                          className="text-xs text-gray-400 hover:text-gray-600">
+                          Messages
+                        </Link>
                       </div>
                     </div>
                   )

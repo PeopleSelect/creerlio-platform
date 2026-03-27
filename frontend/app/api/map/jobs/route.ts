@@ -245,15 +245,12 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // If businessMap is still empty (all profile lookups failed), fall back to
-    // passing ALL fetched jobs through without the orphan filter. This ensures
-    // jobs always appear even if we can't resolve business names/coords.
-    const useOrphanFilter = businessMap.size > 0
-
-    // Filter out orphaned jobs — keep any job whose business_profile_id or business_id is in the map.
-    // If businessMap is empty (all profile lookups failed), skip the filter so jobs still appear.
+    // Orphan filter: only used when NOT in show_all mode (e.g. radius search).
+    // In show_all mode every published job should appear regardless of whether
+    // its business profile resolved in businessMap.
     const filteredData = (data || []).filter((job: any) => {
-      if (!useOrphanFilter) return true
+      if (showAll) return true          // never drop jobs in show-all mode
+      if (businessMap.size === 0) return true  // map empty → can't filter, pass all
       const byBpId = job.business_profile_id && businessMap.has(String(job.business_profile_id))
       const byBizId = job.business_id && businessMap.has(String(job.business_id))
       return byBpId || byBizId

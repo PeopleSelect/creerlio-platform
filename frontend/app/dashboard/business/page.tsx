@@ -2752,7 +2752,7 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
       <header className="bg-black border-0">
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center space-x-3">
-            <div className="px-4 py-2 rounded-full bg-[#20C997] text-white text-base font-bold">
+            <div className="px-4 py-2 rounded-full bg-blue-600 text-white text-base font-bold">
               C
             </div>
             <span className="text-white text-2xl font-bold">Creerlio</span>
@@ -2768,8 +2768,13 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
                 className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
               >
-                <div className="w-10 h-10 rounded-full bg-[#20C997] flex items-center justify-center text-white font-bold text-lg">
-                  {(businessProfile?.business_name || businessProfile?.name || user?.full_name || 'B').charAt(0).toUpperCase()}
+                <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg overflow-hidden">
+                  {businessProfile?.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={businessProfile.logo_url} alt="Logo" className="w-full h-full object-contain p-1" />
+                  ) : (
+                    (businessProfile?.business_name || businessProfile?.name || user?.full_name || 'B').charAt(0).toUpperCase()
+                  )}
                 </div>
                 <span className="text-white font-medium hidden md:block">
                   {businessProfile?.business_name || businessProfile?.name || 'Business'}

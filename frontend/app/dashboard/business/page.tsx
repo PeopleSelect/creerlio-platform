@@ -1740,6 +1740,11 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
           }
         }
         const usernameFromMetadata = userMetadata.username || null
+        // Redirect customers immediately — they should not access the business dashboard
+        if (userMetadata.registration_type === 'customer' || userMetadata.registered_as === 'customer') {
+          router.replace('/dashboard/customer')
+          return
+        }
         const registeredAsTalentFromMetadata = userMetadata.registration_type === 'talent' || userMetadata.registered_as === 'talent'
         if (!cancelled && usernameFromMetadata) {
           setUser((prev) => (prev ? { ...prev, username: usernameFromMetadata } : prev))

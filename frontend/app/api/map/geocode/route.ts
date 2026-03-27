@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     }
 
     const types = searchParams.get('types') || 'place,locality,neighborhood,postcode,region'
-    const country = searchParams.get('country') || 'AU'
+    const country = searchParams.get('country') || ''
     const limit = searchParams.get('limit') || '6'
 
     const u = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json`)

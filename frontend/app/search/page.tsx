@@ -222,7 +222,7 @@ function SearchPageInner() {
     mapLocAbortRef.current?.abort()
     const ac = new AbortController()
     mapLocAbortRef.current = ac
-    fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&country=AU`, { signal: ac.signal })
+    fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}`, { signal: ac.signal })
       .then(r => r.json()).catch(() => null)
       .then(json => {
         const feats = Array.isArray(json?.features) ? json.features : []
@@ -340,7 +340,7 @@ function SearchPageInner() {
     mapRouteAbortRef.current?.abort()
     const ac = new AbortController()
     mapRouteAbortRef.current = ac
-    fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&types=address,place,locality,neighborhood,postcode,region&country=AU`, { signal: ac.signal })
+    fetch(`/api/map/geocode?q=${encodeURIComponent(qq)}&types=address,place,locality,neighborhood,postcode,region`, { signal: ac.signal })
       .then(r => r.json()).catch(() => null)
       .then(json => {
         const feats = Array.isArray(json?.features) ? json.features : []

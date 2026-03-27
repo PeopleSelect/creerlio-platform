@@ -198,31 +198,49 @@ export async function GET(request: NextRequest) {
     }>()
 
     if (rawIds.size > 0) {
-      // Fetch profiles matching ANY of the collected ids (id, user_id, or business_id columns)
-      const { data: businesses } = await supabase
-        .from('business_profiles')
-        .select('id, user_id, business_id, name, business_name, lat, lng, location, city, state, country')
-        .or(`id.in.(${Array.from(rawIds).join(',')}),user_id.in.(${Array.from(rawIds).join(',')}),business_id.in.(${Array.from(rawIds).join(',')})`)
+      const idList = Array.from(rawIds)
+      const BP_SELECT = 'id, user_id, business_id, name, business_name, lat, lng, location, city, state, country'
 
-      if (businesses) {
-        console.log('[API /map/jobs] Business profiles fetched:', businesses.length)
-        businesses.forEach((biz: any) => {
-          const profile = {
-            name: biz.name,
-            business_name: biz.business_name,
-            lat: biz.lat,
-            lng: biz.lng,
-            location: biz.location,
-            city: biz.city,
-            state: biz.state,
-            country: biz.country
-          }
-          // Register the profile under every ID variant so job lookups always hit
-          if (biz.id) businessMap.set(String(biz.id), profile)
-          if (biz.user_id) businessMap.set(String(biz.user_id), profile)
-          if (biz.business_id) businessMap.set(String(biz.business_id), profile)
-        })
-      }
+      // Run three separate queries (OR across different columns with IN is unreliable in PostgREST)
+      const [byId, byUserId, byBizId] = await Promise.all([
+        supabase.from('business_profiles').select(BP_SELECT).in('id', idList),
+        supabase.from('business_profiles').select(BP_SELECT).in('user_id', idList),
+        supabase.from('business_profiles').select(BP_SELECT).in('business_id', idList),
+      ])
+
+      // Deduplicate by profile id before registering
+      const seen = new Set<string>()
+      const allBizRows = [...(byId.data || []), ...(byUserId.data || []), ...(byBizId.data || [])]
+      const businesses = allBizRows.filter((b: any) => {
+        const key = String(b.id)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+
+      console.log('[API /map/jobs] Business profiles fetched:', businesses.length, {
+        byId: byId.data?.length || 0,
+        byUserId: byUserId.data?.length || 0,
+        byBizId: byBizId.data?.length || 0,
+        errors: [byId.error?.message, byUserId.error?.message, byBizId.error?.message].filter(Boolean)
+      })
+
+      businesses.forEach((biz: any) => {
+        const profile = {
+          name: biz.name,
+          business_name: biz.business_name,
+          lat: biz.lat,
+          lng: biz.lng,
+          location: biz.location,
+          city: biz.city,
+          state: biz.state,
+          country: biz.country
+        }
+        // Register the profile under every ID variant so job lookups always hit
+        if (biz.id) businessMap.set(String(biz.id), profile)
+        if (biz.user_id) businessMap.set(String(biz.user_id), profile)
+        if (biz.business_id) businessMap.set(String(biz.business_id), profile)
+      })
     }
 
     // Filter out orphaned jobs — keep any job whose business_profile_id or business_id is in the map

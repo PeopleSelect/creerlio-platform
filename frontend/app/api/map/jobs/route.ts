@@ -189,20 +189,15 @@ export async function GET(request: NextRequest) {
     const businessMap = new Map<string, {
       name?: string
       business_name?: string
-      lat?: number
-      lng?: number
-      location?: string
-      city?: string
-      state?: string
-      country?: string
     }>()
 
     if (rawIds.size > 0) {
       const idList = Array.from(rawIds)
-      // Safe select — only columns that have always existed in business_profiles.
-      // business_id is optional (added later); querying it separately avoids
-      // a silent null-data failure that would wipe out businessMap entirely.
-      const BP_SAFE = 'id, user_id, name, business_name, lat, lng, location, city, state, country'
+      // Safe select — only columns guaranteed to exist in business_profiles.
+      // lat/lng/location/city/state/country are omitted because column names
+      // vary between environments (some use latitude/longitude, some lat/lng).
+      // A column-not-found error silently returns null data, emptying businessMap.
+      const BP_SAFE = 'id, user_id, name, business_name'
 
       // Always-safe queries: by primary key and by user_id
       const [byId, byUserId] = await Promise.all([
@@ -242,12 +237,6 @@ export async function GET(request: NextRequest) {
         const profile = {
           name: biz.name,
           business_name: biz.business_name,
-          lat: biz.lat,
-          lng: biz.lng,
-          location: biz.location,
-          city: biz.city,
-          state: biz.state,
-          country: biz.country
         }
         // Register under every ID variant so job lookups always hit
         if (biz.id) businessMap.set(String(biz.id), profile)
@@ -299,32 +288,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // If still no coordinates, fall back to business location
-      if (lat == null || lng == null) {
-        const business = (job.business_profile_id && businessMap.get(String(job.business_profile_id)))
-                      || (job.business_id && businessMap.get(String(job.business_id)))
-        if (business) {
-          // First try business coordinates directly
-          if (business.lat != null && business.lng != null) {
-            lat = business.lat
-            lng = business.lng
-            approx = true
-          }
-          // If no direct coords, try to geocode business location
-          else if (business.location || business.city || business.state || business.country) {
-            const bizLocationParts = [business.location, business.city, business.state, business.country].filter(Boolean)
-            if (bizLocationParts.length > 0) {
-              const bizLocationString = bizLocationParts.join(', ')
-              const geocoded = await geocodeAddress(bizLocationString)
-              if (geocoded) {
-                lat = geocoded.lat
-                lng = geocoded.lng
-                approx = true
-              }
-            }
-          }
-        }
-      }
+      // (Business profile coords not available in businessMap — geocoded from job location above)
 
       // If still no coordinates and we have a search center (for show_all mode), use search center as fallback
       if ((lat == null || lng == null) && showAll && searchParams.get('lat') && searchParams.get('lng')) {

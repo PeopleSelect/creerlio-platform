@@ -24,10 +24,15 @@ CREATE TABLE IF NOT EXISTS public.business_products (
   updated_at   timestamptz DEFAULT now()
 );
 
--- 3. Link opportunities to a specific product/service
-ALTER TABLE public.opportunities
-  ADD COLUMN IF NOT EXISTS product_id   uuid REFERENCES public.business_products(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS product_name text;
+-- 3. Link opportunities to a specific product/service (safe — wrapped in DO block)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'opportunities') THEN
+    ALTER TABLE public.opportunities
+      ADD COLUMN IF NOT EXISTS product_id   uuid REFERENCES public.business_products(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS product_name text;
+  END IF;
+END $$;
 
 -- ── RLS ───────────────────────────────────────────────────────────────────
 

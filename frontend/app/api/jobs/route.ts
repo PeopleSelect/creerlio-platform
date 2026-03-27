@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     let qb: any = supabase
       .from('jobs')
       .select(
-        'id,title,description,location,city,state,country,employment_type,remote_allowed,salary_min,salary_max,salary_currency,required_skills,created_at,business_profile_id,status'
+        'id,title,description,location,city,state,country,employment_type,remote_allowed,salary_min,salary_max,salary_currency,required_skills,created_at,business_profile_id,business_id,status'
       )
       .limit(200)
 

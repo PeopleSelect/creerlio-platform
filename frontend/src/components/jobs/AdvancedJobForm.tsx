@@ -327,7 +327,7 @@ export default function AdvancedJobForm({ businessProfile }: AdvancedJobFormProp
         application_url: formData.external_link || null,
         application_email: null,
         business_profile_id: businessProfileId, // Legacy RLS
-        business_id: activeBusinessId || null,
+        business_id: activeBusinessId || businessProfileId,
         location_id: activeLocationId,
       }
       const legacyPayload: any = {

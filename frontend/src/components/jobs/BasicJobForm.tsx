@@ -193,7 +193,7 @@ export default function BasicJobForm({ businessProfile }: BasicJobFormProps) {
         status: formData.status,
         is_active: isActive,
         business_profile_id: businessProfileId, // Legacy RLS
-        business_id: activeBusinessId || null,
+        business_id: activeBusinessId || businessProfileId,
         location_id: activeLocationId,
       }
       const legacyPayload: any = {

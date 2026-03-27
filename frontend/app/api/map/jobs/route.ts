@@ -171,18 +171,21 @@ export async function GET(request: NextRequest) {
       } : null
     })
 
-    // Fetch business profiles separately to avoid join issues
-    // Collect IDs from both business_profile_id and business_id columns
-    const businessIds = new Set<string>()
+    // Fetch business profiles separately to avoid join issues.
+    // Collect every UUID variant (business_profile_id, business_id) so we can find
+    // the business profile even when the generator stored a different UUID in each column.
+    const rawIds = new Set<string>()
     if (data && Array.isArray(data)) {
       data.forEach((job: any) => {
-        if (job.business_profile_id) businessIds.add(String(job.business_profile_id))
-        if (job.business_id) businessIds.add(String(job.business_id))
+        if (job.business_profile_id) rawIds.add(String(job.business_profile_id))
+        if (job.business_id) rawIds.add(String(job.business_id))
       })
     }
 
-    console.log('[API /map/jobs] Business IDs to fetch:', Array.from(businessIds))
+    console.log('[API /map/jobs] Business IDs to fetch:', Array.from(rawIds))
 
+    // businessMap key → canonical profile data
+    // We also build a reverse map: any UUID that belongs to a profile → profile id
     const businessMap = new Map<string, {
       name?: string
       business_name?: string
@@ -193,41 +196,18 @@ export async function GET(request: NextRequest) {
       state?: string
       country?: string
     }>()
-    if (businessIds.size > 0) {
-      // First try with location columns, fall back to basic columns if they don't exist
-      let businesses: any[] | null = null
-      let bizError: any = null
 
-      // Try full query with location data
-      const fullQuery = await supabase
+    if (rawIds.size > 0) {
+      // Fetch profiles matching ANY of the collected ids (id, user_id, or business_id columns)
+      const { data: businesses } = await supabase
         .from('business_profiles')
-        .select('id, name, business_name, lat, lng, location, city, state, country')
-        .in('id', Array.from(businessIds))
+        .select('id, user_id, business_id, name, business_name, lat, lng, location, city, state, country')
+        .or(`id.in.(${Array.from(rawIds).join(',')}),user_id.in.(${Array.from(rawIds).join(',')}),business_id.in.(${Array.from(rawIds).join(',')})`)
 
-      if (fullQuery.error && (fullQuery.error.code === '42703' || fullQuery.error.message?.includes('column'))) {
-        // Column doesn't exist, try basic query
-        console.log('[API /map/jobs] Some business columns missing, trying basic query')
-        const basicQuery = await supabase
-          .from('business_profiles')
-          .select('id, name, business_name')
-          .in('id', Array.from(businessIds))
-        businesses = basicQuery.data
-        bizError = basicQuery.error
-      } else {
-        businesses = fullQuery.data
-        bizError = fullQuery.error
-      }
-
-      if (bizError) {
-        console.error('[API /map/jobs] Business profiles fetch error:', {
-          message: bizError.message,
-          code: bizError.code,
-          details: bizError.details
-        })
-      } else if (businesses) {
+      if (businesses) {
         console.log('[API /map/jobs] Business profiles fetched:', businesses.length)
         businesses.forEach((biz: any) => {
-          businessMap.set(String(biz.id), {
+          const profile = {
             name: biz.name,
             business_name: biz.business_name,
             lat: biz.lat,
@@ -236,7 +216,11 @@ export async function GET(request: NextRequest) {
             city: biz.city,
             state: biz.state,
             country: biz.country
-          })
+          }
+          // Register the profile under every ID variant so job lookups always hit
+          if (biz.id) businessMap.set(String(biz.id), profile)
+          if (biz.user_id) businessMap.set(String(biz.user_id), profile)
+          if (biz.business_id) businessMap.set(String(biz.business_id), profile)
         })
       }
     }

@@ -39,11 +39,13 @@ CREATE INDEX IF NOT EXISTS business_claim_events_business_idx
 ALTER TABLE business_claim_events ENABLE ROW LEVEL SECURITY;
 
 -- Anyone can insert events (anonymous claim_link_viewed)
+DROP POLICY IF EXISTS "claim_events_anyone_insert" ON business_claim_events;
 CREATE POLICY "claim_events_anyone_insert"
   ON business_claim_events FOR INSERT
   WITH CHECK (true);
 
 -- Owner can read events for their business
+DROP POLICY IF EXISTS "claim_events_owner_read" ON business_claim_events;
 CREATE POLICY "claim_events_owner_read"
   ON business_claim_events FOR SELECT
   TO authenticated

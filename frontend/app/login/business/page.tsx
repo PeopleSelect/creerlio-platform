@@ -213,7 +213,8 @@ function BusinessLoginPageInner() {
         }
       } catch {}
 
-      router.replace(redirectTo)
+      // New users go through onboarding; returning users use redirectTo
+      router.replace('/onboarding')
     } finally {
       setBusy(false)
     }

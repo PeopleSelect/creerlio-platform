@@ -3992,11 +3992,9 @@ export default function TalentDashboard() {
                                 {biz?.industry && <p className="text-gray-500 text-xs">{[biz.industry, biz.city].filter(Boolean).join(' · ')}</p>}
                                 {r.message && <p className="text-gray-600 text-xs mt-1.5 italic">"{r.message}"</p>}
                                 <p className="text-gray-400 text-xs mt-1">{new Date(r.created_at).toLocaleDateString()}</p>
-                                {slug && (
+                                {biz?.id && (
                                   <a
-                                    href={`/businesses/${slug}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                    href={`/dashboard/business/view?id=${biz.id}`}
                                     className="inline-block mt-2 text-xs text-blue-600 hover:underline"
                                   >
                                     View Business Profile →

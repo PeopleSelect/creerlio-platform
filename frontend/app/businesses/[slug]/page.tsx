@@ -531,7 +531,7 @@ function BusinessPublicPageInner() {
                 {isTalent ? (
                   <div className="flex items-center gap-3">
                     <Link
-                      href={`/dashboard/talent?apply=${selectedRole.id}`}
+                      href={`/jobs/${selectedRole.id}?returnTo=${encodeURIComponent(`/businesses/${slug}`)}`}
                       className="flex-1 text-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 text-sm transition-colors"
                     >
                       Apply with Your Talent Profile

@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 export const dynamic = 'force-dynamic'
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
-type RoleIntent = 'find_businesses' | 'find_work' | 'both'
+type RoleIntent = 'find_businesses' | 'find_work' | 'find_talent' | 'find_customers' | 'both'
 
 interface Opportunity {
   id: string
@@ -287,7 +287,27 @@ function OnboardingFlow() {
             <p className="text-slate-400 mb-10">This shapes everything we surface for you.</p>
 
             <div className="space-y-3">
-              {[
+              {(session?.user?.user_metadata?.registration_type === 'business' ? [
+                {
+                  value: 'find_talent' as RoleIntent,
+                  label: 'Find Talent',
+                  sub: 'Discover and connect with professionals anonymously',
+                  icon: '🔍',
+                },
+                {
+                  value: 'find_customers' as RoleIntent,
+                  label: 'Find Customers',
+                  sub: 'Connect with businesses and individuals looking for your services',
+                  icon: '🤝',
+                },
+                {
+                  value: 'both' as RoleIntent,
+                  label: 'Both',
+                  sub: 'I want to explore all opportunities',
+                  icon: '✦',
+                  recommended: true,
+                },
+              ] : [
                 {
                   value: 'find_businesses' as RoleIntent,
                   label: 'Find businesses',
@@ -307,7 +327,7 @@ function OnboardingFlow() {
                   icon: '✦',
                   recommended: true,
                 },
-              ].map(opt => {
+              ]).map(opt => {
                 const selected = roleIntent === opt.value
                 return (
                   <button

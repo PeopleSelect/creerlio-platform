@@ -4525,9 +4525,9 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                 }`}
               >
                 Your Outreach Requests
-                {discoveryOutreach.length > 0 && (
+                {(connRequestsFromBusiness.length + discoveryOutreach.length) > 0 && (
                   <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full">
-                    {discoveryOutreach.length}
+                    {connRequestsFromBusiness.length + discoveryOutreach.length}
                   </span>
                 )}
               </button>

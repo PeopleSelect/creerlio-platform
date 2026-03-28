@@ -375,7 +375,7 @@ function OnboardingFlow() {
                   placeholder="Alex Chen"
                   disabled={!!session}
                   autoFocus
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-80 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -390,7 +390,7 @@ function OnboardingFlow() {
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="alex@example.com"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
               )}
@@ -406,7 +406,7 @@ function OnboardingFlow() {
                   onChange={e => setWhatIDo(e.target.value)}
                   placeholder="e.g. Senior Engineer, Event Manager, Marketing Consultant"
                   onKeyDown={e => e.key === 'Enter' && !busy && handleProfileSubmit()}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 />
               </div>
             </div>

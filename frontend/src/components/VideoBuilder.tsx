@@ -96,7 +96,7 @@ export default function VideoBuilder({ businessId, businessName, onCreated }: Vi
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. Company Brand Overview"
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
@@ -108,7 +108,7 @@ export default function VideoBuilder({ businessId, businessName, onCreated }: Vi
           onChange={(e) => setDescription(e.target.value)}
           placeholder="What should this video communicate?"
           rows={2}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
         />
       </div>
 
@@ -120,7 +120,7 @@ export default function VideoBuilder({ businessId, businessName, onCreated }: Vi
           onChange={(e) => setBrief(e.target.value)}
           placeholder="List specific points you want covered — services, achievements, calls to action…"
           rows={3}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
         />
       </div>
 

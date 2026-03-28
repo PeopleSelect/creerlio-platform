@@ -23,7 +23,9 @@ export async function GET(req: NextRequest) {
     .select(`
       id, status, message, created_at, responded_at,
       business_id,
-      business_profiles ( id, name, business_name, industry, city )
+      business_profiles ( id, name, business_name, industry, city,
+        business_profile_pages ( slug )
+      )
     `)
     .eq('talent_profile_id', tp.id)
     .order('created_at', { ascending: false })

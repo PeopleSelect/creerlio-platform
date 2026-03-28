@@ -3982,6 +3982,7 @@ export default function TalentDashboard() {
                       {outreachRequests.map((r) => {
                         const biz = r.business_profiles
                         const bizName = biz?.name || biz?.business_name || 'A Business'
+                        const slug = biz?.business_profile_pages?.slug ?? null
                         const isPending = r.status === 'pending'
                         return (
                           <div key={r.id} className="bg-white border border-gray-200 rounded-lg p-3">
@@ -3991,28 +3992,19 @@ export default function TalentDashboard() {
                                 {biz?.industry && <p className="text-gray-500 text-xs">{[biz.industry, biz.city].filter(Boolean).join(' · ')}</p>}
                                 {r.message && <p className="text-gray-600 text-xs mt-1.5 italic">"{r.message}"</p>}
                                 <p className="text-gray-400 text-xs mt-1">{new Date(r.created_at).toLocaleDateString()}</p>
+                                {slug && (
+                                  <a
+                                    href={`/businesses/${slug}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-block mt-2 text-xs text-blue-600 hover:underline"
+                                  >
+                                    View Business Profile →
+                                  </a>
+                                )}
                               </div>
                               {isPending ? (
-                                <div className="flex gap-2 shrink-0">
-                                  <button
-                                    type="button"
-                                    disabled={outreachBusy === r.id}
-                                    onClick={async () => {
-                                      setOutreachBusy(r.id)
-                                      try {
-                                        const session = (await supabase.auth.getSession()).data.session
-                                        await fetch('/api/talent/outreach', {
-                                          method: 'PATCH',
-                                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-                                          body: JSON.stringify({ request_id: r.id, action: 'decline' }),
-                                        })
-                                        setOutreachRequests(prev => prev.map(x => x.id === r.id ? { ...x, status: 'declined' } : x))
-                                      } finally { setOutreachBusy(null) }
-                                    }}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-50"
-                                  >
-                                    Decline
-                                  </button>
+                                <div className="flex flex-col gap-2 shrink-0">
                                   <button
                                     type="button"
                                     disabled={outreachBusy === r.id}
@@ -4031,6 +4023,25 @@ export default function TalentDashboard() {
                                     className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
                                   >
                                     Accept
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={outreachBusy === r.id}
+                                    onClick={async () => {
+                                      setOutreachBusy(r.id)
+                                      try {
+                                        const session = (await supabase.auth.getSession()).data.session
+                                        await fetch('/api/talent/outreach', {
+                                          method: 'PATCH',
+                                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+                                          body: JSON.stringify({ request_id: r.id, action: 'decline' }),
+                                        })
+                                        setOutreachRequests(prev => prev.map(x => x.id === r.id ? { ...x, status: 'declined' } : x))
+                                      } finally { setOutreachBusy(null) }
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                                  >
+                                    Decline
                                   </button>
                                 </div>
                               ) : (

@@ -26,6 +26,7 @@ interface SearchMapProps {
   isExpanded?: boolean
   onMarkerClick?: (markerId: string | number) => void
   resizeTrigger?: number
+  focusMarkerId?: string | number | null
 }
 
 type MapStyle = 'dark' | 'light' | 'satellite' | 'streets'
@@ -37,7 +38,7 @@ const mapStyles: Record<MapStyle, string> = {
   streets: 'mapbox://styles/mapbox/streets-v12',
 }
 
-export default function SearchMap({ markers, className = '', center, zoom = 11, isExpanded = false, onMarkerClick, resizeTrigger }: SearchMapProps) {
+export default function SearchMap({ markers, className = '', center, zoom = 11, isExpanded = false, onMarkerClick, resizeTrigger, focusMarkerId }: SearchMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<any>(null)
   const markersRef = useRef<any[]>([])
@@ -48,7 +49,7 @@ export default function SearchMap({ markers, className = '', center, zoom = 11, 
     if (!mapContainer.current || typeof window === 'undefined' || !mapboxgl) return
 
     // Mapbox token
-    const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoiY3JlZXJsaW8iLCJhIjoiY21pY3IxZHljMXFwNTJzb2FydzR4b3F1YSJ9.Is8-GyfEdqwKKEo2cGO65g'
+    const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
     
     // Set Mapbox access token
     mapboxgl.accessToken = MAPBOX_TOKEN
@@ -215,6 +216,26 @@ export default function SearchMap({ markers, className = '', center, zoom = 11, 
       }
     }
   }, [markers, center, zoom, activeStyle])
+
+  // Fly to and highlight focused marker when focusMarkerId changes
+  useEffect(() => {
+    if (!focusMarkerId || !map.current) return
+    const marker = markers.find(m => String(m.id) === String(focusMarkerId))
+    if (!marker) return
+
+    // Fly to the marker
+    map.current.flyTo({ center: [marker.lng, marker.lat], zoom: 14, speed: 1.4 })
+
+    // Highlight: pulse the matching marker element
+    markersRef.current.forEach((m, i) => {
+      const el = m.getElement()
+      const isTarget = String(markers[i]?.id) === String(focusMarkerId)
+      el.style.backgroundColor = isTarget ? '#f59e0b' : '#3b82f6'
+      el.style.width = isTarget ? '42px' : '32px'
+      el.style.height = isTarget ? '42px' : '32px'
+      el.style.zIndex = isTarget ? '10' : '1'
+    })
+  }, [focusMarkerId, markers])
 
   // Resize map when expanded state changes
   useEffect(() => {

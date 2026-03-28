@@ -90,6 +90,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
   const [talents, setTalents] = useState<AnonymizedTalent[]>([])
   const [selectedTalentId, setSelectedTalentId] = useState<string | null>(null)
   const [selectedTalent, setSelectedTalent] = useState<AnonymizedTalent | null>(null)
+  const [focusedTalentId, setFocusedTalentId] = useState<string | null>(null)
   const [requestingConnection, setRequestingConnection] = useState(false)
   const [showTalentPopup, setShowTalentPopup] = useState(false)
 
@@ -600,14 +601,25 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
     }
   }, [showTalentPopup, businessProfileId, isAuthenticated])
 
+  // Called when map dot is clicked — opens the full profile popup
   const handleTalentMarkerClick = (talentId: string | number) => {
     const talentIdStr = String(talentId)
     const talent = talents.find(t => t.id === talentIdStr)
     if (talent) {
       setSelectedTalentId(talentIdStr)
       setSelectedTalent(talent)
+      setFocusedTalentId(talentIdStr)
       setShowTalentPopup(true)
     }
+  }
+
+  // Called when a result row is clicked — flies to location and highlights dot, no popup
+  const handleTalentResultClick = (talentId: string) => {
+    const talent = talents.find(t => t.id === talentId)
+    if (!talent) return
+    setFocusedTalentId(talentId)
+    setShowTalentPopup(false)
+    setSelectedTalent(null)
   }
 
   const mapMarkers = useMemo(() => {
@@ -926,8 +938,12 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
                       <button
                         key={talent.id}
                         type="button"
-                        onClick={() => handleTalentMarkerClick(talent.id)}
-                        className="w-full text-left p-2 rounded border transition-all bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20"
+                        onClick={() => handleTalentResultClick(talent.id)}
+                        className={`w-full text-left p-2 rounded border transition-all hover:bg-white/10 hover:border-white/20 ${
+                          focusedTalentId === talent.id
+                            ? 'bg-amber-500/20 border-amber-400/50'
+                            : 'bg-white/5 border-white/10'
+                        }`}
                       >
                         {talent.title ? (
                           <div className="flex items-center gap-2">
@@ -965,6 +981,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
                     center={mapCenter}
                     zoom={mapMarkers.length > 0 ? (mapMarkers.length === 1 ? 12 : 11) : 10}
                     className="w-full h-full"
+                    focusMarkerId={focusedTalentId}
                     onMarkerClick={handleTalentMarkerClick}
                     resizeTrigger={mapResizeTrigger}
                   />

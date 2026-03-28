@@ -4624,13 +4624,32 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                               Sent {new Date(r.created_at).toLocaleString()}
                             </p>
                           </div>
-                          <span className={`shrink-0 text-xs px-2 py-1 rounded font-medium ${
-                            r.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                            r.status === 'declined' || r.status === 'rejected' ? 'bg-red-100 text-red-600' :
-                            'bg-blue-100 text-blue-600'
-                          }`}>
-                            {r.status === 'accepted' ? 'Accepted' : (r.status === 'declined' || r.status === 'rejected') ? 'Declined' : 'Pending'}
-                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`text-xs px-2 py-1 rounded font-medium ${
+                              r.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                              r.status === 'declined' || r.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                              'bg-blue-100 text-blue-600'
+                            }`}>
+                              {r.status === 'accepted' ? 'Accepted' : (r.status === 'declined' || r.status === 'rejected') ? 'Declined' : 'Pending'}
+                            </span>
+                            {r.status === 'pending' && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (!confirm('Withdraw this connection request?')) return
+                                  const { error } = await supabase
+                                    .from('talent_connection_requests')
+                                    .delete()
+                                    .eq('id', r.id)
+                                  if (error) { alert('Failed to withdraw: ' + error.message); return }
+                                  setConnRequestsFromBusiness((prev) => prev.filter((x) => x.id !== r.id))
+                                }}
+                                className="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-2 py-1 rounded transition-colors"
+                              >
+                                Withdraw
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}

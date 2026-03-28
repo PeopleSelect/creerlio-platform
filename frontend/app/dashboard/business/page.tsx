@@ -63,6 +63,7 @@ export default function BusinessDashboard() {
   const [connectionsMenuOpen, setConnectionsMenuOpen] = useState(false)
   const [vacanciesMenuOpen, setVacanciesMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [manageMenuOpen, setManageMenuOpen] = useState(false)
   const handleLocationProfileDropdowns = (next: { city?: string | null; state?: string | null; country?: string | null }) => {
     setLocationEditDraft((prev) => ({
       ...prev,
@@ -2981,7 +2982,7 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                 </div>
               )}
             </div>
-            {(['portfolio', 'locations', 'team', 'calendar', 'business_map'] as TabType[]).map((tab) => (
+            {(['portfolio', 'business_map'] as TabType[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -2991,24 +2992,50 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                {tab === 'portfolio'
-                    ? 'Business Profile'
-                    : tab === 'vacancies'
-                      ? 'Vacancies'
-                      : tab === 'locations'
-                        ? 'Locations'
-                        : tab === 'team'
-                          ? 'Team Management'
-                    : tab === 'calendar'
-                      ? 'Calendar'
-                      : tab === 'business_map'
-                        ? 'Talent Search'
-                        : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'portfolio' ? 'Business Profile' : 'Talent Search'}
                 {activeTab === tab && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>
                 )}
               </button>
             ))}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  if (!['locations', 'team', 'calendar'].includes(activeTab)) setActiveTab('locations')
+                  setManageMenuOpen((open) => !open)
+                }}
+                className={`px-6 py-3 text-sm font-medium transition-all relative ${
+                  ['locations', 'team', 'calendar'].includes(activeTab)
+                    ? 'text-[#20C997]'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Manage
+                {['locations', 'team', 'calendar'].includes(activeTab) && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>
+                )}
+              </button>
+              {manageMenuOpen && (
+                <div className="absolute z-20 mt-2 w-48 rounded-lg border border-gray-200 bg-white shadow-lg">
+                  {([
+                    { tab: 'locations', label: 'Locations' },
+                    { tab: 'team', label: 'Team Management' },
+                    { tab: 'calendar', label: 'Calendar' },
+                  ] as { tab: TabType; label: string }[]).map(({ tab, label }) => (
+                    <button
+                      type="button"
+                      key={tab}
+                      onClick={() => { setActiveTab(tab); setManageMenuOpen(false) }}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                        activeTab === tab ? 'text-[#20C997]' : 'text-gray-700'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="relative">
               <button
                 onClick={() => {

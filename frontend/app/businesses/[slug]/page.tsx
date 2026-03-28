@@ -181,9 +181,11 @@ function BusinessPublicPageInner() {
   const [notFound, setNF]         = useState(false)
   const [modal, setModal]         = useState<'general' | 'consultation' | 'message' | null>(null)
   const [openRoles, setOpenRoles] = useState<OpenRole[]>([])
+  const [selectedRole, setSelectedRole] = useState<OpenRole | null>(null)
   // Customer session state
   const [customerToken, setCToken] = useState<string | null>(null)
   const [isCustomer, setIsCustomer] = useState(false)
+  const [isTalent, setIsTalent]   = useState(false)
   const [customerConnModal, setCCModal] = useState<'general' | 'consultation' | null>(null)
   const [ccMessage, setCCMessage]  = useState('')
   const [ccSending, setCCSending]  = useState(false)
@@ -209,7 +211,7 @@ function BusinessPublicPageInner() {
       .catch(() => setNF(true))
       .finally(() => setLoading(false))
 
-    // Check if visitor is a logged-in customer
+    // Check visitor auth type
     supabase.auth.getSession().then(({ data: sd }) => {
       const session = sd?.session
       if (!session) return
@@ -217,6 +219,9 @@ function BusinessPublicPageInner() {
       if (meta.registration_type === 'customer') {
         setCToken(session.access_token)
         setIsCustomer(true)
+      }
+      if (meta.registration_type === 'talent' || meta.also_talent === true) {
+        setIsTalent(true)
       }
     }).catch(() => {})
   }, [slug])
@@ -426,7 +431,7 @@ function BusinessPublicPageInner() {
           </section>
         )}
 
-        {/* ── 5. Open Roles (auto-synced) ───────────────────── */}
+        {/* ── 5. Open Roles ─────────────────────────────────── */}
         {openRoles.length > 0 && (
           <section className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
             <div className="flex items-center justify-between mb-2">
@@ -442,12 +447,17 @@ function BusinessPublicPageInner() {
             </p>
             <div className="space-y-4">
               {openRoles.map(role => (
-                <div key={role.id} className="flex items-start gap-4 rounded-xl border border-gray-100 bg-gray-50 p-5">
+                <button
+                  key={role.id}
+                  type="button"
+                  onClick={() => setSelectedRole(role)}
+                  className="w-full text-left flex items-start gap-4 rounded-xl border border-gray-100 bg-gray-50 hover:bg-blue-50 hover:border-blue-200 transition-colors p-5 group"
+                >
                   <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
                     <Briefcase className="h-4 w-4 text-blue-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900">{role.title}</p>
+                    <p className="font-medium text-gray-900 group-hover:text-blue-700">{role.title}</p>
                     <div className="mt-1 flex flex-wrap gap-3 text-xs text-gray-500">
                       {(role.location_label || role.location) && (
                         <span className="flex items-center gap-1">
@@ -463,20 +473,101 @@ function BusinessPublicPageInner() {
                       <p className="mt-2 text-sm text-gray-600 line-clamp-2">{role.description}</p>
                     )}
                   </div>
-                  {role.application_url && (
-                    <a
-                      href={role.application_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors shrink-0"
-                    >
-                      Apply <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
-                </div>
+                  <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-blue-500 shrink-0 mt-1" />
+                </button>
               ))}
             </div>
           </section>
+        )}
+
+        {/* ── Job Detail Modal ──────────────────────────────── */}
+        {selectedRole && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-start justify-between p-6 border-b border-gray-100">
+                <div className="flex-1 min-w-0 pr-4">
+                  <h2 className="text-xl font-bold text-gray-900">{selectedRole.title}</h2>
+                  <div className="mt-2 flex flex-wrap gap-3 text-sm text-gray-500">
+                    {(selectedRole.location_label || selectedRole.location) && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-4 w-4" />
+                        {selectedRole.location_label || selectedRole.location}
+                      </span>
+                    )}
+                    {selectedRole.employment_type && (
+                      <span className="rounded-full bg-blue-50 border border-blue-100 px-3 py-0.5 text-blue-700 text-xs font-medium">
+                        {selectedRole.employment_type}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">{data!.name}</p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => setSelectedRole(null)}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 shrink-0"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Body — full description */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {selectedRole.description ? (
+                  <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
+                    {selectedRole.description}
+                  </div>
+                ) : (
+                  <p className="text-gray-400 text-sm">No description provided.</p>
+                )}
+              </div>
+
+              {/* Footer — Apply CTA */}
+              <div className="p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+                {isTalent ? (
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href={`/dashboard/talent?apply=${selectedRole.id}`}
+                      className="flex-1 text-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 text-sm transition-colors"
+                    >
+                      Apply with Your Talent Profile
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRole(null)}
+                      className="px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-100"
+                    >
+                      Close
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-500 text-center">
+                      To apply you need a free Talent account with a completed portfolio.
+                    </p>
+                    <div className="flex gap-3">
+                      <Link
+                        href={`/login/talent?mode=signup&redirect=${encodeURIComponent(`/businesses/${slug}`)}`}
+                        className="flex-1 text-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 text-sm transition-colors"
+                      >
+                        Register as Talent &amp; Apply
+                      </Link>
+                      <Link
+                        href={`/login/talent?mode=signin&redirect=${encodeURIComponent(`/businesses/${slug}`)}`}
+                        className="flex-1 text-center rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 font-semibold py-3 text-sm transition-colors"
+                      >
+                        Sign In to Apply
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ── 6. Talent Access Requests ─────────────────────── */}

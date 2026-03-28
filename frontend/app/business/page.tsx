@@ -171,7 +171,7 @@ export default function BusinessPage() {
 
         <section className="text-center">
           <Link
-            href="/search"
+            href="/talent"
             className="inline-flex rounded-lg bg-blue-600 px-8 py-3 text-sm font-semibold text-white hover:bg-blue-700"
           >
             Explore Talent

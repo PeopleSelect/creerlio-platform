@@ -92,6 +92,8 @@ export default function TalentDashboard() {
   const [connWithdrawn, setConnWithdrawn] = useState<any[]>([])
   const [connLoading, setConnLoading] = useState(false)
   const [connError, setConnError] = useState<string | null>(null)
+  const [outreachRequests, setOutreachRequests] = useState<any[]>([])
+  const [outreachBusy, setOutreachBusy] = useState<string | null>(null)
   const [isCancelling, setIsCancelling] = useState(false)
   const [selectedRequest, setSelectedRequest] = useState<any>(null)
   const [withdrawingAppId, setWithdrawingAppId] = useState<string | null>(null)
@@ -1027,6 +1029,20 @@ export default function TalentDashboard() {
       setConnAccepted(acceptedWithNames)
       setConnDeclined(declinedWithNames)
       setConnWithdrawn(withdrawnWithNames)
+
+      // Fetch business-initiated outreach requests (new discovery system)
+      try {
+        const session = (await supabase.auth.getSession()).data.session
+        if (session?.access_token) {
+          const outRes = await fetch('/api/talent/outreach', {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          })
+          if (outRes.ok) {
+            const { requests } = await outRes.json()
+            setOutreachRequests(requests || [])
+          }
+        }
+      } catch {}
 
       // Calendar items (read-only, derived from accepted connections)
       const commercialAccepted = acceptedWithNames.filter((r) => !Array.isArray(r.selected_sections) || r.selected_sections.length === 0)
@@ -3808,9 +3824,9 @@ export default function TalentDashboard() {
                   }`}
                 >
                   Connection Requests
-                  {careerRequests.length > 0 && (
+                  {(careerRequests.length + outreachRequests.filter(r => r.status === 'pending').length) > 0 && (
                     <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full">
-                      {careerRequests.length}
+                      {careerRequests.length + outreachRequests.filter(r => r.status === 'pending').length}
                     </span>
                   )}
                 </button>
@@ -3955,6 +3971,81 @@ export default function TalentDashboard() {
 
             {/* Connection Requests Tab Content */}
             {connectionMode === 'requests' && (
+              <div className="space-y-4">
+
+                {/* Business Discovery Outreach Requests */}
+                {outreachRequests.length > 0 && (
+                  <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-4">
+                    <h3 className="text-gray-900 font-semibold mb-1">Business Outreach</h3>
+                    <p className="text-gray-500 text-xs mb-3">Businesses found your anonymous profile and would like to connect</p>
+                    <div className="space-y-3">
+                      {outreachRequests.map((r) => {
+                        const biz = r.business_profiles
+                        const bizName = biz?.name || biz?.business_name || 'A Business'
+                        const isPending = r.status === 'pending'
+                        return (
+                          <div key={r.id} className="bg-white border border-gray-200 rounded-lg p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-gray-900 text-sm font-semibold">{bizName}</p>
+                                {biz?.industry && <p className="text-gray-500 text-xs">{[biz.industry, biz.city].filter(Boolean).join(' · ')}</p>}
+                                {r.message && <p className="text-gray-600 text-xs mt-1.5 italic">"{r.message}"</p>}
+                                <p className="text-gray-400 text-xs mt-1">{new Date(r.created_at).toLocaleDateString()}</p>
+                              </div>
+                              {isPending ? (
+                                <div className="flex gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    disabled={outreachBusy === r.id}
+                                    onClick={async () => {
+                                      setOutreachBusy(r.id)
+                                      try {
+                                        const session = (await supabase.auth.getSession()).data.session
+                                        await fetch('/api/talent/outreach', {
+                                          method: 'PATCH',
+                                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+                                          body: JSON.stringify({ request_id: r.id, action: 'decline' }),
+                                        })
+                                        setOutreachRequests(prev => prev.map(x => x.id === r.id ? { ...x, status: 'declined' } : x))
+                                      } finally { setOutreachBusy(null) }
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                                  >
+                                    Decline
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={outreachBusy === r.id}
+                                    onClick={async () => {
+                                      setOutreachBusy(r.id)
+                                      try {
+                                        const session = (await supabase.auth.getSession()).data.session
+                                        await fetch('/api/talent/outreach', {
+                                          method: 'PATCH',
+                                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+                                          body: JSON.stringify({ request_id: r.id, action: 'accept' }),
+                                        })
+                                        setOutreachRequests(prev => prev.map(x => x.id === r.id ? { ...x, status: 'accepted' } : x))
+                                      } finally { setOutreachBusy(null) }
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                                  >
+                                    Accept
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className={`shrink-0 text-xs px-2 py-1 rounded font-medium ${r.status === 'accepted' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                  {r.status === 'accepted' ? 'Accepted' : 'Declined'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
               <div className="border border-gray-200 rounded-lg p-4">
                 <h3 className="text-gray-900 font-semibold mb-3">Connection Requests</h3>
                 <p className="text-gray-600 text-xs mb-3">
@@ -3994,6 +4085,7 @@ export default function TalentDashboard() {
                     ))}
                   </div>
                 )}
+              </div>
               </div>
             )}
 

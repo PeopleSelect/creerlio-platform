@@ -502,6 +502,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
           business_id: bpId,
           talent_id: talentId,
           status: 'pending',
+          initiated_by: 'business',
           selected_sections: []
         })
         .select()

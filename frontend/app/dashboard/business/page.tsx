@@ -4602,19 +4602,38 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                   <h3 className="text-gray-900 font-semibold">Your Outreach Requests</h3>
                 </div>
                 <p className="text-gray-500 text-xs mb-3">
-                  Connection requests sent to anonymous talent via Talent Discovery. Identity revealed only after they accept.
+                  Connection requests you sent to talent via Talent Search. Messaging unlocks after they accept.
                 </p>
                 {connLoading ? (
                   <p className="text-gray-600">Loading…</p>
-                ) : discoveryOutreach.length === 0 ? (
+                ) : connRequestsFromBusiness.length === 0 && discoveryOutreach.length === 0 ? (
                   <div className="text-center py-6">
                     <p className="text-gray-500 text-sm">No outreach requests sent yet.</p>
-                    <a href="/dashboard/business/discovery" className="text-blue-600 text-sm hover:underline mt-1 inline-block">
-                      Browse Talent Discovery →
-                    </a>
+                    <p className="text-gray-400 text-xs mt-1">Use Talent Search to find and connect with talent.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
+                    {connRequestsFromBusiness.map((r) => (
+                      <div key={r.id} className="border border-blue-200 bg-blue-50/30 rounded-lg p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-gray-900 text-sm font-medium">
+                              {r.talent_name || 'Talent'}
+                            </p>
+                            <p className="text-gray-400 text-xs mt-1">
+                              Sent {new Date(r.created_at).toLocaleString()}
+                            </p>
+                          </div>
+                          <span className={`shrink-0 text-xs px-2 py-1 rounded font-medium ${
+                            r.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                            r.status === 'declined' || r.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                            'bg-blue-100 text-blue-600'
+                          }`}>
+                            {r.status === 'accepted' ? 'Accepted' : (r.status === 'declined' || r.status === 'rejected') ? 'Declined' : 'Pending'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                     {discoveryOutreach.map((r) => (
                       <div key={r.id} className="border border-blue-200 bg-blue-50/30 rounded-lg p-3">
                         <div className="flex items-center justify-between gap-3">
@@ -4622,9 +4641,6 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                             <p className="text-gray-900 text-sm font-medium">
                               Anonymous Talent · {String(r.talent_profile_id).slice(0, 8)}
                             </p>
-                            {r.talent_profiles?.headline && (
-                              <p className="text-gray-600 text-xs mt-0.5 truncate">{r.talent_profiles.headline}</p>
-                            )}
                             {r.message && (
                               <p className="text-gray-500 text-xs mt-1 italic truncate">"{r.message}"</p>
                             )}

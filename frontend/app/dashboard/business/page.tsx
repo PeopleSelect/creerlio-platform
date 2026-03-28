@@ -4632,6 +4632,12 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                             }`}>
                               {r.status === 'accepted' ? 'Accepted' : (r.status === 'declined' || r.status === 'rejected') ? 'Declined' : 'Pending'}
                             </span>
+                            <Link
+                              href={`/portfolio/view?talent_id=${r.talent_id}&request_id=${r.id}`}
+                              className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 px-2 py-1 rounded transition-colors"
+                            >
+                              View Profile
+                            </Link>
                             {r.status === 'pending' && (
                               <button
                                 type="button"

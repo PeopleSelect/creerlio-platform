@@ -5152,7 +5152,7 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
             <iframe
               title="Business Map"
               src="/business-map-embedded"
-              className="w-full h-[75vh] rounded-xl"
+              className="w-full h-[92vh] rounded-xl"
             />
           </div>
         )}

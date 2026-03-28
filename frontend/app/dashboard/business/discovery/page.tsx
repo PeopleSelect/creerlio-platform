@@ -75,8 +75,6 @@ export default function RecruiterDiscoveryPage() {
     if (!s) return talent
     return talent.filter((t) => {
       const hay = [
-        t.username,
-        t.name,
         t.headline,
         t.short_bio,
         ...(Array.isArray(t.selected_skills) ? t.selected_skills : []),
@@ -151,7 +149,7 @@ export default function RecruiterDiscoveryPage() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by skill, title, name..."
+            placeholder="Search by skill, title, bio..."
             className="w-full sm:max-w-md rounded-lg bg-slate-900 border border-white/10 px-3 py-2 text-white outline-none"
           />
           <div className="text-sm text-slate-300">{filtered.length} results</div>

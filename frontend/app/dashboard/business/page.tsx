@@ -3002,7 +3002,7 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                     : tab === 'calendar'
                       ? 'Calendar'
                       : tab === 'business_map'
-                        ? 'Business Map'
+                        ? 'Talent Search'
                         : tab.charAt(0).toUpperCase() + tab.slice(1)}
                 {activeTab === tab && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>

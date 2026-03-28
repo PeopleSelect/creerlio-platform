@@ -367,7 +367,8 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
 
               if (!showAllTalents && distanceKm > radiusKm) return null
             } else {
-              // No location filter - just get coordinates for display if available
+              // No location set — only show if showAllTalents is checked
+              if (!showAllTalents) return null
               coords = await geocodeTalentLocation(t)
             }
 

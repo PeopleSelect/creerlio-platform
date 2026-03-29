@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import VideoChat from '@/components/VideoChat'
+import ConversationSummary from '@/components/ConversationSummary'
 import dynamic from 'next/dynamic'
 import BusinessDiscoveryMap, {type BusinessFeature, type RouteState, type BusinessDiscoveryMapHandle } from '@/components/BusinessDiscoveryMap'
 
@@ -38,7 +39,7 @@ async function resolveTalentBankUrl(path?: string | null, seconds = 60 * 30) {
 }
 
 
-type TabType = 'overview' | 'profile' | 'portfolio' | 'applications' | 'connections'
+type TabType = 'overview' | 'profile' | 'portfolio' | 'applications' | 'connections' | 'video_history'
 type TalentIntentStatus = 'available' | 'not_available' | 'open_to_offers' | 'casual_only'
 type IntentWorkType = 'full_time' | 'part_time' | 'contract' | 'advisory' | ''
 type IntentLocationMode = 'on_site' | 'hybrid' | 'remote' | ''
@@ -209,6 +210,9 @@ export default function TalentDashboard() {
   const [videoChatLoadingId, setVideoChatLoadingId] = useState<string | null>(null)
   const [videoChatError, setVideoChatError] = useState<string | null>(null)
   const [incomingVideoCall, setIncomingVideoCall] = useState<any | null>(null)
+  const [videoHistory, setVideoHistory] = useState<any[]>([])
+  const [videoHistoryLoading, setVideoHistoryLoading] = useState(false)
+  const [videoHistorySummaryId, setVideoHistorySummaryId] = useState<string | null>(null)
 
   // Portfolio view state
   const [portfolioLoading, setPortfolioLoading] = useState(false)
@@ -875,6 +879,21 @@ export default function TalentDashboard() {
     const interval = setInterval(checkForIncomingCall, 5000)
     return () => clearInterval(interval)
   }, [talentProfile?.id])
+
+  useEffect(() => {
+    if (activeTab !== 'video_history' || !talentProfile?.id) return
+    setVideoHistoryLoading(true)
+    supabase
+      .from('video_chat_sessions')
+      .select('id, status, initiated_by, started_at, ended_at, business_id, business_profiles ( business_name, name )')
+      .eq('talent_id', talentProfile.id)
+      .eq('status', 'ended')
+      .order('ended_at', { ascending: false })
+      .then(({ data }) => {
+        setVideoHistory(data || [])
+        setVideoHistoryLoading(false)
+      })
+  }, [activeTab, talentProfile?.id])
 
   const parseCsv = (value: string) =>
     value
@@ -2280,13 +2299,15 @@ export default function TalentDashboard() {
             >
               View Portfolio
             </Link>
-            {(['applications', 'connections'] as TabType[]).map((tab) => (
+            {(['applications', 'connections', 'video_history'] as TabType[]).map((tab) => (
               <button
                 key={tab}
                 title={
                   tab === 'applications'
                     ? 'Track your job applications — see which roles you\'ve applied for and their status'
-                    : 'Manage connection requests from businesses and recruiters interested in your profile'
+                    : tab === 'connections'
+                    ? 'Manage connection requests from businesses and recruiters interested in your profile'
+                    : 'View your past video chat sessions and conversation summaries'
                 }
                 onClick={() => {
                   if (isBusinessRoute) {
@@ -2302,7 +2323,7 @@ export default function TalentDashboard() {
                 }`}
               >
                 <span className="flex items-center gap-1.5">
-                  {tab === 'connections' ? 'Career Connections' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  {tab === 'connections' ? 'Career Connections' : tab === 'video_history' ? 'Video History' : tab.charAt(0).toUpperCase() + tab.slice(1)}
                   {!isBusinessRoute && tab === 'connections' && notifications.filter((n) => !n.is_read).length > 0 && (
                     <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-amber-500 rounded-full animate-pulse">
                       {notifications.filter((n) => !n.is_read).length}
@@ -2334,6 +2355,14 @@ export default function TalentDashboard() {
               className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
             >
               Snapshots ↗
+            </Link>
+            <Link
+              href="/opportunity"
+              title="AI-powered opportunity scoring — see which jobs are the best move for your career"
+              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors flex items-center gap-1"
+            >
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+              Opportunity Intelligence ↗
             </Link>
             {/* Portfolio Templates temporarily hidden */}
             {/* Business Connections tab temporarily hidden */}
@@ -4965,6 +4994,49 @@ Declined Career Requests
           </div>
         )}
       
+      {activeTab === 'video_history' && (
+        <div className="dashboard-card rounded-xl p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Video Chat History</h2>
+          {videoHistoryLoading ? (
+            <div className="flex items-center gap-3 py-8">
+              <div className="w-6 h-6 border-4 border-[#20C997] border-t-transparent rounded-full animate-spin" />
+              <p className="text-gray-500">Loading history...</p>
+            </div>
+          ) : videoHistory.length === 0 ? (
+            <p className="text-gray-500 py-8 text-center">No video chats yet. Start a video call from Career Connections.</p>
+          ) : (
+            <div className="space-y-3">
+              {videoHistory.map((session) => {
+                const biz = session.business_profiles as any
+                const bizName = biz?.business_name || biz?.name || 'Business'
+                const duration = session.started_at && session.ended_at
+                  ? Math.round((new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 60000)
+                  : null
+                return (
+                  <div key={session.id} className="border border-gray-200 rounded-lg p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-900 font-semibold">{bizName}</p>
+                      <p className="text-gray-500 text-xs mt-0.5">
+                        {session.ended_at ? new Date(session.ended_at).toLocaleString() : '—'}
+                        {duration !== null ? ` · ${duration} min` : ''}
+                        {' · '}{session.initiated_by === 'talent' ? 'You called' : 'Incoming call'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setVideoHistorySummaryId(session.id)}
+                      className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg font-semibold transition-colors"
+                    >
+                      View Summary
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Incoming Video Call notification (business initiated) */}
       {incomingVideoCall && !videoChatSession && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-800 border border-purple-500/60 rounded-xl shadow-2xl px-6 py-4 flex items-center gap-4 max-w-sm w-full">
@@ -5013,6 +5085,13 @@ Declined Career Requests
             </button>
           </div>
         </div>
+      )}
+
+      {videoHistorySummaryId && (
+        <ConversationSummary
+          sessionId={videoHistorySummaryId}
+          onClose={() => setVideoHistorySummaryId(null)}
+        />
       )}
 
       {/* Video Chat Modal */}

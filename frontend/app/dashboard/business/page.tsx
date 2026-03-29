@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import VideoChat from '@/components/VideoChat'
+import ConversationSummary from '@/components/ConversationSummary'
 import { useBusinessContext } from '@/components/BusinessContext'
 import LocationDropdownsString from '@/components/LocationDropdownsString'
 import { INDUSTRY_OPTIONS } from '@/constants/industries'
@@ -33,6 +34,7 @@ type TabType =
   | 'locations'
   | 'business_map'
   | 'team'
+  | 'video_history'
 
 function useDebouncedValue<T>(value: T, delayMs: number) {
   const [debounced, setDebounced] = useState(value)
@@ -1672,6 +1674,9 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
   const [videoChatLoading, setVideoChatLoading] = useState(false)
   const [videoChatError, setVideoChatError] = useState<string | null>(null)
   const [incomingVideoCall, setIncomingVideoCall] = useState<any | null>(null)
+  const [videoHistory, setVideoHistory] = useState<any[]>([])
+  const [videoHistoryLoading, setVideoHistoryLoading] = useState(false)
+  const [videoHistorySummaryId, setVideoHistorySummaryId] = useState<string | null>(null)
 
   const [serviceConnections, setServiceConnections] = useState<
     Array<{ talent_id: string; conversation_id: string; talent_name: string; last_message: string; last_at: string }>
@@ -1939,6 +1944,21 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
     const interval = setInterval(checkForIncomingCall, 5000)
     return () => clearInterval(interval)
   }, [businessProfile?.id])
+
+  useEffect(() => {
+    if (activeTab !== 'video_history' || !businessProfile?.id) return
+    setVideoHistoryLoading(true)
+    supabase
+      .from('video_chat_sessions')
+      .select('id, status, initiated_by, started_at, ended_at, talent_id, talent_profiles ( name )')
+      .eq('business_id', businessProfile.id)
+      .eq('status', 'ended')
+      .order('ended_at', { ascending: false })
+      .then(({ data }) => {
+        setVideoHistory(data || [])
+        setVideoHistoryLoading(false)
+      })
+  }, [activeTab, businessProfile?.id])
 
   async function loadConnections() {
     setConnLoading(true)
@@ -3009,6 +3029,17 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                 </div>
               )}
             </div>
+            <button
+              onClick={() => setActiveTab('video_history')}
+              className={`px-6 py-3 text-sm font-medium transition-all relative ${
+                activeTab === 'video_history' ? 'text-[#20C997]' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Video History
+              {activeTab === 'video_history' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>
+              )}
+            </button>
             {(['portfolio', 'business_map'] as TabType[]).map((tab) => (
               <button
                 key={tab}

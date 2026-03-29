@@ -849,43 +849,30 @@ export default function TalentDashboard() {
     }
   }, [user?.id, talentProfile?.id, intentLoaded])
 
-  // Subscribe to incoming video calls (business-initiated) + check for existing ones on load
+  // Poll for incoming video calls (business-initiated) every 5 seconds
   useEffect(() => {
     if (!talentProfile?.id) return
 
-    // Check for any already-pending/active sessions (business may have called before page loaded)
-    supabase
-      .from('video_chat_sessions')
-      .select('*')
-      .eq('talent_id', talentProfile.id)
-      .eq('initiated_by', 'business')
-      .in('status', ['pending', 'active'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setIncomingVideoCall(data)
-      })
+    const checkForIncomingCall = async () => {
+      const { data } = await supabase
+        .from('video_chat_sessions')
+        .select('*')
+        .eq('talent_id', talentProfile.id)
+        .eq('initiated_by', 'business')
+        .in('status', ['pending', 'active'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (data) {
+        setIncomingVideoCall(prev => prev?.id === data.id ? prev : data)
+      } else {
+        setIncomingVideoCall(null)
+      }
+    }
 
-    // Also subscribe for new inserts while on the page
-    const channel = supabase
-      .channel(`incoming-video-talent-${talentProfile.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'video_chat_sessions',
-          filter: `talent_id=eq.${talentProfile.id}`,
-        },
-        (payload: any) => {
-          if (payload.new?.initiated_by === 'business') {
-            setIncomingVideoCall(payload.new)
-          }
-        }
-      )
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    checkForIncomingCall()
+    const interval = setInterval(checkForIncomingCall, 5000)
+    return () => clearInterval(interval)
   }, [talentProfile?.id])
 
   const parseCsv = (value: string) =>

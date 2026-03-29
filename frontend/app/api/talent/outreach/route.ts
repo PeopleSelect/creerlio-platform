@@ -69,5 +69,21 @@ export async function PATCH(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // On accept, mirror into talent_connection_requests so the business shows up
+  // in Career Connections with full messaging/video/meeting buttons
+  if (action === 'accept' && data) {
+    await svc
+      .from('talent_connection_requests')
+      .upsert({
+        talent_id:        tp.id,
+        business_id:      data.business_id,
+        status:           'accepted',
+        initiated_by:     'business',
+        selected_sections: [],
+        responded_at:     new Date().toISOString(),
+      }, { onConflict: 'talent_id,business_id', ignoreDuplicates: false })
+  }
+
   return NextResponse.json({ request: data })
 }

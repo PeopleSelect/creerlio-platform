@@ -1921,7 +1921,7 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
     const checkForIncomingCall = async () => {
       const { data } = await supabase
         .from('video_chat_sessions')
-        .select('*')
+        .select('*, talent_profiles ( name, first_name, last_name )')
         .eq('business_id', businessProfile.id)
         .eq('initiated_by', 'talent')
         .in('status', ['pending', 'active'])
@@ -5430,7 +5430,9 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-white text-sm font-semibold">Incoming Video Call</p>
-            <p className="text-slate-400 text-xs truncate">A talent wants to video chat</p>
+            <p className="text-slate-400 text-xs truncate">
+              {(incomingVideoCall?.talent_profiles as any)?.name || (incomingVideoCall?.talent_profiles as any)?.first_name || 'A talent'} wants to video chat
+            </p>
           </div>
           <div className="flex gap-2">
             <button

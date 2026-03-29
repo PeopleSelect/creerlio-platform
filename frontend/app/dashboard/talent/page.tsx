@@ -856,7 +856,7 @@ export default function TalentDashboard() {
     const checkForIncomingCall = async () => {
       const { data } = await supabase
         .from('video_chat_sessions')
-        .select('*')
+        .select('*, business_profiles ( business_name, name )')
         .eq('talent_id', talentProfile.id)
         .eq('initiated_by', 'business')
         .in('status', ['pending', 'active'])
@@ -4991,7 +4991,9 @@ Declined Career Requests
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-white text-sm font-semibold">Incoming Video Call</p>
-            <p className="text-slate-400 text-xs truncate">A business wants to video chat</p>
+            <p className="text-slate-400 text-xs truncate">
+              {(incomingVideoCall?.business_profiles as any)?.business_name || (incomingVideoCall?.business_profiles as any)?.name || 'A business'} wants to video chat
+            </p>
           </div>
           <div className="flex gap-2">
             <button

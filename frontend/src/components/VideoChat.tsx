@@ -12,6 +12,7 @@ interface VideoChatProps {
   recordingEnabled?: boolean
   talentName?: string
   businessName?: string
+  isInitiator?: boolean
 }
 
 export default function VideoChat({
@@ -21,7 +22,8 @@ export default function VideoChat({
   onEnd,
   recordingEnabled = false,
   talentName = 'Talent',
-  businessName = 'Business'
+  businessName = 'Business',
+  isInitiator = true,
 }: VideoChatProps) {
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
@@ -32,19 +34,25 @@ export default function VideoChat({
   const [isMuted, setIsMuted] = useState(false)
   const [isVideoOff, setIsVideoOff] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
-  
+
   const localStreamRef = useRef<MediaStream | null>(null)
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null)
+  const channelRef = useRef<any>(null)
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const startTimeRef = useRef<number | null>(null)
-  
+  // Store pending ICE candidates received before remote description is set
+  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([])
+  const remoteDescSetRef = useRef(false)
+  // Store local offer so we can re-send it if the joiner requests it
+  const localOfferSdpRef = useRef<string | null>(null)
+
   useEffect(() => {
     initializeVideoChat()
     return () => {
       cleanup()
     }
   }, [])
-  
+
   const initializeVideoChat = async () => {
     try {
       // Get user media (camera and microphone)
@@ -52,29 +60,29 @@ export default function VideoChat({
         video: true,
         audio: true
       })
-      
+
       localStreamRef.current = stream
-      
+
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream
       }
-      
-      // Initialize WebRTC peer connection
-      // NOTE: This is a simplified version. For production, use Agora, Twilio, or similar service
+
+      // Initialize WebRTC peer connection with public STUN servers
       const pc = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
         ]
       })
-      
+
       peerConnectionRef.current = pc
-      
+
       // Add local stream tracks
       stream.getTracks().forEach(track => {
         pc.addTrack(track, stream)
       })
-      
+
       // Handle remote stream
       pc.ontrack = (event) => {
         if (remoteVideoRef.current) {
@@ -82,24 +90,139 @@ export default function VideoChat({
         }
         setIsConnected(true)
       }
-      
+
       pc.oniceconnectionstatechange = () => {
-        console.log('[VideoChat] ICE connection state:', pc.iceConnectionState)
+        console.log('[VideoChat] ICE state:', pc.iceConnectionState)
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          setIsConnected(true)
+        }
         if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
           setError('Connection lost. Please try again.')
         }
       }
-      
+
+      // Send ICE candidates to the other peer via Supabase Realtime
+      pc.onicecandidate = (event) => {
+        if (event.candidate && channelRef.current) {
+          channelRef.current.send({
+            type: 'broadcast',
+            event: 'ice',
+            payload: { candidate: event.candidate.toJSON() }
+          })
+        }
+      }
+
+      // Set up Supabase Realtime signaling channel
+      // self: false means we don't receive our own broadcasts
+      const channel = supabase.channel(`video-room-${roomId}`, {
+        config: { broadcast: { self: false } }
+      })
+      channelRef.current = channel
+
+      channel
+        // Receive SDP offer (joiner side)
+        .on('broadcast', { event: 'offer' }, async ({ payload }) => {
+          if (!isInitiator) {
+            try {
+              await pc.setRemoteDescription({ type: 'offer', sdp: payload.sdp })
+              remoteDescSetRef.current = true
+              // Apply any ICE candidates that arrived before the offer
+              for (const c of pendingCandidatesRef.current) {
+                await pc.addIceCandidate(new RTCIceCandidate(c))
+              }
+              pendingCandidatesRef.current = []
+              const answer = await pc.createAnswer()
+              await pc.setLocalDescription(answer)
+              channel.send({
+                type: 'broadcast',
+                event: 'answer',
+                payload: { sdp: answer.sdp }
+              })
+            } catch (err: any) {
+              console.error('[VideoChat] Error handling offer:', err)
+              setError('Failed to connect. Please try again.')
+            }
+          }
+        })
+        // Receive SDP answer (initiator side)
+        .on('broadcast', { event: 'answer' }, async ({ payload }) => {
+          if (isInitiator) {
+            try {
+              await pc.setRemoteDescription({ type: 'answer', sdp: payload.sdp })
+              remoteDescSetRef.current = true
+              // Apply any ICE candidates that arrived before the answer
+              for (const c of pendingCandidatesRef.current) {
+                await pc.addIceCandidate(new RTCIceCandidate(c))
+              }
+              pendingCandidatesRef.current = []
+            } catch (err: any) {
+              console.error('[VideoChat] Error handling answer:', err)
+              setError('Failed to connect. Please try again.')
+            }
+          }
+        })
+        // Receive ICE candidates from either side
+        .on('broadcast', { event: 'ice' }, async ({ payload }) => {
+          if (payload.candidate) {
+            if (remoteDescSetRef.current && peerConnectionRef.current) {
+              try {
+                await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate))
+              } catch (err) {
+                console.error('[VideoChat] Error adding ICE candidate:', err)
+              }
+            } else {
+              // Queue until remote description is set
+              pendingCandidatesRef.current.push(payload.candidate)
+            }
+          }
+        })
+        // Joiner requests the offer (in case initiator already sent it before joiner subscribed)
+        .on('broadcast', { event: 'request_offer' }, async () => {
+          if (isInitiator && localOfferSdpRef.current) {
+            channel.send({
+              type: 'broadcast',
+              event: 'offer',
+              payload: { sdp: localOfferSdpRef.current }
+            })
+          }
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            if (isInitiator) {
+              // Create and broadcast the offer
+              try {
+                const offer = await pc.createOffer()
+                await pc.setLocalDescription(offer)
+                localOfferSdpRef.current = offer.sdp || null
+                channel.send({
+                  type: 'broadcast',
+                  event: 'offer',
+                  payload: { sdp: offer.sdp }
+                })
+              } catch (err: any) {
+                console.error('[VideoChat] Error creating offer:', err)
+                setError('Failed to create call. Please try again.')
+              }
+            } else {
+              // Request the offer from the initiator (handles case where initiator already sent it)
+              channel.send({
+                type: 'broadcast',
+                event: 'request_offer',
+                payload: {}
+              })
+            }
+          }
+        })
+
       // Start session on backend
       const { data: sessionRes } = await supabase.auth.getSession()
       if (!sessionRes?.session?.user) {
         throw new Error('Not authenticated')
       }
-      
-      // Get access token for server-side authentication
+
       const accessToken = sessionRes.session.access_token
-      
-      // Call backend to start session
+
+      // Call backend to mark session as started
       const response = await fetch(`/api/video-chat/${sessionId}/start`, {
         method: 'POST',
         headers: {
@@ -107,7 +230,7 @@ export default function VideoChat({
           'Authorization': `Bearer ${accessToken}`,
         }
       })
-      
+
       if (!response.ok) {
         const errorText = await response.text()
         let errorMessage = 'Failed to start video chat session'
@@ -117,47 +240,48 @@ export default function VideoChat({
         } catch {
           errorMessage = errorText || errorMessage
         }
-        throw new Error(errorMessage)
+        // Don't throw — session start failure shouldn't block the call
+        console.warn('[VideoChat] Session start warning:', errorMessage)
       }
-      
-      const responseData = await response.json()
-      
-      if (!responseData.success) {
-        throw new Error(responseData.error || 'Failed to start video chat session')
-      }
-      
+
       startTimeRef.current = Date.now()
       durationIntervalRef.current = setInterval(() => {
         if (startTimeRef.current) {
           setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000))
         }
       }, 1000)
-      
+
     } catch (err: any) {
       console.error('[VideoChat] Error initializing:', err)
       setError(err.message || 'Failed to initialize video chat')
     }
   }
-  
+
   const cleanup = async () => {
+    // Leave the signaling channel
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current)
+      channelRef.current = null
+    }
+
     // Stop all tracks
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop())
       localStreamRef.current = null
     }
-    
+
     // Close peer connection
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close()
       peerConnectionRef.current = null
     }
-    
+
     // Clear interval
     if (durationIntervalRef.current) {
       clearInterval(durationIntervalRef.current)
       durationIntervalRef.current = null
     }
-    
+
     // End session on backend
     if (sessionId && startTimeRef.current) {
       try {
@@ -165,7 +289,7 @@ export default function VideoChat({
         if (sessionRes?.session?.user) {
           const duration_seconds = Math.floor((Date.now() - startTimeRef.current) / 1000)
           const accessToken = sessionRes.session.access_token
-          
+
           await fetch(`/api/video-chat/${sessionId}/end`, {
             method: 'POST',
             headers: {
@@ -182,7 +306,7 @@ export default function VideoChat({
       }
     }
   }
-  
+
   const handleEndCall = async () => {
     await cleanup()
     // Show summary if recording was enabled
@@ -192,12 +316,12 @@ export default function VideoChat({
       onEnd()
     }
   }
-  
+
   const handleCloseSummary = () => {
     setShowSummary(false)
     onEnd()
   }
-  
+
   const handleToggleMute = () => {
     if (localStreamRef.current) {
       const audioTracks = localStreamRef.current.getAudioTracks()
@@ -208,7 +332,7 @@ export default function VideoChat({
       }
     }
   }
-  
+
   const handleToggleVideo = () => {
     if (localStreamRef.current) {
       const videoTracks = localStreamRef.current.getVideoTracks()
@@ -219,19 +343,18 @@ export default function VideoChat({
       }
     }
   }
-  
+
   const handleStartRecording = async () => {
     if (!recordingEnabled || !sessionId) return
-    
+
     try {
       const { data: sessionRes } = await supabase.auth.getSession()
       if (!sessionRes?.session?.user) {
         throw new Error('Not authenticated')
       }
-      
-      // Get access token for server-side authentication
+
       const accessToken = sessionRes.session.access_token
-      
+
       const response = await fetch(`/api/video-chat/${sessionId}/recording/start`, {
         method: 'POST',
         headers: {
@@ -239,40 +362,24 @@ export default function VideoChat({
           'Authorization': `Bearer ${accessToken}`,
         }
       })
-      
+
       if (!response.ok) {
         throw new Error('Failed to start recording')
       }
-      
+
       setIsRecording(true)
     } catch (err: any) {
       console.error('[VideoChat] Error starting recording:', err)
       setError(err.message || 'Failed to start recording')
     }
   }
-  
+
   const handleStopRecording = async () => {
     if (!sessionId) return
-    
-    try {
-      // In a real implementation, you would:
-      // 1. Stop MediaRecorder
-      // 2. Upload recording to storage
-      // 3. Get transcription (could be done on backend)
-      // 4. Call stop recording endpoint
-      
-      // For now, we'll just stop the recording flag
-      // The actual recording/transcription should be handled by the WebRTC service (Agora, Twilio, etc.)
-      
-      setIsRecording(false)
-      // TODO: Implement actual recording stop and upload
-      alert('Recording stopped. Summary will be generated when transcription is available.')
-    } catch (err: any) {
-      console.error('[VideoChat] Error stopping recording:', err)
-      setError(err.message || 'Failed to stop recording')
-    }
+    setIsRecording(false)
+    alert('Recording stopped. Summary will be generated when transcription is available.')
   }
-  
+
   const formatDuration = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600)
     const mins = Math.floor((seconds % 3600) / 60)
@@ -282,7 +389,7 @@ export default function VideoChat({
     }
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
-  
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col">
       {/* Header */}
@@ -305,7 +412,7 @@ export default function VideoChat({
           )}
         </div>
       </div>
-      
+
       {/* Video Area */}
       <div className="flex-1 relative bg-slate-950 overflow-hidden">
         {error && (
@@ -313,24 +420,23 @@ export default function VideoChat({
             {error}
           </div>
         )}
-        
+
         {/* Remote Video (Main) */}
         <div className="absolute inset-0 flex items-center justify-center">
           <video
             ref={remoteVideoRef}
             autoPlay
             playsInline
-            className="w-full h-full object-cover"
-            style={{ display: isConnected ? 'block' : 'none' }}
+            className={`w-full h-full object-cover${isConnected ? '' : ' hidden'}`}
           />
           {!isConnected && (
             <div className="text-center text-gray-400">
-              <p className="text-lg mb-2">Waiting for connection...</p>
-              <p className="text-sm">Share this room ID: {roomId}</p>
+              <p className="text-lg mb-2">Waiting for the other person to join...</p>
+              <p className="text-sm opacity-60">They will see a &quot;Join Video Call&quot; notification in their dashboard</p>
             </div>
           )}
         </div>
-        
+
         {/* Local Video (Picture-in-Picture) */}
         <div className="absolute bottom-4 right-4 w-64 h-48 bg-slate-800 rounded-lg overflow-hidden border-2 border-slate-700">
           <video
@@ -342,12 +448,13 @@ export default function VideoChat({
           />
         </div>
       </div>
-      
+
       {/* Controls */}
       <div className="bg-slate-800 border-t border-slate-700 px-6 py-4">
         <div className="flex items-center justify-center gap-4">
           {/* Mute Toggle */}
           <button
+            type="button"
             onClick={handleToggleMute}
             className={`p-3 rounded-full transition-colors ${
               isMuted
@@ -367,9 +474,10 @@ export default function VideoChat({
               </svg>
             )}
           </button>
-          
+
           {/* Video Toggle */}
           <button
+            type="button"
             onClick={handleToggleVideo}
             className={`p-3 rounded-full transition-colors ${
               isVideoOff
@@ -388,12 +496,13 @@ export default function VideoChat({
               </svg>
             )}
           </button>
-          
+
           {/* Recording Controls */}
           {recordingEnabled && (
             <>
               {!isRecording ? (
                 <button
+                  type="button"
                   onClick={handleStartRecording}
                   className="p-3 rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors"
                   title="Start Recording"
@@ -404,6 +513,7 @@ export default function VideoChat({
                 </button>
               ) : (
                 <button
+                  type="button"
                   onClick={handleStopRecording}
                   className="p-3 rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors"
                   title="Stop Recording"
@@ -415,9 +525,10 @@ export default function VideoChat({
               )}
             </>
           )}
-          
+
           {/* End Call */}
           <button
+            type="button"
             onClick={handleEndCall}
             className="p-3 rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors"
             title="End Call"
@@ -428,7 +539,7 @@ export default function VideoChat({
           </button>
         </div>
       </div>
-      
+
       {/* Conversation Summary Modal */}
       {showSummary && (
         <ConversationSummary

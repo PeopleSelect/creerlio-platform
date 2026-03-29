@@ -207,6 +207,7 @@ export default function TalentDashboard() {
   const [videoChatSession, setVideoChatSession] = useState<any | null>(null)
   const [videoChatLoading, setVideoChatLoading] = useState(false)
   const [videoChatError, setVideoChatError] = useState<string | null>(null)
+  const [incomingVideoCall, setIncomingVideoCall] = useState<any | null>(null)
 
   // Portfolio view state
   const [portfolioLoading, setPortfolioLoading] = useState(false)
@@ -848,6 +849,29 @@ export default function TalentDashboard() {
     }
   }, [user?.id, talentProfile?.id, intentLoaded])
 
+  // Subscribe to incoming video calls (business-initiated)
+  useEffect(() => {
+    if (!talentProfile?.id) return
+    const channel = supabase
+      .channel(`incoming-video-talent-${talentProfile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'video_chat_sessions',
+          filter: `talent_id=eq.${talentProfile.id}`,
+        },
+        (payload: any) => {
+          if (payload.new?.initiated_by === 'business' && payload.new?.status === 'pending') {
+            setIncomingVideoCall(payload.new)
+          }
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [talentProfile?.id])
+
   const parseCsv = (value: string) =>
     value
       .split(',')
@@ -1396,6 +1420,7 @@ export default function TalentDashboard() {
           businessId,
           businessName,
           talentName: talentProfile?.name || 'Talent',
+          isInitiator: true,
         })
       } else {
         throw new Error('Invalid response from server')
@@ -4215,7 +4240,8 @@ export default function TalentDashboard() {
                                       ...data.session,
                                       businessId: r.business_id,
                                       businessName: r.business_name || 'Business',
-                                      talentName: talentProfile?.name || 'Talent'
+                                      talentName: talentProfile?.name || 'Talent',
+                                      isInitiator: true,
                                     })
                                   } else {
                                     throw new Error('Invalid response from server')
@@ -4812,6 +4838,45 @@ Declined Career Requests
           </div>
         )}
       
+      {/* Incoming Video Call notification (business initiated) */}
+      {incomingVideoCall && !videoChatSession && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-800 border border-purple-500/60 rounded-xl shadow-2xl px-6 py-4 flex items-center gap-4 max-w-sm w-full">
+          <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-sm font-semibold">Incoming Video Call</p>
+            <p className="text-slate-400 text-xs truncate">A business wants to video chat</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setVideoChatSession({
+                  ...incomingVideoCall,
+                  talentName: talentProfile?.name || 'Talent',
+                  businessName: 'Business',
+                  isInitiator: false,
+                })
+                setIncomingVideoCall(null)
+              }}
+              className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold rounded-lg transition-colors"
+            >
+              Join
+            </button>
+            <button
+              type="button"
+              onClick={() => setIncomingVideoCall(null)}
+              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold rounded-lg transition-colors"
+            >
+              Decline
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Video Chat Modal */}
       {videoChatSession && (
         <VideoChat
@@ -4825,6 +4890,7 @@ Declined Career Requests
           recordingEnabled={videoChatSession.recording_enabled || false}
           talentName={videoChatSession.talentName || 'Talent'}
           businessName={videoChatSession.businessName || 'Business'}
+          isInitiator={videoChatSession.isInitiator !== false}
         />
       )}
       

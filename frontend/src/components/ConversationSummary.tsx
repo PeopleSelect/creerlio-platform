@@ -34,14 +34,27 @@ export default function ConversationSummary({ sessionId, onClose }: Conversation
           'Authorization': `Bearer ${accessToken}`,
         }
       })
-      
+
+      // 404 just means no summary exists yet — not an error
+      if (response.status === 404) {
+        setSummary(null)
+        return
+      }
+
       if (!response.ok) {
         const errorText = await response.text()
-        throw new Error(errorText || 'Failed to load summary')
+        let errorMessage = 'Failed to load summary'
+        try {
+          const parsed = JSON.parse(errorText)
+          errorMessage = parsed.error || errorMessage
+        } catch {
+          errorMessage = errorText || errorMessage
+        }
+        throw new Error(errorMessage)
       }
-      
+
       const data = await response.json()
-      
+
       if (data.success && data.summary) {
         setSummary(data.summary)
       } else {

@@ -4372,24 +4372,72 @@ export default function TalentDashboard() {
                         </div>
                       </div>
                     )})}
-                    {/* Accepted business outreach — shown here instead of Outreach section */}
+                    {/* businessAccepted — accepted talent_connection_requests initiated by business */}
+                    {businessAccepted.map((r) => {
+                      const handleDiscontinueBiz = async () => {
+                        if (!confirm('Are you sure you want to discontinue this connection?')) return
+                        const { error } = await supabase
+                          .from('talent_connection_requests')
+                          .update({ status: 'discontinued', responded_at: new Date().toISOString() })
+                          .eq('id', r.id)
+                        if (error) { alert('Failed: ' + error.message); return }
+                        await loadConnections()
+                      }
+                      return (
+                        <div key={r.id} className="border border-gray-200 rounded-lg p-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-gray-900 text-sm font-semibold">{r.business_name || 'Business'}</p>
+                              <p className="text-gray-500 text-xs mt-1">
+                                Accepted {r.responded_at ? new Date(r.responded_at).toLocaleString() : '—'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button type="button" onClick={() => router.push(`/dashboard/talent/messages?business_id=${r.business_id}&connection_id=${r.id}`)} className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors">Messages</button>
+                              <button type="button" onClick={() => router.push(`/dashboard/business/view?id=${r.business_id}`)} className="px-3 py-1.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-semibold transition-colors">View Business</button>
+                              <button type="button" onClick={async (e) => {
+                                e.stopPropagation()
+                                setVideoChatLoading(true)
+                                try {
+                                  const { data: sessionRes } = await supabase.auth.getSession()
+                                  const accessToken = sessionRes.session?.access_token
+                                  const response = await fetch('/api/video-chat/initiate', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+                                    body: JSON.stringify({ connection_request_id: r.id, initiated_by: 'talent', recording_enabled: true })
+                                  })
+                                  const data = await response.json()
+                                  if (!response.ok || !data.success) throw new Error(data.error || 'Failed')
+                                  setVideoChatSession({ ...data.session, businessId: r.business_id, businessName: r.business_name || 'Business', talentName: talentProfile?.name || 'Talent', isInitiator: true })
+                                } catch (err: any) { alert(err.message || 'Failed to start video chat') }
+                                finally { setVideoChatLoading(false) }
+                              }} disabled={videoChatLoading} className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-colors disabled:opacity-60">Video Chat</button>
+                              <button type="button" onClick={() => router.push(`/dashboard/talent/calendar?schedule_meeting=true&business_id=${r.business_id}&connection_id=${r.id}`)} className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-semibold transition-colors">Meeting</button>
+                              <button type="button" onClick={handleDiscontinueBiz} className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold transition-colors">Discontinue</button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {/* Accepted business outreach — shown here when no talent_connection_requests entry exists */}
                     {outreachRequests.filter(r => r.status === 'accepted').map((r) => {
                       const biz = r.business_profiles
                       const bizName = biz?.name || biz?.business_name || 'A Business'
+                      const bizId = biz?.id || r.business_id
                       return (
-                        <div key={`outreach-${r.id}`} className="border border-green-200 bg-green-50/30 rounded-lg p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex-1 min-w-0">
+                        <div key={`outreach-${r.id}`} className="border border-gray-200 rounded-lg p-3">
+                          <div className="flex items-center justify-between">
+                            <div>
                               <p className="text-gray-900 text-sm font-semibold">{bizName}</p>
-                              {biz?.industry && <p className="text-gray-500 text-xs">{[biz.industry, biz.city].filter(Boolean).join(' · ')}</p>}
-                              <p className="text-gray-400 text-xs mt-1">Connected {new Date(r.created_at).toLocaleDateString()}</p>
-                              {biz?.id && (
-                                <a href={`/dashboard/business/view?id=${biz.id}`} className="inline-block mt-1 text-xs text-blue-600 hover:underline">
-                                  View Business Profile →
-                                </a>
-                              )}
+                              {biz?.industry && <p className="text-gray-500 text-xs mt-0.5">{[biz.industry, biz.city].filter(Boolean).join(' · ')}</p>}
+                              <p className="text-gray-500 text-xs mt-1">
+                                Accepted {r.responded_at ? new Date(r.responded_at).toLocaleString() : new Date(r.created_at).toLocaleDateString()}
+                              </p>
                             </div>
-                            <span className="shrink-0 text-xs px-2 py-1 rounded font-medium bg-green-100 text-green-700">Connected</span>
+                            <div className="flex items-center gap-2">
+                              <button type="button" onClick={() => router.push(`/dashboard/talent/messages?business_id=${bizId}`)} className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors">Messages</button>
+                              {bizId && <button type="button" onClick={() => router.push(`/dashboard/business/view?id=${bizId}`)} className="px-3 py-1.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-semibold transition-colors">View Business</button>}
+                            </div>
                           </div>
                         </div>
                       )

@@ -91,6 +91,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
   const [selectedTalentId, setSelectedTalentId] = useState<string | null>(null)
   const [selectedTalent, setSelectedTalent] = useState<AnonymizedTalent | null>(null)
   const [focusedTalentId, setFocusedTalentId] = useState<string | null>(null)
+  const [activeResultId, setActiveResultId] = useState<string | null>(null)
   const [requestingConnection, setRequestingConnection] = useState(false)
   const [showTalentPopup, setShowTalentPopup] = useState(false)
 
@@ -609,6 +610,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
       setSelectedTalentId(talentIdStr)
       setSelectedTalent(talent)
       setFocusedTalentId(talentIdStr)
+      setActiveResultId(talentIdStr)
       setShowTalentPopup(true)
     }
   }
@@ -617,6 +619,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
   const handleTalentResultClick = (talentId: string) => {
     const talent = talents.find(t => t.id === talentId)
     if (!talent) return
+    setActiveResultId(talentId)
     setFocusedTalentId(talentId)
     setShowTalentPopup(false)
     setSelectedTalent(null)
@@ -940,7 +943,7 @@ export function BusinessMapPageInner({ forceEmbedded }: { forceEmbedded?: boolea
                         type="button"
                         onClick={() => handleTalentResultClick(talent.id)}
                         className={`w-full text-left p-2 rounded border transition-all hover:bg-white/10 hover:border-white/20 ${
-                          focusedTalentId === talent.id
+                          activeResultId === talent.id
                             ? 'bg-amber-500/20 border-amber-400/50'
                             : 'bg-white/5 border-white/10'
                         }`}

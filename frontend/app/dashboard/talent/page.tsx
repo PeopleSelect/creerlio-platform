@@ -4090,7 +4090,7 @@ export default function TalentDashboard() {
                 </p>
                 {connLoading ? (
                   <p className="text-gray-600">Loading connection requests…</p>
-                ) : careerRequests.length === 0 ? (
+                ) : careerRequests.length === 0 && outreachRequests.filter(r => r.status === 'pending').length === 0 ? (
                   <p className="text-gray-600 text-sm">No pending connection requests yet.</p>
                 ) : (
                   <div className="space-y-3">
@@ -4120,6 +4120,60 @@ export default function TalentDashboard() {
                         )
                       })()
                     ))}
+                    {outreachRequests.filter(r => r.status === 'pending').map((r) => {
+                      const biz = r.business_profiles
+                      const bizName = biz?.business_name || biz?.name || 'A Business'
+                      return (
+                        <div key={r.id} className="border border-blue-200 bg-blue-50/40 rounded-lg p-3">
+                          <p className="text-gray-900 text-sm font-medium">{bizName}</p>
+                          {biz?.industry && <p className="text-gray-500 text-xs mt-0.5">{biz.industry}{biz.city ? ` · ${biz.city}` : ''}</p>}
+                          <p className="text-gray-600 text-xs mt-1">
+                            Wants to connect · Received {new Date(r.created_at).toLocaleDateString()}
+                          </p>
+                          {r.message && <p className="text-gray-500 text-xs mt-1 italic">"{r.message}"</p>}
+                          <div className="flex gap-2 mt-2">
+                            <button
+                              disabled={outreachBusy === r.id}
+                              onClick={async () => {
+                                setOutreachBusy(r.id)
+                                try {
+                                  const session = (await supabase.auth.getSession()).data.session
+                                  const res = await fetch('/api/talent/outreach', {
+                                    method: 'PATCH',
+                                    headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ request_id: r.id, action: 'accept' }),
+                                  })
+                                  if (res.ok) setOutreachRequests(prev => prev.map(x => x.id === r.id ? { ...x, status: 'accepted' } : x))
+                                  else alert('Failed to accept request')
+                                } finally { setOutreachBusy(null) }
+                              }}
+                              className="px-3 py-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors"
+                            >
+                              {outreachBusy === r.id ? '…' : 'Accept'}
+                            </button>
+                            <button
+                              disabled={outreachBusy === r.id}
+                              onClick={async () => {
+                                setOutreachBusy(r.id)
+                                try {
+                                  const session = (await supabase.auth.getSession()).data.session
+                                  const res = await fetch('/api/talent/outreach', {
+                                    method: 'PATCH',
+                                    headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ request_id: r.id, action: 'decline' }),
+                                  })
+                                  if (res.ok) setOutreachRequests(prev => prev.map(x => x.id === r.id ? { ...x, status: 'declined' } : x))
+                                  else alert('Failed to decline request')
+                                } finally { setOutreachBusy(null) }
+                              }}
+                              className="px-3 py-1 bg-gray-200 hover:bg-gray-300 disabled:opacity-50 text-gray-700 text-xs font-semibold rounded-lg transition-colors"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>

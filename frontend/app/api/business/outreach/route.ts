@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     .select(`
       id, status, message, created_at, responded_at,
       talent_profile_id,
-      talent_profiles ( headline, skills )
+      talent_profiles ( id, user_id, headline, skills )
     `)
     .eq('business_id', biz.id)
     .order('created_at', { ascending: false })

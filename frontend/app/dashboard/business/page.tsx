@@ -4661,12 +4661,18 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                             }`}>
                               {r.status === 'accepted' ? 'Accepted' : (r.status === 'declined' || r.status === 'rejected') ? 'Declined' : 'Pending'}
                             </span>
-                            <Link
-                              href={`/portfolio/view?talent_id=${r.talent_id}&request_id=${r.id}`}
-                              className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 px-2 py-1 rounded transition-colors"
-                            >
-                              View Profile
-                            </Link>
+                            {r.status === 'accepted' ? (
+                              <Link
+                                href={`/portfolio/view?talent_id=${r.talent_id}&request_id=${r.id}`}
+                                className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 px-2 py-1 rounded transition-colors"
+                              >
+                                View Profile
+                              </Link>
+                            ) : (
+                              <span className="text-xs text-gray-400 border border-gray-200 px-2 py-1 rounded cursor-not-allowed" title="Available once talent accepts">
+                                Pending Acceptance
+                              </span>
+                            )}
                             {r.status === 'pending' && (
                               <button
                                 type="button"
@@ -4702,13 +4708,23 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                               Sent {new Date(r.created_at).toLocaleDateString()}
                             </p>
                           </div>
-                          <span className={`shrink-0 text-xs px-2 py-1 rounded font-medium ${
-                            r.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                            r.status === 'declined' ? 'bg-red-100 text-red-600' :
-                            'bg-blue-100 text-blue-600'
-                          }`}>
-                            {r.status === 'accepted' ? 'Accepted' : r.status === 'declined' ? 'Declined' : 'Pending'}
-                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`text-xs px-2 py-1 rounded font-medium ${
+                              r.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                              r.status === 'declined' ? 'bg-red-100 text-red-600' :
+                              'bg-blue-100 text-blue-600'
+                            }`}>
+                              {r.status === 'accepted' ? 'Accepted' : r.status === 'declined' ? 'Declined' : 'Pending'}
+                            </span>
+                            {r.status === 'accepted' && r.talent_profiles?.user_id && (
+                              <Link
+                                href={`/portfolio/view?talent_id=${r.talent_profiles.user_id}`}
+                                className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 px-2 py-1 rounded transition-colors"
+                              >
+                                View Profile
+                              </Link>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}

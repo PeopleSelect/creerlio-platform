@@ -2357,6 +2357,13 @@ export default function TalentDashboard() {
               Snapshots ↗
             </Link>
             <Link
+              href="/dashboard/talent/qr"
+              title="Get your QR code to share your portfolio with businesses and recruiters"
+              className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
+            >
+              QR Code ↗
+            </Link>
+            <Link
               href="/opportunity"
               title="AI-powered opportunity scoring — see which jobs are the best move for your career"
               className="px-6 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors flex items-center gap-1"

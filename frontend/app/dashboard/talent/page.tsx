@@ -206,6 +206,7 @@ export default function TalentDashboard() {
   // Video Chat state
   const [videoChatSession, setVideoChatSession] = useState<any | null>(null)
   const [videoChatLoading, setVideoChatLoading] = useState(false)
+  const [videoChatLoadingId, setVideoChatLoadingId] = useState<string | null>(null)
   const [videoChatError, setVideoChatError] = useState<string | null>(null)
   const [incomingVideoCall, setIncomingVideoCall] = useState<any | null>(null)
 
@@ -4294,50 +4295,30 @@ export default function TalentDashboard() {
                             <button
                               onClick={async (e) => {
                                 e.stopPropagation()
-                                setVideoChatLoading(true)
+                                setVideoChatLoadingId(r.id)
                                 setVideoChatError(null)
                                 try {
                                   const { data: sessionRes } = await supabase.auth.getSession()
                                   if (!sessionRes?.session?.user?.email) {
                                     throw new Error('Please sign in to start video chat')
                                   }
-                                  
-                                  // Get access token for server-side authentication
                                   const accessToken = sessionRes.session.access_token
-                                  
-                                  // Initiate video chat
                                   const response = await fetch('/api/video-chat/initiate', {
                                     method: 'POST',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                      'Authorization': `Bearer ${accessToken}`,
-                                    },
-                                    body: JSON.stringify({
-                                      connection_request_id: r.id,
-                                      initiated_by: 'talent',
-                                      recording_enabled: true
-                                    })
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+                                    body: JSON.stringify({ connection_request_id: r.id, initiated_by: 'talent', recording_enabled: true })
                                   })
-                                  
                                   if (!response.ok) {
                                     const errorText = await response.text()
                                     throw new Error(errorText || `HTTP error! status: ${response.status}`)
                                   }
-                                  
                                   const data = await response.json()
-                                  
-                                  if (!data.success) {
-                                    throw new Error(data.error || 'Failed to initiate video chat')
-                                  }
-                                  
+                                  if (!data.success) throw new Error(data.error || 'Failed to initiate video chat')
                                   if (data.session) {
-                                    setVideoChatSession({
-                                      ...data.session,
-                                      businessId: r.business_id,
-                                      businessName: r.business_name || 'Business',
-                                      talentName: talentProfile?.name || 'Talent',
-                                      isInitiator: true,
-                                    })
+                                    // Resolve business name from the session's actual business_id
+                                    const bpRes = await supabase.from('business_profiles').select('business_name, name').eq('id', data.session.business_id).maybeSingle()
+                                    const resolvedName = (bpRes.data as any)?.business_name || (bpRes.data as any)?.name || r.business_name || 'Business'
+                                    setVideoChatSession({ ...data.session, businessId: data.session.business_id, businessName: resolvedName, talentName: talentProfile?.name || 'Talent', isInitiator: true })
                                   } else {
                                     throw new Error('Invalid response from server')
                                   }
@@ -4346,13 +4327,13 @@ export default function TalentDashboard() {
                                   setVideoChatError(err.message || 'Failed to start video chat')
                                   alert(err.message || 'Failed to start video chat')
                                 } finally {
-                                  setVideoChatLoading(false)
+                                  setVideoChatLoadingId(null)
                                 }
                               }}
-                              disabled={videoChatLoading}
+                              disabled={videoChatLoadingId === r.id}
                               className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-colors disabled:opacity-60"
                             >
-                              {videoChatLoading ? 'Starting...' : 'Video Chat'}
+                              {videoChatLoadingId === r.id ? 'Starting...' : 'Video Chat'}
                             </button>
                             <button
                               onClick={() => {
@@ -4397,7 +4378,7 @@ export default function TalentDashboard() {
                               <button type="button" onClick={() => router.push(`/dashboard/business/view?id=${r.business_id}`)} className="px-3 py-1.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white text-sm font-semibold transition-colors">View Business</button>
                               <button type="button" onClick={async (e) => {
                                 e.stopPropagation()
-                                setVideoChatLoading(true)
+                                setVideoChatLoadingId(r.id)
                                 try {
                                   const { data: sessionRes } = await supabase.auth.getSession()
                                   const accessToken = sessionRes.session?.access_token
@@ -4408,10 +4389,13 @@ export default function TalentDashboard() {
                                   })
                                   const data = await response.json()
                                   if (!response.ok || !data.success) throw new Error(data.error || 'Failed')
-                                  setVideoChatSession({ ...data.session, businessId: r.business_id, businessName: r.business_name || 'Business', talentName: talentProfile?.name || 'Talent', isInitiator: true })
+                                  // Resolve business name from the session's actual business_id
+                                  const bpRes = await supabase.from('business_profiles').select('business_name, name').eq('id', data.session.business_id).maybeSingle()
+                                  const resolvedName = (bpRes.data as any)?.business_name || (bpRes.data as any)?.name || r.business_name || 'Business'
+                                  setVideoChatSession({ ...data.session, businessId: data.session.business_id, businessName: resolvedName, talentName: talentProfile?.name || 'Talent', isInitiator: true })
                                 } catch (err: any) { alert(err.message || 'Failed to start video chat') }
-                                finally { setVideoChatLoading(false) }
-                              }} disabled={videoChatLoading} className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-colors disabled:opacity-60">Video Chat</button>
+                                finally { setVideoChatLoadingId(null) }
+                              }} disabled={videoChatLoadingId === r.id} className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-colors disabled:opacity-60">{videoChatLoadingId === r.id ? 'Starting...' : 'Video Chat'}</button>
                               <button type="button" onClick={() => router.push(`/dashboard/talent/calendar?schedule_meeting=true&business_id=${r.business_id}&connection_id=${r.id}`)} className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-semibold transition-colors">Meeting</button>
                               <button type="button" onClick={handleDiscontinueBiz} className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold transition-colors">Discontinue</button>
                             </div>

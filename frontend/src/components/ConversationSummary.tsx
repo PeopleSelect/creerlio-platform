@@ -6,15 +6,21 @@ import { supabase } from '@/lib/supabase'
 interface ConversationSummaryProps {
   sessionId: string
   onClose: () => void
+  preloadedSummary?: any
 }
 
-export default function ConversationSummary({ sessionId, onClose }: ConversationSummaryProps) {
-  const [summary, setSummary] = useState<any | null>(null)
-  const [loading, setLoading] = useState(true)
+export default function ConversationSummary({ sessionId, onClose, preloadedSummary }: ConversationSummaryProps) {
+  const [summary, setSummary] = useState<any | null>(preloadedSummary || null)
+  const [loading, setLoading] = useState(!preloadedSummary)
   const [error, setError] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
 
   useEffect(() => {
+    if (preloadedSummary) {
+      setSummary(preloadedSummary)
+      setLoading(false)
+      return
+    }
     loadSummary()
   }, [sessionId])
 

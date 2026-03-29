@@ -29,6 +29,8 @@ export default function VideoChat({
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
+  const [isProcessingRecording, setIsProcessingRecording] = useState(false)
+  const [recordingSummary, setRecordingSummary] = useState<any | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(false)
@@ -45,6 +47,11 @@ export default function VideoChat({
   const remoteDescSetRef = useRef(false)
   // Store local offer so we can re-send it if the joiner requests it
   const localOfferSdpRef = useRef<string | null>(null)
+  // Recording refs
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const mixedOutputRef = useRef<MediaStreamAudioDestinationNode | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordingChunksRef = useRef<Blob[]>([])
 
   useEffect(() => {
     initializeVideoChat()
@@ -65,6 +72,18 @@ export default function VideoChat({
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream
+      }
+
+      // Set up audio context for mixing local + remote audio
+      const audioContext = new AudioContext()
+      audioContextRef.current = audioContext
+      const mixedOutput = audioContext.createMediaStreamDestination()
+      mixedOutputRef.current = mixedOutput
+
+      // Connect local audio to the mix
+      if (stream.getAudioTracks().length > 0) {
+        const localSource = audioContext.createMediaStreamSource(stream)
+        localSource.connect(mixedOutput)
       }
 
       // Initialize WebRTC peer connection with public STUN servers
@@ -89,6 +108,11 @@ export default function VideoChat({
           remoteVideoRef.current.srcObject = event.streams[0]
         }
         setIsConnected(true)
+        // Connect remote audio to mixed output
+        if (audioContextRef.current && mixedOutputRef.current && event.streams[0].getAudioTracks().length > 0) {
+          const remoteSource = audioContextRef.current.createMediaStreamSource(event.streams[0])
+          remoteSource.connect(mixedOutputRef.current)
+        }
       }
 
       pc.oniceconnectionstatechange = () => {
@@ -282,6 +306,12 @@ export default function VideoChat({
       durationIntervalRef.current = null
     }
 
+    // Close AudioContext
+    if (audioContextRef.current) {
+      audioContextRef.current.close()
+      audioContextRef.current = null
+    }
+
     // End session on backend
     if (sessionId && startTimeRef.current) {
       try {
@@ -308,13 +338,12 @@ export default function VideoChat({
   }
 
   const handleEndCall = async () => {
-    await cleanup()
-    // Show summary if recording was enabled
-    if (recordingEnabled && isRecording) {
-      setShowSummary(true)
-    } else {
-      onEnd()
+    if (isRecording && mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
     }
+    await cleanup()
+    onEnd()
   }
 
   const handleCloseSummary = () => {
@@ -345,29 +374,37 @@ export default function VideoChat({
   }
 
   const handleStartRecording = async () => {
-    if (!recordingEnabled || !sessionId) return
+    if (!recordingEnabled || !sessionId || !mixedOutputRef.current) return
 
     try {
       const { data: sessionRes } = await supabase.auth.getSession()
-      if (!sessionRes?.session?.user) {
-        throw new Error('Not authenticated')
-      }
+      if (!sessionRes?.session?.user) throw new Error('Not authenticated')
 
       const accessToken = sessionRes.session.access_token
 
-      const response = await fetch(`/api/video-chat/${sessionId}/recording/start`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        }
-      })
+      // Get a supported MIME type
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : 'audio/mp4'
 
-      if (!response.ok) {
-        throw new Error('Failed to start recording')
+      const recorder = new MediaRecorder(mixedOutputRef.current.stream, { mimeType })
+      recordingChunksRef.current = []
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordingChunksRef.current.push(e.data)
       }
 
+      recorder.start(1000) // collect chunks every second
+      mediaRecorderRef.current = recorder
       setIsRecording(true)
+
+      // Also notify backend
+      await fetch(`/api/video-chat/${sessionId}/recording/start`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      })
     } catch (err: any) {
       console.error('[VideoChat] Error starting recording:', err)
       setError(err.message || 'Failed to start recording')
@@ -375,9 +412,52 @@ export default function VideoChat({
   }
 
   const handleStopRecording = async () => {
-    if (!sessionId) return
+    if (!mediaRecorderRef.current || !sessionId) return
+
     setIsRecording(false)
-    alert('Recording stopped. Summary will be generated when transcription is available.')
+    setIsProcessingRecording(true)
+
+    try {
+      const { data: sessionRes } = await supabase.auth.getSession()
+      const accessToken = sessionRes?.session?.access_token
+      if (!accessToken) throw new Error('Not authenticated')
+
+      // Stop the recorder and collect remaining chunks
+      await new Promise<void>((resolve) => {
+        if (!mediaRecorderRef.current) { resolve(); return }
+        mediaRecorderRef.current.onstop = () => resolve()
+        mediaRecorderRef.current.stop()
+      })
+
+      const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm'
+      const blob = new Blob(recordingChunksRef.current, { type: mimeType })
+      recordingChunksRef.current = []
+
+      // Upload and process
+      const formData = new FormData()
+      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
+      formData.append('recording', blob, `recording-${sessionId}.${ext}`)
+
+      const response = await fetch(`/api/video-chat/${sessionId}/process-recording`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.summary) {
+        setRecordingSummary(data.summary)
+        setShowSummary(true)
+      } else {
+        setError(data.error || 'Recording saved but summary generation failed')
+      }
+    } catch (err: any) {
+      console.error('[VideoChat] Recording processing error:', err)
+      setError(err.message || 'Failed to process recording')
+    } finally {
+      setIsProcessingRecording(false)
+    }
   }
 
   const formatDuration = (seconds: number) => {
@@ -418,6 +498,16 @@ export default function VideoChat({
         {error && (
           <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-2 rounded-lg">
             {error}
+          </div>
+        )}
+
+        {isProcessingRecording && (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 z-20">
+            <div className="text-center">
+              <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-white font-semibold">Processing recording...</p>
+              <p className="text-slate-400 text-sm mt-1">Transcribing and generating AI summary</p>
+            </div>
           </div>
         )}
 
@@ -544,6 +634,7 @@ export default function VideoChat({
       {showSummary && (
         <ConversationSummary
           sessionId={sessionId}
+          preloadedSummary={recordingSummary}
           onClose={handleCloseSummary}
         />
       )}

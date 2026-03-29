@@ -5432,7 +5432,15 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
             </button>
             <button
               type="button"
-              onClick={() => setIncomingVideoCall(null)}
+              onClick={async () => {
+                if (incomingVideoCall?.id) {
+                  await supabase
+                    .from('video_chat_sessions')
+                    .update({ status: 'cancelled' })
+                    .eq('id', incomingVideoCall.id)
+                }
+                setIncomingVideoCall(null)
+              }}
               className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold rounded-lg transition-colors"
             >
               Decline

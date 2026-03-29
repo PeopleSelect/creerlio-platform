@@ -279,6 +279,28 @@ function BusinessMessagesPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [talentId])
 
+  // Poll for new messages every 5 seconds (silent — no loading state)
+  useEffect(() => {
+    if (!talentId) return
+    const interval = setInterval(async () => {
+      const businessId = await resolveBusinessId()
+      if (!businessId) return
+      const { data: sessionRes } = await supabase.auth.getSession()
+      const token = sessionRes.session?.access_token
+      if (!token) return
+      const res = await fetch(
+        `/api/messages?talent_id=${encodeURIComponent(talentId)}&business_id=${encodeURIComponent(businessId)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (res.ok) {
+        const json = await res.json()
+        if (json.messages) setItems(json.messages as any)
+      }
+    }, 5000)
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [talentId])
+
   async function handleVideoChat() {
     if (!talentId || !connectionId) return
     setVideoChatLoading(true)

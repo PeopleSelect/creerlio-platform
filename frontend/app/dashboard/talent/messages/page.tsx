@@ -284,6 +284,22 @@ function TalentMessagesPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId])
 
+  // Poll for new messages every 5 seconds (silent — no loading state)
+  useEffect(() => {
+    if (!conversationId) return
+    const interval = setInterval(async () => {
+      const msgRes = await supabase
+        .from('messages')
+        .select('id, sender_type, body, created_at')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true })
+      if (!msgRes.error && msgRes.data) {
+        setItems(msgRes.data as any)
+      }
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [conversationId])
+
   async function handleVideoChat() {
     if (!businessId || !connectionId) return
     setVideoChatLoading(true)

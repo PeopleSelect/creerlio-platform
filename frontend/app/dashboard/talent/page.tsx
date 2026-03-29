@@ -3852,9 +3852,9 @@ export default function TalentDashboard() {
                   }`}
                 >
                   Connection Requests
-                  {(careerRequests.length + outreachRequests.filter(r => r.status === 'pending').length) > 0 && (
+                  {(careerRequests.length + businessRequests.length + outreachRequests.filter(r => r.status === 'pending').length) > 0 && (
                     <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full">
-                      {careerRequests.length + outreachRequests.filter(r => r.status === 'pending').length}
+                      {careerRequests.length + businessRequests.length + outreachRequests.filter(r => r.status === 'pending').length}
                     </span>
                   )}
                 </button>
@@ -4090,7 +4090,7 @@ export default function TalentDashboard() {
                 </p>
                 {connLoading ? (
                   <p className="text-gray-600">Loading connection requests…</p>
-                ) : careerRequests.length === 0 && outreachRequests.filter(r => r.status === 'pending').length === 0 ? (
+                ) : careerRequests.length === 0 && businessRequests.length === 0 && outreachRequests.filter(r => r.status === 'pending').length === 0 ? (
                   <p className="text-gray-600 text-sm">No pending connection requests yet.</p>
                 ) : (
                   <div className="space-y-3">
@@ -4174,6 +4174,44 @@ export default function TalentDashboard() {
                         </div>
                       )
                     })}
+                    {businessRequests.map((r) => (
+                      <div key={r.id} className="border border-purple-200 bg-purple-50/40 rounded-lg p-3">
+                        <p className="text-gray-900 text-sm font-medium">{r.business_name || 'Business'}</p>
+                        <p className="text-gray-600 text-xs mt-1">
+                          Wants to connect · Received {new Date(r.created_at).toLocaleDateString()}
+                        </p>
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const { error } = await supabase
+                                .from('talent_connection_requests')
+                                .update({ status: 'accepted', responded_at: new Date().toISOString() })
+                                .eq('id', r.id)
+                              if (error) { alert('Failed to accept: ' + error.message); return }
+                              await loadConnections()
+                            }}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold rounded-lg transition-colors"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const { error } = await supabase
+                                .from('talent_connection_requests')
+                                .update({ status: 'declined', responded_at: new Date().toISOString() })
+                                .eq('id', r.id)
+                              if (error) { alert('Failed to decline: ' + error.message); return }
+                              await loadConnections()
+                            }}
+                            className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded-lg transition-colors"
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

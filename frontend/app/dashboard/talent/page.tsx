@@ -4862,6 +4862,7 @@ Declined Career Requests
                   talentName: talentProfile?.name || 'Talent',
                   businessName: 'Business',
                   isInitiator: false,
+                  recording_enabled: false,
                 })
                 setIncomingVideoCall(null)
               }}

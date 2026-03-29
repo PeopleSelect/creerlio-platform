@@ -122,8 +122,10 @@ export async function POST(
 
     let summaryData: any = {
       summary_text: transcriptionText.startsWith('[')
-        ? 'Recording was too short or silent for transcription.'
-        : 'Summary generation failed.',
+        ? 'The recording was too short or silent to transcribe. Try recording a longer section of the conversation.'
+        : transcriptionText.trim().length <= 20
+        ? 'The transcription was too brief to generate a meaningful summary. Try recording more of the conversation.'
+        : 'AI summary unavailable.',
       key_points: [],
       action_items: [],
       sentiment: 'neutral',

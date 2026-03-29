@@ -5423,6 +5423,7 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                   talentName: 'Talent',
                   businessName: businessProfile?.business_name || businessProfile?.name || 'Business',
                   isInitiator: false,
+                  recording_enabled: false,
                 })
                 setIncomingVideoCall(null)
               }}

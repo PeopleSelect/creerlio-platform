@@ -1914,9 +1914,25 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
 
-  // Subscribe to incoming video calls (talent-initiated)
+  // Subscribe to incoming video calls (talent-initiated) + check for existing ones on load
   useEffect(() => {
     if (!businessProfile?.id) return
+
+    // Check for any already-pending/active sessions (talent may have called before page loaded)
+    supabase
+      .from('video_chat_sessions')
+      .select('*')
+      .eq('business_id', businessProfile.id)
+      .eq('initiated_by', 'talent')
+      .in('status', ['pending', 'active'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setIncomingVideoCall(data)
+      })
+
+    // Also subscribe for new inserts while on the page
     const channel = supabase
       .channel(`incoming-video-business-${businessProfile.id}`)
       .on(
@@ -1928,7 +1944,7 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
           filter: `business_id=eq.${businessProfile.id}`,
         },
         (payload: any) => {
-          if (payload.new?.initiated_by === 'talent' && payload.new?.status === 'pending') {
+          if (payload.new?.initiated_by === 'talent') {
             setIncomingVideoCall(payload.new)
           }
         }

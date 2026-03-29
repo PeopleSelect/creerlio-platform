@@ -3808,9 +3808,9 @@ export default function TalentDashboard() {
                   }`}
                 >
                   Career Connections
-                  {careerAccepted.length > 0 && (
+                  {(careerAccepted.length + outreachRequests.filter(r => r.status === 'accepted').length) > 0 && (
                     <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full">
-                      {careerAccepted.length}
+                      {careerAccepted.length + outreachRequests.filter(r => r.status === 'accepted').length}
                     </span>
                   )}
                 </button>
@@ -3973,13 +3973,13 @@ export default function TalentDashboard() {
             {connectionMode === 'requests' && (
               <div className="space-y-4">
 
-                {/* Business Discovery Outreach Requests */}
-                {outreachRequests.length > 0 && (
+                {/* Business Discovery Outreach Requests — pending/declined only; accepted move to Career Connections */}
+                {outreachRequests.filter(r => r.status !== 'accepted').length > 0 && (
                   <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-4">
                     <h3 className="text-gray-900 font-semibold mb-1">Business Outreach</h3>
                     <p className="text-gray-500 text-xs mb-3">Businesses found your anonymous profile and would like to connect</p>
                     <div className="space-y-3">
-                      {outreachRequests.map((r) => {
+                      {outreachRequests.filter(r => r.status !== 'accepted').map((r) => {
                         const biz = r.business_profiles
                         const bizName = biz?.name || biz?.business_name || 'A Business'
                         const slug = biz?.business_profile_pages?.slug ?? null
@@ -4105,7 +4105,7 @@ export default function TalentDashboard() {
                 <h3 className="text-gray-900 font-semibold mb-3">Career Connections</h3>
                 {connLoading ? (
                   <p className="text-gray-600">Loading connections…</p>
-                ) : careerAccepted.length === 0 ? (
+                ) : careerAccepted.length === 0 && outreachRequests.filter(r => r.status === 'accepted').length === 0 ? (
                   <p className="text-gray-600">No accepted connections yet.</p>
                 ) : (
                   <div className="space-y-3">
@@ -4251,6 +4251,28 @@ export default function TalentDashboard() {
                         </div>
                       </div>
                     )})}
+                    {/* Accepted business outreach — shown here instead of Outreach section */}
+                    {outreachRequests.filter(r => r.status === 'accepted').map((r) => {
+                      const biz = r.business_profiles
+                      const bizName = biz?.name || biz?.business_name || 'A Business'
+                      return (
+                        <div key={`outreach-${r.id}`} className="border border-green-200 bg-green-50/30 rounded-lg p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-gray-900 text-sm font-semibold">{bizName}</p>
+                              {biz?.industry && <p className="text-gray-500 text-xs">{[biz.industry, biz.city].filter(Boolean).join(' · ')}</p>}
+                              <p className="text-gray-400 text-xs mt-1">Connected {new Date(r.created_at).toLocaleDateString()}</p>
+                              {biz?.id && (
+                                <a href={`/dashboard/business/view?id=${biz.id}`} className="inline-block mt-1 text-xs text-blue-600 hover:underline">
+                                  View Business Profile →
+                                </a>
+                              )}
+                            </div>
+                            <span className="shrink-0 text-xs px-2 py-1 rounded font-medium bg-green-100 text-green-700">Connected</span>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>

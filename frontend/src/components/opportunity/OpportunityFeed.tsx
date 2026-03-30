@@ -93,7 +93,9 @@ export default function OpportunityFeed({ jobs, selectedJobId, mode, onSelect }:
                   <p className="text-sm font-semibold text-white leading-tight truncate">{job.title}</p>
                   {score && <VerdictBadge verdict={score.verdict} />}
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5 truncate">{job.business_name}</p>
+                {mode === 'talent' && (
+                  <p className="text-xs text-slate-400 mt-0.5 truncate">{job.business_name}</p>
+                )}
 
                 <div className="flex items-center gap-3 mt-1.5">
                   {salary && (

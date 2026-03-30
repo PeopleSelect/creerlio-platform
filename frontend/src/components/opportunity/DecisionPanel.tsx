@@ -67,35 +67,41 @@ export default function DecisionPanel({ job, mode, routeInfo, onApply, onSave, o
     )
   }
 
-  // Business mode: show talent profile card, not scoring
+  // Business mode: show anonymous talent card — no identity revealed
   if (mode === 'business') {
     const skills = job.industry ? job.industry.split(', ') : []
+    // business_name field stores "snapshot:{id}" or '' — extract snapshot id if present
+    const snapshotId = job.business_name?.startsWith('snapshot:') ? job.business_name.slice(9) : null
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    const portfolioUrl = `${origin}/portfolio/view?talent_id=${job.id}`
+    // Link to snapshot view if available, otherwise portfolio with no identity fields
+    const viewUrl = snapshotId
+      ? `${origin}/dashboard/business?snapshot=${snapshotId}`
+      : null
+
     return (
       <div className="flex flex-col h-full overflow-y-auto">
         <div className="px-5 py-4 border-b border-slate-700/60">
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold mb-1">Talent Profile</p>
-          <p className="text-sm font-bold text-white leading-tight">{job.title || 'Talent'}</p>
-          <p className="text-xs text-slate-400 mt-0.5">{job.business_name}</p>
+          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold mb-1">Anonymous Talent</p>
+          <p className="text-sm font-bold text-white leading-tight">{job.title || 'Professional'}</p>
+          <p className="text-xs text-slate-500 mt-0.5 italic">Identity hidden until mutual connection</p>
         </div>
         <div className="flex-1 px-5 py-4 space-y-4">
-          <div className="bg-slate-800/60 rounded-xl p-3.5 space-y-2">
+          <div className="bg-slate-800/60 rounded-xl p-3.5 space-y-3">
             {job.city && (
               <div>
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Location</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">General Area</p>
                 <p className="text-slate-200 text-sm font-semibold mt-0.5">{job.city}</p>
               </div>
             )}
             {job.description && (
               <div>
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mt-2">Experience</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Experience</p>
                 <p className="text-slate-200 text-sm font-semibold mt-0.5">{job.description}</p>
               </div>
             )}
             {skills.length > 0 && (
               <div>
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mt-2">Skills</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Skills</p>
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
                   {skills.map((s) => (
                     <span key={s} className="text-[11px] bg-slate-700/60 text-slate-300 rounded-full px-2.5 py-0.5">{s}</span>
@@ -104,21 +110,39 @@ export default function DecisionPanel({ job, mode, routeInfo, onApply, onSave, o
               </div>
             )}
           </div>
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3.5">
-            <p className="text-[10px] text-blue-400 font-semibold uppercase tracking-wider mb-1">Anonymous Portfolio</p>
-            <p className="text-xs text-blue-300">This talent's full portfolio is available to view — identity only revealed on mutual connection.</p>
-          </div>
+
+          {snapshotId ? (
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3.5">
+              <p className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider mb-1">Discovery Profile Available</p>
+              <p className="text-xs text-emerald-300">This talent has shared an anonymous discovery profile. View it below.</p>
+            </div>
+          ) : (
+            <div className="bg-slate-700/30 border border-slate-600/30 rounded-xl p-3.5">
+              <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1">No Discovery Profile</p>
+              <p className="text-xs text-slate-500">This talent hasn't published an anonymous snapshot yet. Send a connection request to introduce yourself.</p>
+            </div>
+          )}
         </div>
         <div className="px-5 py-4 border-t border-slate-700/60 space-y-2">
-          <a
-            href={portfolioUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full py-2.5 rounded-xl font-semibold text-sm text-black text-center block transition-all hover:brightness-110"
-            style={{ background: 'linear-gradient(135deg, #20C997, #3b82f6)' }}
-          >
-            View Portfolio
-          </a>
+          {viewUrl ? (
+            <a
+              href={viewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-2.5 rounded-xl font-semibold text-sm text-black text-center block transition-all hover:brightness-110"
+              style={{ background: 'linear-gradient(135deg, #20C997, #3b82f6)' }}
+            >
+              View Anonymous Profile
+            </a>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="w-full py-2.5 rounded-xl font-semibold text-sm text-slate-500 text-center border border-slate-700 cursor-not-allowed"
+            >
+              No Profile Published
+            </button>
+          )}
         </div>
       </div>
     )

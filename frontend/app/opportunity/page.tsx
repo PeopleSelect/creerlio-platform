@@ -128,9 +128,10 @@ export default function OpportunityPage() {
   // Load talent profiles (business mode)
   const loadTalents = useCallback(async () => {
     setLoadingJobs(true)
+    // Deliberately exclude 'name' — never expose identity to business view
     const { data, error } = await supabase
       .from('talent_profiles')
-      .select('id, name, title, city, latitude, longitude, skills, experience_years')
+      .select('id, title, city, latitude, longitude, skills, experience_years')
       .not('latitude', 'is', null)
       .eq('is_active', true)
       .limit(50)
@@ -138,11 +139,27 @@ export default function OpportunityPage() {
     if (error) console.error('[OpportunityPage] talent_profiles query error:', error)
 
     if (data && data.length > 0) {
+      const ids = data.map((t: any) => t.id)
+
+      // Fetch active snapshot IDs for portfolio linking
+      const { data: snapshots } = await supabase
+        .from('talent_snapshots')
+        .select('id, talent_id')
+        .in('talent_id', ids)
+        .eq('is_active', true)
+      const snapshotMap: Record<string, string> = {}
+      if (snapshots) {
+        snapshots.forEach((s: any) => {
+          if (!snapshotMap[s.talent_id]) snapshotMap[s.talent_id] = s.id
+        })
+      }
+
       setJobs(data.map((t: any) => ({
         id: String(t.id),
-        title: t.title || 'Talent',
+        title: t.title || 'Anonymous Talent',
         business_id: t.id,
-        business_name: t.name || 'Anonymous',
+        // Store snapshot_id in description field for use in DecisionPanel link
+        business_name: snapshotMap[t.id] ? `snapshot:${snapshotMap[t.id]}` : '',
         city: t.city,
         lat: t.latitude,
         lng: t.longitude,

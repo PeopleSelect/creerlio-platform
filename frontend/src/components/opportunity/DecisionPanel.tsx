@@ -17,6 +17,7 @@ interface Props {
   onApply: (job: Job) => void
   onSave: (job: Job) => void
   onCompare: (job: Job) => void
+  onConnect?: (job: Job) => void
 }
 
 function StatBar({ label, value, color = '#20C997' }: { label: string; value: number; color?: string }) {
@@ -47,7 +48,7 @@ function WeeklyImpactRow({ label, value, positive }: { label: string; value: str
   )
 }
 
-export default function DecisionPanel({ job, mode, routeInfo, onApply, onSave, onCompare }: Props) {
+export default function DecisionPanel({ job, mode, routeInfo, onApply, onSave, onCompare, onConnect }: Props) {
   if (!job) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-slate-500 px-6 text-center">
@@ -70,13 +71,13 @@ export default function DecisionPanel({ job, mode, routeInfo, onApply, onSave, o
   // Business mode: show anonymous talent card — no identity revealed
   if (mode === 'business') {
     const skills = job.industry ? job.industry.split(', ') : []
-    // business_name field stores "snapshot:{id}" or '' — extract snapshot id if present
+    // business_name encodes: 'snapshot:{id}' | 'visible' | ''
     const snapshotId = job.business_name?.startsWith('snapshot:') ? job.business_name.slice(9) : null
+    const isVisible = job.business_name === 'visible'
+    const hasProfile = snapshotId || isVisible
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    // Link to snapshot view if available, otherwise portfolio with no identity fields
-    const viewUrl = snapshotId
-      ? `${origin}/dashboard/business?snapshot=${snapshotId}`
-      : null
+    const viewUrl = snapshotId ? `${origin}/dashboard/business?snapshot=${snapshotId}` : null
+    const connectUrl = `${origin}/dashboard/business?connect=${job.id}`
 
     return (
       <div className="flex flex-col h-full overflow-y-auto">
@@ -95,8 +96,8 @@ export default function DecisionPanel({ job, mode, routeInfo, onApply, onSave, o
             )}
             {job.description && (
               <div>
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Experience</p>
-                <p className="text-slate-200 text-sm font-semibold mt-0.5">{job.description}</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">About</p>
+                <p className="text-slate-300 text-xs leading-relaxed mt-0.5">{job.description}</p>
               </div>
             )}
             {skills.length > 0 && (
@@ -111,38 +112,45 @@ export default function DecisionPanel({ job, mode, routeInfo, onApply, onSave, o
             )}
           </div>
 
-          {snapshotId ? (
+          {hasProfile ? (
             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3.5">
               <p className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider mb-1">Discovery Profile Available</p>
-              <p className="text-xs text-emerald-300">This talent has shared an anonymous discovery profile. View it below.</p>
+              <p className="text-xs text-emerald-300">
+                {snapshotId
+                  ? 'This talent has shared an anonymous discovery profile. View it below.'
+                  : 'This talent has opted in to be discovered by businesses. Send a connection request to learn more.'}
+              </p>
             </div>
           ) : (
             <div className="bg-slate-700/30 border border-slate-600/30 rounded-xl p-3.5">
               <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1">No Discovery Profile</p>
-              <p className="text-xs text-slate-500">This talent hasn't published an anonymous snapshot yet. Send a connection request to introduce yourself.</p>
+              <p className="text-xs text-slate-400">
+                This talent hasn&apos;t published an anonymous profile yet.{' '}
+                <a href={connectUrl} className="text-[#20C997] underline hover:no-underline">
+                  Send a connection request
+                </a>{' '}
+                to introduce yourself.
+              </p>
             </div>
           )}
         </div>
         <div className="px-5 py-4 border-t border-slate-700/60 space-y-2">
-          {viewUrl ? (
+          {viewUrl && (
             <a
               href={viewUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full py-2.5 rounded-xl font-semibold text-sm text-black text-center block transition-all hover:brightness-110"
-              style={{ background: 'linear-gradient(135deg, #20C997, #3b82f6)' }}
+              className="w-full py-2.5 rounded-xl font-semibold text-sm text-black text-center block transition-all hover:brightness-110 bg-gradient-to-r from-[#20C997] to-blue-500"
             >
               View Anonymous Profile
             </a>
-          ) : (
-            <button
-              type="button"
-              disabled
-              className="w-full py-2.5 rounded-xl font-semibold text-sm text-slate-500 text-center border border-slate-700 cursor-not-allowed"
-            >
-              No Profile Published
-            </button>
           )}
+          <a
+            href={connectUrl}
+            className="w-full py-2.5 rounded-xl font-semibold text-sm text-center block border border-[#20C997]/50 text-[#20C997] hover:bg-[#20C997]/10 transition-colors"
+          >
+            Send Connection Request
+          </a>
         </div>
       </div>
     )

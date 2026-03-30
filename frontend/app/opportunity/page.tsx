@@ -131,7 +131,7 @@ export default function OpportunityPage() {
     // Deliberately exclude 'name' — never expose identity to business view
     const { data, error } = await supabase
       .from('talent_profiles')
-      .select('id, title, city, latitude, longitude, skills, experience_years')
+      .select('id, title, city, latitude, longitude, skills, experience_years, search_visible, search_summary')
       .not('latitude', 'is', null)
       .eq('is_active', true)
       .limit(50)
@@ -154,18 +154,30 @@ export default function OpportunityPage() {
         })
       }
 
-      setJobs(data.map((t: any) => ({
-        id: String(t.id),
-        title: t.title || 'Anonymous Talent',
-        business_id: t.id,
-        // Store snapshot_id in description field for use in DecisionPanel link
-        business_name: snapshotMap[t.id] ? `snapshot:${snapshotMap[t.id]}` : '',
-        city: t.city,
-        lat: t.latitude,
-        lng: t.longitude,
-        industry: Array.isArray(t.skills) ? t.skills.slice(0, 3).join(', ') : undefined,
-        description: t.experience_years ? `${t.experience_years} years experience` : undefined,
-      })))
+      setJobs(data.map((t: any) => {
+        // business_name encodes discovery state:
+        //   'snapshot:{id}'  → published anonymous snapshot
+        //   'visible'        → opted-in via search_visible (uses search_summary as profile)
+        //   ''               → not discoverable
+        let discoveryFlag = ''
+        if (snapshotMap[t.id]) discoveryFlag = `snapshot:${snapshotMap[t.id]}`
+        else if (t.search_visible) discoveryFlag = 'visible'
+
+        // description holds the best available summary text
+        const summaryText = t.search_summary || (t.experience_years ? `${t.experience_years} years experience` : undefined)
+
+        return {
+          id: String(t.id),
+          title: t.title || 'Anonymous Talent',
+          business_id: t.id,
+          business_name: discoveryFlag,
+          city: t.city,
+          lat: t.latitude,
+          lng: t.longitude,
+          industry: Array.isArray(t.skills) ? t.skills.slice(0, 3).join(', ') : undefined,
+          description: summaryText,
+        }
+      }))
     } else {
       setJobs([])
     }
@@ -335,9 +347,13 @@ export default function OpportunityPage() {
 
   const handleApply = useCallback((job: Job) => {
     trackEvent('APPLY_JOB', 'job', job.id)
-    // Open job application (could route to job detail)
-    window.open(`/jobs/${job.id}`, '_blank')
-  }, [trackEvent])
+    if (mode === 'business') {
+      // Redirect to business dashboard to initiate a connection request with this talent
+      window.location.href = `/dashboard/business?connect=${job.id}`
+    } else {
+      window.open(`/jobs/${job.id}`, '_blank')
+    }
+  }, [trackEvent, mode])
 
   const handleSave = useCallback((job: Job) => {
     trackEvent('SAVE_JOB', 'job', job.id)

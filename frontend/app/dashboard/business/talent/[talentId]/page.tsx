@@ -55,6 +55,41 @@ export default function BusinessTalentViewPage() {
   const canPrint = useMemo(() => consentStatus === 'approved', [consentStatus])
 
   async function gateConnection(bid: string) {
+    // 1. Check talent_connection_requests (accepted formal connection)
+    const tcrRes = await supabase
+      .from('talent_connection_requests')
+      .select('id')
+      .eq('talent_id', talentId)
+      .eq('business_id', bid)
+      .eq('status', 'accepted')
+      .limit(1)
+      .maybeSingle()
+
+    if (tcrRes.data?.id) return true
+
+    // 2. Check ros_connections (QR / direct connection by the talent user)
+    // The talent profile's user_id is needed to match ros_connections.initiator_id
+    const tpRes = await supabase
+      .from('talent_profiles')
+      .select('user_id')
+      .eq('id', talentId)
+      .maybeSingle()
+
+    const talentUserId = (tpRes.data as any)?.user_id
+    if (talentUserId) {
+      const rosRes = await supabase
+        .from('ros_connections')
+        .select('id')
+        .eq('initiator_id', talentUserId)
+        .eq('business_id', bid)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle()
+
+      if (rosRes.data?.id) return true
+    }
+
+    // 3. Legacy: talent_access_grants (expiry-based)
     const gateRes = await supabase
       .from('talent_access_grants')
       .select('id, expires_at, revoked_at')
@@ -64,13 +99,19 @@ export default function BusinessTalentViewPage() {
       .limit(1)
 
     const gate = (gateRes.data || [])[0] as any
-    const isRevoked = !!gate?.revoked_at
-    const isExpired = gate?.expires_at ? new Date(gate.expires_at).getTime() <= Date.now() : true
-    if (!gate || isRevoked || isExpired) {
-      setError(isRevoked ? 'Access revoked' : 'Connection expired')
+    if (gate && !gate.revoked_at) {
+      const isExpired = gate.expires_at ? new Date(gate.expires_at).getTime() <= Date.now() : false
+      if (!isExpired) return true
+      setError('Connection expired')
       return false
     }
-    return true
+    if (gate?.revoked_at) {
+      setError('Access revoked')
+      return false
+    }
+
+    setError('No active connection found for this talent.')
+    return false
   }
 
   async function loadConsent(bid: string) {

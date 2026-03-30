@@ -25,6 +25,7 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
 
 export default function OpportunityPage() {
   const [mode, setMode] = useState<AppMode>('talent')
+  const [userRole, setUserRole] = useState<'talent' | 'business' | null>(null)
   const [showHeatmap, setShowHeatmap] = useState(false)
   const [jobs, setJobs] = useState<Job[]>([])
   const [geoInsights, setGeoInsights] = useState<GeoInsight[]>([])
@@ -47,11 +48,15 @@ export default function OpportunityPage() {
   const userIdRef = useRef<string | null>(null)
   const selectedJobRef = useRef<Job | null>(null)
 
-  // Auth
+  // Auth — detect role and lock mode accordingly
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       tokenRef.current = data.session?.access_token || null
       userIdRef.current = data.session?.user?.id || null
+      const regType = data.session?.user?.user_metadata?.registration_type
+      const role = regType === 'business' ? 'business' : 'talent'
+      setUserRole(role)
+      setMode(role)
     })
   }, [])
 
@@ -418,19 +423,9 @@ export default function OpportunityPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Mode toggle */}
-          <div className="flex items-center gap-1 bg-slate-800 rounded-xl p-1">
-            {(['talent', 'business'] as AppMode[]).map((m) => (
-              <button
-                type="button"
-                key={m}
-                onClick={() => setMode(m)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all
-                  ${mode === m ? 'bg-[#20C997] text-black' : 'text-slate-400 hover:text-white'}`}
-              >
-                {m}
-              </button>
-            ))}
+          {/* Role badge — read-only, no toggle */}
+          <div className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#20C997]/20 text-[#20C997] border border-[#20C997]/30 capitalize">
+            {mode}
           </div>
 
           {/* Heatmap toggle */}
@@ -466,7 +461,7 @@ export default function OpportunityPage() {
             </button>
           )}
 
-          <a href="/dashboard/talent" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+          <a href={userRole === 'business' ? '/dashboard/business' : '/dashboard/talent'} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
             ← Dashboard
           </a>
         </div>

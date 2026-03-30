@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
 
     const supabase = supabaseServiceServer()
 
-    const { data: profile, error: profileErr } = await supabase
+    // 1. Try talent_profiles by profile id
+    let { data: profile, error: profileErr } = await supabase
       .from('talent_profiles')
       .select('id, user_id, name, title, location')
       .eq('id', talentId)
@@ -41,8 +42,46 @@ export async function GET(request: NextRequest) {
     if (profileErr) {
       return NextResponse.json({ error: profileErr.message }, { status: 500 })
     }
+
+    // 2. Try talent_profiles by user_id (when caller passed auth UUID instead of profile id)
     if (!profile) {
-      return NextResponse.json({ error: 'Talent profile not found' }, { status: 404 })
+      const byUid = await supabase
+        .from('talent_profiles')
+        .select('id, user_id, name, title, location')
+        .eq('user_id', talentId)
+        .maybeSingle()
+      if (!byUid.error && byUid.data) {
+        profile = byUid.data
+      }
+    }
+
+    // 3. Try customer_profiles by user_id (QR-connected customer with no talent profile)
+    if (!profile) {
+      const custRes = await supabase
+        .from('customer_profiles')
+        .select('user_id, name')
+        .eq('user_id', talentId)
+        .maybeSingle()
+      if (!custRes.error && custRes.data) {
+        const cp = custRes.data as any
+        return NextResponse.json({
+          profile: { id: talentId, user_id: talentId, name: cp.name || 'Customer', title: null, location: null },
+          portfolio: null,
+        })
+      }
+
+      // 4. Last resort: auth admin metadata
+      const { data: authUser } = await supabase.auth.admin.getUserById(talentId)
+      if (authUser?.user) {
+        const meta = authUser.user.user_metadata || {}
+        const name = meta.full_name || meta.name || authUser.user.email?.split('@')[0] || 'User'
+        return NextResponse.json({
+          profile: { id: talentId, user_id: talentId, name, title: null, location: null },
+          portfolio: null,
+        })
+      }
+
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     }
 
     const targetUserId = profile.user_id || talentId

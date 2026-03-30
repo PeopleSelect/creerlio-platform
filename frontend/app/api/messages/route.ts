@@ -43,9 +43,9 @@ export async function GET(request: NextRequest) {
 
     const supabase = supabaseServiceServer()
 
-    // Verify caller is the talent or the business
+    // Verify caller is the talent, the business, or the ROS initiator (customer user_id === talentId)
     const { businessId: callerBizId, talentProfileId: callerTalentId } = await resolveIdentity(user.id, supabase)
-    const isTalent = callerTalentId === talentId
+    const isTalent = callerTalentId === talentId || user.id === talentId
     const isBusiness = callerBizId === businessId
     if (!isTalent && !isBusiness) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -151,8 +151,8 @@ export async function POST(request: NextRequest) {
     if (!talentId || !businessId || !senderType || !messageBody) {
       return NextResponse.json({ error: 'talent_id, business_id, sender_type, and body are required' }, { status: 400 })
     }
-    if (senderType !== 'talent' && senderType !== 'business') {
-      return NextResponse.json({ error: 'sender_type must be talent or business' }, { status: 400 })
+    if (senderType !== 'talent' && senderType !== 'business' && senderType !== 'customer') {
+      return NextResponse.json({ error: 'sender_type must be talent, business, or customer' }, { status: 400 })
     }
 
     const supabase = supabaseServiceServer()
@@ -163,6 +163,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     if (senderType === 'talent' && callerTalentId !== talentId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    // 'customer' sender: their user_id must match talentId (the conversation participant slot)
+    if (senderType === 'customer' && user.id !== talentId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

@@ -138,7 +138,7 @@ export default function BusinessROSPanel({ businessId }: Props) {
           <p className="text-gray-500 text-sm">
             {filter === 'customer' ? 'Customers will appear here when they scan your QR code.' :
              filter === 'talent' ? 'Talent will appear here when they connect with your business.' :
-             'Business connections will appear here when partners connect.' :
+             filter === 'business' ? 'Business connections will appear here when partners connect.' :
              'Connections from QR scans, direct links, and onboarding appear here.'}
           </p>
         </div>

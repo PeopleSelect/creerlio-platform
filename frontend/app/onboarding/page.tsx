@@ -1,36 +1,153 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
+type RoleType = 'customer' | 'talent' | 'business' | null
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
-type RoleIntent = 'find_businesses' | 'find_work' | 'find_talent' | 'find_customers' | 'both'
 
-interface Opportunity {
+interface OppCard {
   id: string
-  name: string
-  industry: string | null
-  city: string | null
-  tagline: string | null
-  slug: string | null
+  title: string
+  subtitle: string
+  tag: string
+  tagColor: string
+  icon: string
 }
 
-const LOADING_MESSAGES = [
-  'Analysing your preferences…',
-  'Scanning local opportunities…',
-  'Matching you with businesses…',
+// ── Seeded opportunity cards per role ─────────────────────────────────────────
+
+const SEEDED_OPPS: Record<string, OppCard[]> = {
+  customer: [
+    { id: '1', title: 'Exclusive Member Offer', subtitle: 'Get priority access to products before they go public', tag: 'New', tagColor: 'bg-emerald-500', icon: '🎁' },
+    { id: '2', title: 'Book a Consultation', subtitle: 'Chat with the team at no cost — get advice personalised to you', tag: 'Free', tagColor: 'bg-blue-500', icon: '💬' },
+    { id: '3', title: 'Refer & Earn', subtitle: 'Refer a friend and both of you receive a reward', tag: 'Reward', tagColor: 'bg-violet-500', icon: '⭐' },
+  ],
+  talent: [
+    { id: '1', title: 'Immediate Openings', subtitle: 'Roles starting within 2 weeks — apply with one tap', tag: 'Urgent', tagColor: 'bg-red-500', icon: '⚡' },
+    { id: '2', title: 'Flexible Work Opportunities', subtitle: 'Part-time and contract roles that fit your schedule', tag: 'Flexible', tagColor: 'bg-amber-500', icon: '🕐' },
+    { id: '3', title: 'Career Growth Paths', subtitle: 'Senior positions with structured progression and mentorship', tag: 'Growth', tagColor: 'bg-emerald-500', icon: '📈' },
+  ],
+  business: [
+    { id: '1', title: 'Talent Pool Access', subtitle: 'Browse pre-vetted candidates in your industry', tag: 'Exclusive', tagColor: 'bg-violet-500', icon: '👥' },
+    { id: '2', title: 'Co-Marketing Opportunities', subtitle: 'Partner with complementary businesses in your area', tag: 'New', tagColor: 'bg-blue-500', icon: '🤝' },
+    { id: '3', title: 'Customer Intelligence Report', subtitle: 'Understand who is connecting with your brand and why', tag: 'Insight', tagColor: 'bg-emerald-500', icon: '📊' },
+  ],
+}
+
+const ROLE_META = {
+  customer: {
+    icon: '🛍️',
+    label: 'Customer',
+    description: 'Discover businesses, book services, and manage your connections',
+    gradient: 'from-blue-500 to-cyan-400',
+    dashboard: '/dashboard/customer',
+    registrationType: 'customer',
+  },
+  talent: {
+    icon: '💼',
+    label: 'Talent',
+    description: 'Find opportunities, connect with businesses, and grow your career',
+    gradient: 'from-violet-500 to-purple-400',
+    dashboard: '/dashboard/talent',
+    registrationType: 'talent',
+  },
+  business: {
+    icon: '🏢',
+    label: 'Business',
+    description: 'Find customers, hire talent, and build your professional network',
+    gradient: 'from-emerald-500 to-teal-400',
+    dashboard: '/dashboard/business',
+    registrationType: 'business',
+  },
+}
+
+const AI_MESSAGES = [
+  'Mapping your local network…',
+  'Analysing industry trends…',
+  'Scanning opportunities near you…',
   'Building your personalised feed…',
+  'Calibrating recommendations…',
   'Almost ready…',
 ]
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function cn(...classes: (string | boolean | undefined | null)[]) {
+  return classes.filter(Boolean).join(' ')
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function ProgressDots({ step, total = 8 }: { step: number; total?: number }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {Array.from({ length: total }).map((_, i) => (
+        <div
+          key={i}
+          className={cn(
+            'rounded-full transition-all duration-300',
+            i + 1 < step ? 'h-1.5 w-3 bg-white/60' :
+            i + 1 === step ? 'h-1.5 w-5 bg-white' :
+            'h-1.5 w-1.5 bg-white/20'
+          )}
+        />
+      ))}
+    </div>
+  )
+}
+
+function OppCardView({ card, delay = 0 }: { card: OppCard; delay?: number }) {
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), delay)
+    return () => clearTimeout(t)
+  }, [delay])
+
+  return (
+    <div className={cn(
+      'bg-white/5 border border-white/10 rounded-2xl p-4 transition-all duration-500',
+      visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+    )}>
+      <div className="flex items-start gap-3">
+        <div className="text-2xl flex-shrink-0">{card.icon}</div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-sm font-bold text-white leading-tight">{card.title}</p>
+            <span className={cn('text-[10px] font-bold text-white px-1.5 py-0.5 rounded-full flex-shrink-0', card.tagColor)}>
+              {card.tag}
+            </span>
+          </div>
+          <p className="text-xs text-white/50 leading-relaxed">{card.subtitle}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SpinnerRing() {
+  return (
+    <div className="relative w-20 h-20 mx-auto">
+      <div className="absolute inset-0 rounded-full border-2 border-white/10" />
+      <div className="absolute inset-0 rounded-full border-2 border-t-white border-l-white/30 border-r-transparent border-b-transparent animate-spin" />
+      <div className="absolute inset-3 rounded-full border border-white/20 animate-pulse" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="w-3 h-3 rounded-full bg-white animate-pulse" />
+      </div>
+    </div>
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <div className="w-8 h-8 border border-white/20 border-t-white rounded-full animate-spin" />
       </div>
     }>
       <OnboardingFlow />
@@ -40,142 +157,163 @@ export default function OnboardingPage() {
 
 function OnboardingFlow() {
   const router = useRouter()
+  const params = useSearchParams()
+
+  const bizId    = params.get('b')
+  const campaign = params.get('c') || 'onboarding'
+  const roleParam = params.get('role') as RoleType
 
   const [step, setStep] = useState<Step>(1)
-  const [animating, setAnimating] = useState(false)
+  const [fading, setFading] = useState(false)
 
-  // Form state
-  const [roleIntent, setRoleIntent] = useState<RoleIntent>('both')
+  // Identity
+  const [role, setRole] = useState<RoleType>(roleParam || null)
+
+  // Profile form
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [whatIDo, setWhatIDo] = useState('')
+  const [password, setPassword] = useState('')
+  const [roleField, setRoleField] = useState('') // context-specific field
 
   // Auth
   const [session, setSession] = useState<any>(null)
-  const [sessionLoaded, setSessionLoaded] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+  const connectedRef = useRef(false)
 
-  // Opportunities
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([])
-  const [selectedBusiness, setSelectedBusiness] = useState<Opportunity | null>(null)
+  // Business context
+  const [bizName, setBizName] = useState<string | null>(null)
 
-  // Loading cycle
-  const [msgIdx, setMsgIdx] = useState(0)
+  // AI loading
+  const [aiMsgIdx, setAiMsgIdx] = useState(0)
+  const [aiProgress, setAiProgress] = useState(0)
+
+  // Opportunity feed
+  const [opps, setOpps] = useState<OppCard[]>([])
 
   // UI
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  // ── Auth check on mount ──────────────────────────────────────────────────
+  // ── Init ──────────────────────────────────────────────────────────────────
+
   useEffect(() => {
+    // Load business name if QR entry
+    if (bizId) {
+      fetch(`/api/connect?b=${bizId}`)
+        .then(r => r.json())
+        .then(j => { if (j.business?.name) setBizName(j.business.name) })
+        .catch(() => {})
+    }
+
+    // Check existing auth
     supabase.auth.getSession().then(({ data }) => {
       const s = data.session
-      setSession(s)
-      setSessionLoaded(true)
-
       if (s) {
-        const meta = s.user.user_metadata || {}
-        if (meta.onboarding_complete === true) {
-          const dest = meta.registration_type === 'business' ? '/dashboard/business' : '/dashboard/talent'
-          router.replace(dest)
-          return
-        }
-        // Pre-fill from existing metadata
-        if (meta.full_name || meta.first_name) {
-          setName(meta.full_name || `${meta.first_name || ''} ${meta.last_name || ''}`.trim())
-        }
-        if (s.user.email) setEmail(s.user.email)
-        setStep(2) // skip entry for already-authenticated users
-      }
-    }).catch(() => setSessionLoaded(true))
-
-    // Listen for magic link confirmation in another tab
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
-      if (s && !session) {
         setSession(s)
-        const meta = s.user.user_metadata || {}
-        if (meta.full_name || meta.first_name) {
-          setName(meta.full_name || `${meta.first_name || ''} ${meta.last_name || ''}`.trim())
+        setUserId(s.user.id)
+        if (s.user.user_metadata?.full_name) setName(s.user.user_metadata.full_name)
+        if (s.user.email) setEmail(s.user.email)
+        // Skip to profile step if already authed
+        if (roleParam) {
+          setRole(roleParam)
+          setStep(3)
+        } else {
+          setStep(2)
         }
+      } else if (roleParam) {
+        // Role pre-selected from connect page
+        setRole(roleParam)
+        setStep(2)
       }
     })
-    return () => subscription.unsubscribe()
-  }, [router]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Loading message cycle ────────────────────────────────────────────────
+  // ── AI loading cycle ─────────────────────────────────────────────────────
+
   useEffect(() => {
     if (step !== 4) return
-    const iv = setInterval(() => setMsgIdx(i => (i + 1) % LOADING_MESSAGES.length), 700)
-    return () => clearInterval(iv)
-  }, [step])
+    const msgInterval = setInterval(() => setAiMsgIdx(i => (i + 1) % AI_MESSAGES.length), 650)
+    const progInterval = setInterval(() => setAiProgress(p => Math.min(p + 2, 100)), 60)
 
-  // ── Auto-advance from loading → feed ────────────────────────────────────
-  useEffect(() => {
-    if (step !== 4) return
-    const t = setTimeout(async () => {
-      await fetchOpportunities()
+    const advance = setTimeout(async () => {
+      clearInterval(msgInterval)
+      clearInterval(progInterval)
+      setAiProgress(100)
+      setOpps(SEEDED_OPPS[role || 'customer'] || SEEDED_OPPS.customer)
+      await new Promise(r => setTimeout(r, 400))
       goTo(5)
-    }, 3200)
-    return () => clearTimeout(t)
-  }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, 3400)
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
+    return () => { clearInterval(msgInterval); clearInterval(progInterval); clearTimeout(advance) }
+  }, [step, role])
+
+  // ── Auto-connect after auth ───────────────────────────────────────────────
+
+  const doROSConnect = useCallback(async (token: string, uid: string) => {
+    if (!bizId || connectedRef.current) return
+    connectedRef.current = true
+    try {
+      await fetch('/api/ros/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          business_id: bizId,
+          relationship_type: role || 'customer',
+          entry_source: 'qr',
+          campaign,
+        }),
+      })
+    } catch {}
+  }, [bizId, role, campaign])
+
+  // ── Step navigation ───────────────────────────────────────────────────────
+
   function goTo(target: number) {
-    if (animating) return
-    setAnimating(true)
+    setFading(true)
+    setError(null)
     setTimeout(() => {
       setStep(target as Step)
-      setError(null)
-      setAnimating(false)
-    }, 180)
+      setFading(false)
+    }, 200)
   }
 
-  async function fetchOpportunities() {
-    try {
-      const res = await fetch('/api/onboarding/opportunities')
-      if (res.ok) {
-        const json = await res.json()
-        setOpportunities(json.opportunities || [])
-      }
-    } catch {}
+  // ── Step handlers ─────────────────────────────────────────────────────────
+
+  function handleRoleSelect(r: RoleType) {
+    setRole(r)
+    goTo(3)
   }
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
   async function handleProfileSubmit() {
     if (!name.trim()) { setError('Please enter your name'); return }
-    if (!session && !email.trim()) { setError('Please enter your email'); return }
+    if (!email.trim()) { setError('Please enter your email'); return }
+    if (session) {
+      // Already authenticated — skip auth, go to loading
+      goTo(4)
+      return
+    }
+    if (!password || password.length < 6) { setError('Password must be at least 6 characters'); return }
+
     setBusy(true)
     setError(null)
     try {
-      if (!session) {
-        // Send magic link for new users
-        const { error: err } = await supabase.auth.signInWithOtp({
-          email: email.trim(),
-          options: {
-            shouldCreateUser: true,
-            data: {
-              full_name: name.trim(),
-              first_name: name.trim().split(' ')[0],
-              last_name: name.trim().split(' ').slice(1).join(' ') || null,
-              role_intent: roleIntent,
-              what_i_do: whatIDo.trim() || null,
-              registration_type: roleIntent === 'find_businesses' ? 'business' : 'talent',
-            },
-            emailRedirectTo: window.location.origin + '/onboarding',
+      const meta = ROLE_META[role || 'customer']
+      const { data, error: signUpErr } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            full_name: name.trim(),
+            registration_type: meta.registrationType,
+            role_field: roleField,
+            onboarding_complete: false,
           },
-        })
-        if (err) { setError(err.message); return }
-      } else {
-        // Already authenticated — update profile data
-        await supabase.auth.updateUser({
-          data: { role_intent: roleIntent, what_i_do: whatIDo.trim() || null },
-        })
-        const meta = session.user.user_metadata || {}
-        if (meta.registration_type !== 'business') {
-          await supabase.from('talent_profiles').upsert(
-            { user_id: session.user.id, name: name.trim(), title: whatIDo.trim() || null },
-            { onConflict: 'user_id' }
-          )
-        }
+        },
+      })
+      if (signUpErr) { setError(signUpErr.message); return }
+      if (data.session) {
+        setSession(data.session)
+        setUserId(data.session.user.id)
       }
       goTo(4)
     } finally {
@@ -183,562 +321,505 @@ function OnboardingFlow() {
     }
   }
 
-  async function handleConnect(biz: Opportunity) {
-    setSelectedBusiness(biz)
-    if (session) {
-      // Fire-and-forget — don't block UX on API response
-      fetch('/api/onboarding/connect', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ business_profile_id: biz.id }),
-      }).catch(() => {})
-    }
+  async function handleFirstAction() {
+    if (!session) { goTo(7); return }
     goTo(7)
   }
 
-  async function handleComplete() {
+  async function handleConfirm() {
     if (session) {
-      await supabase.auth.updateUser({ data: { onboarding_complete: true } }).catch(() => {})
-      fetch('/api/onboarding/complete', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      }).catch(() => {})
-      const meta = session.user.user_metadata || {}
-      const dest = meta.registration_type === 'business' ? '/dashboard/business' : '/dashboard/talent'
-      router.replace(dest)
-    } else {
-      router.replace('/login')
+      // Mark onboarding complete
+      await supabase.auth.updateUser({
+        data: { onboarding_complete: true, registration_type: ROLE_META[role || 'customer'].registrationType },
+      })
+      // Create ROS connection if from QR
+      if (bizId) await doROSConnect(session.access_token, session.user.id)
     }
+    goTo(8)
   }
 
-  // ── Loading gate ─────────────────────────────────────────────────────────
-  if (!sessionLoaded) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
+  // Screen 8 — auto-redirect
+  useEffect(() => {
+    if (step !== 8) return
+    const dest = session
+      ? (ROLE_META[role || 'customer']?.dashboard || '/dashboard/talent')
+      : '/login/talent'
+    const t = setTimeout(() => router.replace(dest), 2200)
+    return () => clearTimeout(t)
+  }, [step, session, role, router])
 
-  const firstName = name.split(' ')[0] || ''
+  // ── Shared layout ─────────────────────────────────────────────────────────
+
+  const roleM = ROLE_META[role || 'customer']
 
   return (
-    <div
-      className="min-h-screen bg-slate-950 text-white overflow-x-hidden"
-      style={{ transition: 'opacity 180ms', opacity: animating ? 0 : 1 }}
-    >
-      {/* Progress indicator */}
-      {step > 1 && step < 8 && (
-        <div className="fixed top-5 left-0 right-0 flex justify-center gap-1.5 z-50 pointer-events-none">
-          {[2, 3, 4, 5, 6, 7].map(s => (
-            <div
-              key={s}
-              className="h-1 rounded-full transition-all duration-400"
-              style={{
-                width: s === step ? 24 : 6,
-                background: s <= step ? 'rgb(59 130 246)' : 'rgba(255,255,255,0.1)',
-                opacity: s < step ? 0.5 : 1,
-              }}
-            />
-          ))}
-        </div>
-      )}
+    <div className="min-h-screen bg-[#0a0a0f] text-white flex flex-col items-center justify-center px-4 py-10 relative overflow-hidden">
 
-      {/* ── STEP 1: ENTRY ── */}
-      {step === 1 && (
-        <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
-          <div className="max-w-lg w-full">
-            <div className="text-xs font-semibold tracking-[0.2em] text-blue-400 uppercase mb-10">
-              Creerlio
+      {/* Ambient background */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className={cn(
+          'absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full opacity-10 blur-3xl transition-all duration-1000',
+          role === 'customer' ? 'bg-blue-500' :
+          role === 'talent' ? 'bg-violet-500' :
+          role === 'business' ? 'bg-emerald-500' : 'bg-blue-600'
+        )} />
+        <div className="absolute -bottom-40 -left-40 w-[400px] h-[400px] rounded-full opacity-8 blur-3xl bg-indigo-800" />
+      </div>
+
+      {/* Logo */}
+      <div className="mb-8 flex flex-col items-center gap-1 relative z-10">
+        <div className="h-9 w-9 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
+          <span className="text-white font-black text-sm">C</span>
+        </div>
+        <span className="text-white/40 text-xs tracking-widest uppercase font-semibold">Creerlio</span>
+      </div>
+
+      {/* Screen container */}
+      <div className={cn(
+        'w-full max-w-md relative z-10 transition-all duration-200',
+        fading ? 'opacity-0 scale-[0.98]' : 'opacity-100 scale-100'
+      )}>
+        {/* Progress + step indicator */}
+        <div className="flex items-center justify-between mb-8">
+          <ProgressDots step={step} />
+          <span className="text-white/30 text-xs">{step} of 8</span>
+        </div>
+
+        {/* ── SCREEN 1: ENTRY ─────────────────────────────────────────────── */}
+        {step === 1 && (
+          <div className="text-center space-y-6">
+            <div className="space-y-2">
+              {bizName && (
+                <p className="text-white/40 text-sm font-medium uppercase tracking-widest">
+                  You scanned a code from
+                </p>
+              )}
+              {bizName && (
+                <p className="text-white font-bold text-lg">{bizName}</p>
+              )}
+              <h1 className="text-4xl font-black leading-tight tracking-tight text-white mt-4">
+                Your professional<br />network starts here.
+              </h1>
+              <p className="text-white/40 text-base leading-relaxed mt-3">
+                Creerlio connects you with the businesses and opportunities that matter — privately, persistently, and on your terms.
+              </p>
             </div>
-            <h1 className="text-5xl sm:text-6xl font-bold leading-[1.1] mb-6">
-              Turn real-world interactions into{' '}
-              <span className="bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
-                opportunities
-              </span>
-            </h1>
-            <p className="text-slate-400 text-lg leading-relaxed mb-12 max-w-sm mx-auto">
-              Connect with businesses and professionals through private, meaningful relationships.
-            </p>
-            <button
-              onClick={() => goTo(2)}
-              className="w-full sm:w-auto px-12 py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-lg font-semibold transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              Get Started
-            </button>
-            <p className="mt-6 text-sm text-slate-500">
-              Already have an account?{' '}
-              <a href="/login" className="text-blue-400 hover:text-blue-300 transition-colors">
-                Sign in
-              </a>
-            </p>
-          </div>
-        </div>
-      )}
 
-      {/* ── STEP 2: IDENTITY ── */}
-      {step === 2 && (
-        <div className="min-h-screen flex flex-col items-center justify-center px-6 pt-16 pb-10">
-          <div className="max-w-lg w-full">
-            <h2 className="text-4xl font-bold mb-2">How do you want to use Creerlio?</h2>
-            <p className="text-slate-400 mb-10">This shapes everything we surface for you.</p>
+            <div className="grid grid-cols-3 gap-3 mt-6">
+              {(['customer', 'talent', 'business'] as RoleType[]).map(r => (
+                <div key={r} className="bg-white/5 border border-white/8 rounded-2xl p-3 text-center">
+                  <div className="text-2xl mb-1">{ROLE_META[r!].icon}</div>
+                  <p className="text-white/60 text-xs font-semibold capitalize">{r}</p>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => goTo(2)}
+              className="w-full py-4 rounded-2xl font-bold text-base text-white bg-white/10 border border-white/15 hover:bg-white/15 transition-all active:scale-[0.98]"
+            >
+              Begin →
+            </button>
+
+            <p className="text-white/20 text-xs">By continuing, you agree to our Terms and Privacy Policy</p>
+          </div>
+        )}
+
+        {/* ── SCREEN 2: IDENTITY ──────────────────────────────────────────── */}
+        {step === 2 && (
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-3xl font-black leading-tight text-white">How would you like to continue?</h2>
+              <p className="text-white/40 text-sm mt-2 leading-relaxed">
+                Choose your primary role. You can expand later.
+              </p>
+            </div>
 
             <div className="space-y-3">
-              {(session?.user?.user_metadata?.registration_type === 'business' ? [
-                {
-                  value: 'find_talent' as RoleIntent,
-                  label: 'Find Talent',
-                  sub: 'Discover and connect with professionals anonymously',
-                  icon: '🔍',
-                },
-                {
-                  value: 'find_customers' as RoleIntent,
-                  label: 'Find Customers',
-                  sub: 'Connect with businesses and individuals looking for your services',
-                  icon: '🤝',
-                },
-                {
-                  value: 'both' as RoleIntent,
-                  label: 'Both',
-                  sub: 'I want to explore all opportunities',
-                  icon: '✦',
-                  recommended: true,
-                },
-              ] : [
-                {
-                  value: 'find_businesses' as RoleIntent,
-                  label: 'Find businesses',
-                  sub: 'Discover companies to work with or offer services to',
-                  icon: '🏢',
-                },
-                {
-                  value: 'find_work' as RoleIntent,
-                  label: 'Find work',
-                  sub: 'Connect with businesses looking for professionals like you',
-                  icon: '💼',
-                },
-                {
-                  value: 'both' as RoleIntent,
-                  label: 'Both',
-                  sub: 'I want to explore all opportunities',
-                  icon: '✦',
-                  recommended: true,
-                },
-              ]).map(opt => {
-                const selected = roleIntent === opt.value
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => {
-                      setRoleIntent(opt.value)
-                      setTimeout(() => goTo(3), 250)
-                    }}
-                    className={`w-full text-left rounded-2xl border p-5 transition-all duration-200 ${
-                      selected
-                        ? 'border-blue-500 bg-blue-500/10'
-                        : 'border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.07]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <span className="text-2xl">{opt.icon}</span>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-white">{opt.label}</span>
-                          {opt.recommended && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 font-medium uppercase tracking-wide">
-                              Recommended
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-sm text-slate-400 mt-0.5">{opt.sub}</div>
-                      </div>
-                      <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${
-                          selected ? 'border-blue-500 bg-blue-500' : 'border-white/20'
-                        }`}
-                      >
-                        {selected && (
-                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
+              {(['customer', 'talent', 'business'] as const).map(r => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => handleRoleSelect(r)}
+                  className={cn(
+                    'w-full text-left p-5 rounded-2xl border transition-all duration-200 active:scale-[0.98] group',
+                    role === r
+                      ? 'border-white/40 bg-white/10'
+                      : 'border-white/8 bg-white/3 hover:border-white/20 hover:bg-white/6'
+                  )}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      'w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 bg-gradient-to-br',
+                      ROLE_META[r].gradient
+                    )}>
+                      {ROLE_META[r].icon}
                     </div>
-                  </button>
-                )
-              })}
+                    <div>
+                      <p className="font-bold text-white text-base">{ROLE_META[r].label}</p>
+                      <p className="text-white/40 text-sm leading-snug mt-0.5">{ROLE_META[r].description}</p>
+                    </div>
+                    <div className="ml-auto text-white/20 group-hover:text-white/60 transition-colors">→</div>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── STEP 3: QUICK PROFILE ── */}
-      {step === 3 && (
-        <div className="min-h-screen flex flex-col items-center justify-center px-6 pt-16 pb-10">
-          <div className="max-w-lg w-full">
-            <h2 className="text-4xl font-bold mb-2">Tell us about yourself</h2>
-            <p className="text-slate-400 mb-10">
-              Just enough to get started. You can always add more later.
-            </p>
+        {/* ── SCREEN 3: PROFILE ───────────────────────────────────────────── */}
+        {step === 3 && role && (
+          <div className="space-y-5">
+            <div>
+              <div className={cn('inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold text-white mb-3 bg-gradient-to-r', roleM.gradient)}>
+                <span>{roleM.icon}</span>
+                <span>{roleM.label}</span>
+              </div>
+              <h2 className="text-3xl font-black text-white leading-tight">Tell us about yourself</h2>
+              <p className="text-white/40 text-sm mt-1">This stays private. Only shared when you choose.</p>
+            </div>
 
-            <div className="space-y-4 mb-8">
+            <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Your name</label>
+                <label className="text-[10px] text-white/40 uppercase tracking-widest font-semibold block mb-1.5">Full Name</label>
                 <input
                   type="text"
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  placeholder="Alex Chen"
-                  disabled={!!session}
-                  autoFocus
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-80 disabled:cursor-not-allowed"
+                  placeholder="Your name"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors text-sm"
                 />
               </div>
 
-              {!session && (
+              <div>
+                <label className="text-[10px] text-white/40 uppercase tracking-widest font-semibold block mb-1.5">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors text-sm"
+                />
+              </div>
+
+              {/* Role-specific field */}
+              {role === 'customer' && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Your email
-                    <span className="ml-2 text-xs text-blue-400 font-normal">— we'll send you a link</span>
-                  </label>
+                  <label className="text-[10px] text-white/40 uppercase tracking-widest font-semibold block mb-1.5">What are you looking for?</label>
+                  <select
+                    value={roleField}
+                    onChange={e => setRoleField(e.target.value)}
+                    title="What are you looking for?"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white/30 transition-colors text-sm appearance-none"
+                  >
+                    <option value="" className="bg-[#0a0a0f]">Select one…</option>
+                    <option value="products" className="bg-[#0a0a0f]">Products &amp; Goods</option>
+                    <option value="services" className="bg-[#0a0a0f]">Services &amp; Expertise</option>
+                    <option value="experiences" className="bg-[#0a0a0f]">Experiences &amp; Events</option>
+                    <option value="just_browsing" className="bg-[#0a0a0f]">Just exploring</option>
+                  </select>
+                </div>
+              )}
+
+              {role === 'talent' && (
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-widest font-semibold block mb-1.5">Your Role / Profession</label>
                   <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="alex@example.com"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    type="text"
+                    value={roleField}
+                    onChange={e => setRoleField(e.target.value)}
+                    placeholder="e.g. Senior Sales Agent, UX Designer…"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors text-sm"
                   />
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  What do you do?
-                  <span className="ml-2 text-xs text-slate-500 font-normal">optional</span>
-                </label>
-                <input
-                  type="text"
-                  value={whatIDo}
-                  onChange={e => setWhatIDo(e.target.value)}
-                  placeholder="e.g. Senior Engineer, Event Manager, Marketing Consultant"
-                  onKeyDown={e => e.key === 'Enter' && !busy && handleProfileSubmit()}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
-              </div>
+              {role === 'business' && (
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-widest font-semibold block mb-1.5">Business Name</label>
+                  <input
+                    type="text"
+                    value={roleField}
+                    onChange={e => setRoleField(e.target.value)}
+                    placeholder="Your business or trading name"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors text-sm"
+                  />
+                </div>
+              )}
+
+              {/* Password — only shown for new signups */}
+              {!session && (
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-widest font-semibold block mb-1.5">Create Password</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors text-sm"
+                  />
+                </div>
+              )}
             </div>
 
-            {error && (
-              <p className="text-red-400 text-sm mb-4">{error}</p>
-            )}
+            {error && <p className="text-red-400 text-sm">{error}</p>}
 
             <button
               type="button"
               onClick={handleProfileSubmit}
               disabled={busy}
-              className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-lg transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
+              className={cn(
+                'w-full py-4 rounded-2xl font-bold text-base text-white transition-all active:scale-[0.98] bg-gradient-to-r',
+                roleM.gradient,
+                busy && 'opacity-60 cursor-not-allowed'
+              )}
             >
-              {busy ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Setting up…
-                </span>
-              ) : 'Continue'}
+              {busy ? 'Creating your account…' : 'Continue →'}
             </button>
-          </div>
-        </div>
-      )}
 
-      {/* ── STEP 4: AI LOADING ── */}
-      {step === 4 && (
-        <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
-          <div className="max-w-sm">
-            {/* Pulsing rings */}
-            <div className="relative w-24 h-24 mx-auto mb-12">
-              <div className="absolute inset-0 rounded-full border border-blue-500/20 animate-ping" style={{ animationDuration: '2s' }} />
-              <div className="absolute inset-3 rounded-full border border-blue-500/30 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.3s' }} />
-              <div className="absolute inset-6 rounded-full bg-blue-500/10 border border-blue-500/50 flex items-center justify-center">
-                <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-            </div>
-
-            <h2 className="text-2xl font-bold text-white mb-4">Setting up your opportunities</h2>
-            <p
-              className="text-blue-400 text-sm font-medium"
-              style={{ minHeight: 20, transition: 'opacity 400ms', opacity: animating ? 0 : 1 }}
-            >
-              {LOADING_MESSAGES[msgIdx]}
+            <p className="text-center text-white/30 text-xs">
+              Already have an account?{' '}
+              <button
+                type="button"
+                onClick={() => router.push(`/login/${role || 'talent'}${bizId ? `?redirect=${encodeURIComponent(`/connect?b=${bizId}&c=${campaign}`)}` : ''}`)}
+                className="text-white/60 hover:text-white underline transition-colors"
+              >
+                Sign in
+              </button>
             </p>
-
-            {!session && email && (
-              <p className="mt-10 text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-                We've also sent a confirmation link to{' '}
-                <span className="text-slate-300">{email}</span>.
-                You'll need it to start connecting.
-              </p>
-            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── STEP 5: OPPORTUNITY FEED ── */}
-      {step === 5 && (
-        <div className="min-h-screen flex flex-col px-6 pt-20 pb-16">
-          <div className="max-w-2xl mx-auto w-full">
-            <div className="mb-8">
-              <h2 className="text-4xl font-bold mb-3">
-                {firstName ? `Here's what's waiting, ${firstName}` : "Here's what's waiting"}
-              </h2>
-              <p className="text-slate-400 leading-relaxed">
-                Businesses matched to your profile. Your identity stays private until you connect.
+        {/* ── SCREEN 4: AI LOADING ────────────────────────────────────────── */}
+        {step === 4 && (
+          <div className="text-center space-y-8">
+            <SpinnerRing />
+
+            <div>
+              <h2 className="text-2xl font-black text-white">Building your network</h2>
+              <p className="text-white/40 text-sm mt-2 h-5 transition-all duration-300">
+                {AI_MESSAGES[aiMsgIdx]}
               </p>
             </div>
 
-            {/* Social proof */}
-            <div className="flex items-center gap-3 mb-8">
-              <div className="flex -space-x-2">
-                {['bg-blue-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'].map((c, i) => (
-                  <div key={i} className={`w-7 h-7 rounded-full ${c} border-2 border-slate-950`} />
-                ))}
-              </div>
-              <span className="text-sm text-slate-400">127 professionals connected this week</span>
+            {/* Progress bar — width must be inline (dynamic numeric value) */}
+            <div className="w-full bg-white/5 rounded-full h-1 overflow-hidden">
+              {/* eslint-disable-next-line react/forbid-dom-props */}
+              <div
+                className={cn('h-full rounded-full transition-all duration-100 bg-gradient-to-r', roleM.gradient)}
+                style={{ width: `${aiProgress}%` }}
+              />
             </div>
 
-            <div className="space-y-3 mb-10">
-              {opportunities.length > 0
-                ? opportunities.map(opp => (
-                    <OpportunityCard key={opp.id} opp={opp} onConnect={() => handleConnect(opp)} />
-                  ))
-                : Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="rounded-2xl border border-white/10 bg-white/5 p-5 animate-pulse">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-white/10 shrink-0" />
-                        <div className="flex-1 space-y-2">
-                          <div className="h-4 bg-white/10 rounded w-2/5" />
-                          <div className="h-3 bg-white/5 rounded w-1/3" />
-                        </div>
-                        <div className="h-8 w-20 bg-white/10 rounded-lg" />
-                      </div>
-                    </div>
-                  ))}
+            <div className="grid grid-cols-3 gap-3">
+              {['Local Businesses', 'Live Opportunities', 'Your Matches'].map((label, i) => (
+                <div key={label} className={cn(
+                  'bg-white/5 border border-white/8 rounded-xl p-3 text-center transition-all duration-500',
+                  aiProgress > (i + 1) * 30 ? 'opacity-100' : 'opacity-30'
+                )}>
+                  <div className="text-lg mb-1">
+                    {i === 0 ? '🏢' : i === 1 ? '⚡' : '✨'}
+                  </div>
+                  <p className="text-white/50 text-[10px] font-semibold uppercase tracking-wider">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── SCREEN 5: OPPORTUNITY FEED ──────────────────────────────────── */}
+        {step === 5 && (
+          <div className="space-y-5">
+            <div>
+              <p className="text-white/40 text-xs uppercase tracking-widest font-semibold mb-1">Personalised for you</p>
+              <h2 className="text-3xl font-black text-white leading-tight">
+                {role === 'customer' && "Here's what's available"}
+                {role === 'talent' && 'Opportunities waiting for you'}
+                {role === 'business' && 'Your network potential'}
+              </h2>
+              {bizName && (
+                <p className="text-white/40 text-sm mt-1">Based on your connection with {bizName}</p>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {opps.map((card, i) => (
+                <OppCardView key={card.id} card={card} delay={i * 150} />
+              ))}
             </div>
 
             <button
               type="button"
               onClick={() => goTo(6)}
-              className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-lg transition-all duration-200"
+              className={cn(
+                'w-full py-4 rounded-2xl font-bold text-base text-white mt-2 transition-all active:scale-[0.98] bg-gradient-to-r',
+                roleM.gradient
+              )}
             >
-              Make my first connection →
+              Explore all opportunities →
             </button>
+
             <button
               type="button"
-              onClick={handleComplete}
-              className="w-full mt-3 py-3 text-sm text-slate-500 hover:text-slate-300 transition-colors"
+              onClick={() => goTo(6)}
+              className="w-full py-2 text-white/30 text-sm hover:text-white/60 transition-colors"
             >
-              Skip — explore on my own
+              Skip for now
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── STEP 6: FIRST ACTION ── */}
-      {step === 6 && (
-        <div className="min-h-screen flex flex-col items-center justify-center px-6 pt-16 pb-10">
-          <div className="max-w-lg w-full">
-            <h2 className="text-4xl font-bold mb-3 text-center">Make your first connection</h2>
-            <p className="text-slate-400 text-center mb-10">
-              They won't see your full profile until you both agree to connect.
-            </p>
+        {/* ── SCREEN 6: FIRST ACTION ───────────────────────────────────────── */}
+        {step === 6 && role && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-3xl font-black text-white leading-tight">What would you like to do first?</h2>
+              <p className="text-white/40 text-sm mt-2">You can always come back and do more.</p>
+            </div>
 
-            <div className="space-y-3 mb-8">
-              {(opportunities.length > 0 ? opportunities.slice(0, 4) : []).map(opp => (
+            <div className="space-y-3">
+              {role === 'customer' && [
+                { label: bizName ? `Message ${bizName}` : 'Message a business', icon: '💬', action: () => handleFirstAction() },
+                { label: 'Browse services', icon: '🔍', action: () => handleFirstAction() },
+                { label: 'Complete my profile', icon: '✏️', action: () => handleFirstAction() },
+              ].map(item => (
                 <button
-                  key={opp.id}
+                  key={item.label}
                   type="button"
-                  onClick={() => handleConnect(opp)}
-                  className="w-full flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] hover:border-blue-500/50 hover:bg-blue-500/5 p-4 transition-all duration-200 text-left group"
+                  onClick={item.action}
+                  className="w-full text-left bg-white/5 border border-white/10 hover:border-white/25 hover:bg-white/8 rounded-2xl p-4 transition-all active:scale-[0.99] flex items-center gap-4"
                 >
-                  <BusinessAvatar name={opp.name} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-white">{opp.name}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">
-                      {[opp.industry, opp.city].filter(Boolean).join(' · ')}
-                    </div>
-                  </div>
-                  <svg
-                    className="w-4 h-4 text-slate-500 group-hover:text-blue-400 transition-colors shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                  <span className="text-2xl">{item.icon}</span>
+                  <span className="text-white font-semibold">{item.label}</span>
+                  <span className="ml-auto text-white/30">→</span>
+                </button>
+              ))}
+
+              {role === 'talent' && [
+                { label: 'Explore job opportunities', icon: '⚡', action: () => handleFirstAction() },
+                { label: bizName ? `Connect with ${bizName}` : 'Find businesses hiring', icon: '🤝', action: () => handleFirstAction() },
+                { label: 'Complete my profile', icon: '✏️', action: () => handleFirstAction() },
+              ].map(item => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={item.action}
+                  className="w-full text-left bg-white/5 border border-white/10 hover:border-white/25 hover:bg-white/8 rounded-2xl p-4 transition-all active:scale-[0.99] flex items-center gap-4"
+                >
+                  <span className="text-2xl">{item.icon}</span>
+                  <span className="text-white font-semibold">{item.label}</span>
+                  <span className="ml-auto text-white/30">→</span>
+                </button>
+              ))}
+
+              {role === 'business' && [
+                { label: 'Set up my business profile', icon: '🏢', action: () => handleFirstAction() },
+                { label: 'Browse talent pool', icon: '👥', action: () => handleFirstAction() },
+                { label: 'Generate my QR code', icon: '📲', action: () => handleFirstAction() },
+              ].map(item => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={item.action}
+                  className="w-full text-left bg-white/5 border border-white/10 hover:border-white/25 hover:bg-white/8 rounded-2xl p-4 transition-all active:scale-[0.99] flex items-center gap-4"
+                >
+                  <span className="text-2xl">{item.icon}</span>
+                  <span className="text-white font-semibold">{item.label}</span>
+                  <span className="ml-auto text-white/30">→</span>
                 </button>
               ))}
             </div>
-
-            <button
-              type="button"
-              onClick={handleComplete}
-              className="w-full py-3 text-sm text-slate-500 hover:text-slate-300 transition-colors"
-            >
-              Skip — explore on my own
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── STEP 7: CONFIRMATION ── */}
-      {step === 7 && (
-        <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
-          <div className="max-w-md w-full">
-            <div className="w-20 h-20 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mx-auto mb-8">
-              <svg className="w-10 h-10 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+        {/* ── SCREEN 7: CONFIRMATION ───────────────────────────────────────── */}
+        {step === 7 && (
+          <div className="text-center space-y-6">
+            <div className={cn(
+              'w-20 h-20 rounded-full mx-auto flex items-center justify-center text-4xl bg-gradient-to-br',
+              roleM.gradient
+            )}>
+              ✓
             </div>
 
-            <h2 className="text-4xl font-bold mb-3">
-              {session ? "You're connected" : 'Request sent'}
-            </h2>
-
-            {selectedBusiness && (
-              <p className="text-slate-300 text-lg mb-8">
-                {session
-                  ? `Your connection with ${selectedBusiness.name} is live.`
-                  : `Your interest in ${selectedBusiness.name} has been noted.`}
+            <div>
+              <h2 className="text-3xl font-black text-white">You&apos;re all set.</h2>
+              {bizName && (
+                <p className="text-white/60 text-base mt-2">
+                  Connected with <span className="text-white font-semibold">{bizName}</span>
+                </p>
+              )}
+              <p className="text-white/40 text-sm mt-1 leading-relaxed">
+                Your relationship is private, persistent, and fully in your control.
+                You can disconnect at any time.
               </p>
-            )}
+            </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-left space-y-4 mb-8">
-              {[
-                session
-                  ? `${selectedBusiness?.name || 'This business'} can now see your shared profile and reach out`
-                  : 'Confirm your email to activate your first connection',
-                'You can continue building your profile any time — it gets stronger with each interaction',
-                'Every connection you make builds your private opportunity pipeline',
-              ].map((msg, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 shrink-0" />
-                  <p className="text-sm text-slate-300 leading-relaxed">{msg}</p>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-left space-y-3">
+              <p className="text-white/40 text-xs uppercase tracking-widest font-semibold">Your account</p>
+              <div className="flex items-center gap-3">
+                <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center text-xl bg-gradient-to-br', roleM.gradient)}>
+                  {roleM.icon}
                 </div>
-              ))}
+                <div>
+                  <p className="text-white font-bold text-sm">{name || 'Your Name'}</p>
+                  <p className="text-white/40 text-xs">{roleM.label} · {email}</p>
+                </div>
+              </div>
             </div>
 
             <button
               type="button"
-              onClick={() => goTo(8)}
-              className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-lg transition-all duration-200"
+              onClick={handleConfirm}
+              className={cn(
+                'w-full py-4 rounded-2xl font-bold text-base text-white transition-all active:scale-[0.98] bg-gradient-to-r',
+                roleM.gradient
+              )}
             >
-              Continue →
+              Go to my dashboard →
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── STEP 8: VALUE LOCK-IN ── */}
-      {step === 8 && (
-        <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
-          <div className="max-w-md w-full">
-            <div className="text-xs font-semibold tracking-[0.2em] text-blue-400 uppercase mb-8">
-              You're in
+        {/* ── SCREEN 8: REDIRECT ──────────────────────────────────────────── */}
+        {step === 8 && (
+          <div className="text-center space-y-6">
+            <div className="relative w-20 h-20 mx-auto">
+              <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
+                <circle
+                  cx="40" cy="40" r="36" fill="none"
+                  stroke="white" strokeWidth="4"
+                  strokeDasharray="226"
+                  strokeDashoffset="0"
+                  strokeLinecap="round"
+                  className="animate-[dash_2s_ease-in-out_forwards]"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center text-2xl">
+                {roleM.icon}
+              </div>
             </div>
 
-            <h2 className="text-4xl sm:text-5xl font-bold leading-[1.1] mb-6">
-              The more you interact,{' '}
-              <span className="bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
-                the more you unlock
-              </span>
-            </h2>
-
-            <p className="text-slate-400 text-lg leading-relaxed mb-12">
-              Creerlio works in the background. Every connection, every interaction becomes a future opportunity.
-            </p>
-
-            <div className="grid grid-cols-3 gap-3 mb-12">
-              {[
-                { label: 'Connection', value: selectedBusiness ? '1' : '0', icon: '🤝' },
-                { label: 'Opportunities', value: 'Growing', icon: '📈' },
-                { label: 'Visibility', value: 'Active', icon: '✨' },
-              ].map(stat => (
-                <div key={stat.label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                  <div className="text-2xl mb-2">{stat.icon}</div>
-                  <div className="text-xl font-bold text-white">{stat.value}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">{stat.label}</div>
-                </div>
-              ))}
+            <div>
+              <h2 className="text-2xl font-black text-white">Taking you to your dashboard…</h2>
+              <p className="text-white/40 text-sm mt-1">Everything is ready for you.</p>
             </div>
-
-            <button
-              type="button"
-              onClick={handleComplete}
-              className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              Go to Dashboard →
-            </button>
           </div>
-        </div>
-      )}
-    </div>
-  )
-}
+        )}
+      </div>
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function OpportunityCard({ opp, onConnect }: { opp: Opportunity; onConnect: () => void }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] hover:border-white/20 transition-all duration-200 p-5">
-      <div className="flex items-center gap-4">
-        <BusinessAvatar name={opp.name} />
-        <div className="flex-1 min-w-0">
-          <div className="font-semibold text-white">{opp.name}</div>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            {opp.industry && <span className="text-xs text-slate-400">{opp.industry}</span>}
-            {opp.industry && opp.city && <span className="text-slate-600 text-xs">·</span>}
-            {opp.city && <span className="text-xs text-slate-400">{opp.city}</span>}
-          </div>
-          {opp.tagline && (
-            <p className="text-xs text-slate-500 mt-1 line-clamp-1">{opp.tagline}</p>
-          )}
-        </div>
+      {/* Bottom skip (steps 1-3) */}
+      {step <= 3 && step > 1 && (
         <button
           type="button"
-          onClick={onConnect}
-          className="shrink-0 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold text-white transition-colors"
+          onClick={() => goTo(step > 1 ? step - 1 as Step : 1)}
+          className="mt-8 text-white/20 hover:text-white/50 text-xs transition-colors relative z-10"
         >
-          Connect
+          ← Back
         </button>
-      </div>
-    </div>
-  )
-}
-
-function BusinessAvatar({ name }: { name: string }) {
-  const initials = name
-    .split(' ')
-    .map(w => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
-  const palettes = [
-    'from-blue-500 to-blue-700',
-    'from-violet-500 to-violet-700',
-    'from-emerald-500 to-emerald-700',
-    'from-amber-500 to-amber-700',
-    'from-rose-500 to-rose-700',
-    'from-cyan-500 to-cyan-700',
-  ]
-  const palette = palettes[name.charCodeAt(0) % palettes.length]
-  return (
-    <div
-      className={`w-12 h-12 rounded-xl bg-gradient-to-br ${palette} flex items-center justify-center text-white font-bold text-sm shrink-0`}
-    >
-      {initials}
+      )}
     </div>
   )
 }

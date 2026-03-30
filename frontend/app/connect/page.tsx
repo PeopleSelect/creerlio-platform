@@ -176,9 +176,21 @@ function ConnectInner() {
     })
   }, [status, doConnect])
 
-  function handleJoin() {
-    const returnUrl = encodeURIComponent(`/connect?b=${bizId}&c=${campaign}`)
-    router.push(`/login/customer?mode=signup&redirect=${returnUrl}`)
+  // Role-selection state for unauthenticated users
+  const [selectedRole, setSelectedRole] = useState<'customer' | 'talent' | 'business' | null>(null)
+  const [showRoleSelect, setShowRoleSelect] = useState(false)
+
+  const ROLE_OPTIONS = [
+    { key: 'customer' as const, icon: '🛍️', label: 'Customer', desc: 'Discover products and services' },
+    { key: 'talent'   as const, icon: '💼', label: 'Talent',   desc: 'Find work opportunities' },
+    { key: 'business' as const, icon: '🏢', label: 'Business', desc: 'Connect and collaborate' },
+  ]
+
+  function handleJoin(role?: 'customer' | 'talent' | 'business') {
+    const r = role || selectedRole || 'customer'
+    // Route to onboarding with role pre-selected and business QR context
+    const onboardUrl = `/onboarding?b=${bizId}&c=${campaign}&role=${r}`
+    router.push(onboardUrl)
   }
 
   function handleSignIn() {
@@ -246,26 +258,38 @@ function ConnectInner() {
             </div>
           )}
 
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
-            <div className="mx-auto h-12 w-12 rounded-full bg-blue-500/20 border border-blue-400/30 flex items-center justify-center mb-4">
-              <Sparkles className="h-6 w-6 text-blue-300" />
+          {/* Role selection — "How would you like to continue?" */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+            <div className="text-center mb-5">
+              <h2 className="text-lg font-bold text-white">How would you like to continue?</h2>
+              <p className="text-white/40 text-sm mt-1">Choose your role to get the right experience</p>
             </div>
-            <h2 className="text-lg font-bold text-white mb-1">Connect Instantly</h2>
-            <p className="text-white/50 text-sm mb-5">
-              Join Creerlio to connect with {preview.name}, send enquiries, and manage your business relationships.
-            </p>
-            <div className="space-y-3">
-              <button type="button" onClick={handleJoin}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-blue-500 px-6 py-3 text-sm font-bold text-white hover:bg-blue-400 transition-colors">
-                <Sparkles className="h-4 w-4" /> Join Creerlio &amp; Connect
-              </button>
-              <button type="button" onClick={handleSignIn}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 px-6 py-3 text-sm font-semibold text-white/80 hover:bg-white/10 transition-colors">
-                Already have an account? Sign in
-              </button>
+
+            <div className="space-y-2 mb-5">
+              {ROLE_OPTIONS.map(r => (
+                <button
+                  key={r.key}
+                  type="button"
+                  onClick={() => { setSelectedRole(r.key); handleJoin(r.key) }}
+                  className="w-full text-left flex items-center gap-4 px-4 py-3.5 rounded-xl border border-white/10 hover:border-white/30 hover:bg-white/8 transition-all active:scale-[0.99] group"
+                >
+                  <span className="text-2xl flex-shrink-0">{r.icon}</span>
+                  <div className="flex-1">
+                    <p className="text-white font-semibold text-sm">{r.label}</p>
+                    <p className="text-white/40 text-xs">{r.desc}</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-white/20 group-hover:text-white/60 transition-colors" />
+                </button>
+              ))}
             </div>
+
+            <button type="button" onClick={handleSignIn}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 px-6 py-2.5 text-sm font-semibold text-white/60 hover:bg-white/8 hover:text-white/80 transition-colors">
+              Already have an account? Sign in
+            </button>
+
             <p className="text-white/20 text-xs mt-4 flex items-center justify-center gap-1">
-              <Shield className="h-3 w-3" /> Secure · No spam · Cancel anytime
+              <Shield className="h-3 w-3" /> Private · No spam · Disconnect anytime
             </p>
           </div>
         </div>

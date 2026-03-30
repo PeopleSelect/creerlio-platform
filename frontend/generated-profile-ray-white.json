@@ -1,0 +1,507 @@
+{
+  "business": {
+    "name": "Ray White",
+    "slug": "ray-white",
+    "website_url": "https://www.raywhite.com.au",
+    "linkedin_url": "",
+    "youtube_url": "",
+    "careers_url": "https://www.raywhite.com.au/careers",
+    "phone": "+61 7 3231 2000",
+    "email": "info@raywhite.com"
+  },
+  "profile": {
+    "tagline": "Your Partner in Real Estate Success",
+    "about": "Ray White is a leading real estate group in Australasia, offering a wide range of services including residential, commercial, and rural property sales, property management, and investment services. Founded in 1902 by Ray White in Crows Nest, Queensland, the company has grown to become a household name with over 1,000 offices across Australia, New Zealand, and Asia. Our team of dedicated professionals is committed to providing exceptional service and achieving outstanding results for our clients. We pride ourselves on our innovative approach, extensive market knowledge, and strong community ties. At Ray White, we believe in fostering a positive and inclusive workplace culture that encourages growth and development. We are always on the lookout for talented individuals to join our team and help us continue to deliver excellence in the real estate industry.",
+    "industry": "Real Estate",
+    "business_type": "Private",
+    "hq_city": "Brisbane",
+    "hq_state": "Queensland",
+    "hq_country": "Australia",
+    "hq_address": "Level 26, 111 Eagle Street, Brisbane, QLD 4000",
+    "latitude": -27.4658,
+    "longitude": 153.027,
+    "company_size": "10,001+ employees",
+    "founded_year": 1902,
+    "ownership_type": "Family-owned"
+  },
+  "content": {
+    "mission": "To be the most trusted and successful real estate group in Australasia, delivering exceptional service and results for our clients.",
+    "value_prop_headline": "Comprehensive Real Estate Solutions",
+    "value_prop_body": "Ray White offers a full suite of real estate services, from buying and selling to property management and investment advice, ensuring our clients receive the best possible outcomes.",
+    "acknowledgement_of_country": "Ray White acknowledges the Traditional Custodians of the lands on which we operate and pays respect to Elders past, present, and emerging."
+  },
+  "impact_stats": [
+    {
+      "label": "Offices Worldwide",
+      "value": "1,000+"
+    },
+    {
+      "label": "Properties Sold Annually",
+      "value": "Over 75,000"
+    },
+    {
+      "label": "Years in Business",
+      "value": "120+"
+    },
+    {
+      "label": "Employees",
+      "value": "10,001+"
+    },
+    {
+      "label": "Countries Served",
+      "value": "10+"
+    }
+  ],
+  "culture_values": [
+    {
+      "title": "Integrity",
+      "description": "We conduct our business with the highest level of integrity and transparency."
+    },
+    {
+      "title": "Innovation",
+      "description": "We embrace change and strive for continuous improvement."
+    },
+    {
+      "title": "Community",
+      "description": "We are committed to making a positive impact in the communities we serve."
+    },
+    {
+      "title": "Excellence",
+      "description": "We aim for excellence in everything we do, delivering superior results for our clients."
+    },
+    {
+      "title": "Collaboration",
+      "description": "We believe in the power of teamwork and collaboration to achieve our goals."
+    }
+  ],
+  "business_areas": [
+    {
+      "name": "Residential Sales",
+      "description": "Helping clients buy and sell residential properties with expert guidance and support."
+    },
+    {
+      "name": "Commercial Sales",
+      "description": "Providing comprehensive services for commercial property transactions."
+    },
+    {
+      "name": "Property Management",
+      "description": "Offering professional management services to maximize property investment returns."
+    },
+    {
+      "name": "Rural Sales",
+      "description": "Specializing in the sale and purchase of rural properties and farms."
+    },
+    {
+      "name": "Investment Services",
+      "description": "Providing strategic advice and solutions for property investors."
+    }
+  ],
+  "benefits": [
+    {
+      "title": "Professional Development",
+      "description": "Opportunities for continuous learning and career advancement."
+    },
+    {
+      "title": "Flexible Work Arrangements",
+      "description": "Supporting work-life balance with flexible scheduling options."
+    },
+    {
+      "title": "Health and Wellbeing",
+      "description": "Access to health programs and wellbeing initiatives."
+    },
+    {
+      "title": "Community Engagement",
+      "description": "Encouraging involvement in community service and volunteer activities."
+    },
+    {
+      "title": "Recognition Programs",
+      "description": "Celebrating achievements and rewarding outstanding performance."
+    }
+  ],
+  "programs": [
+    {
+      "name": "Graduate Program",
+      "description": "A structured program for recent graduates to kickstart their careers in real estate.",
+      "url": "https://www.raywhite.com.au/careers/graduate-program"
+    },
+    {
+      "name": "Leadership Development",
+      "description": "Training programs designed to develop future leaders within the company.",
+      "url": "https://www.raywhite.com.au/careers/leadership-development"
+    },
+    {
+      "name": "Sales Training",
+      "description": "Comprehensive sales training to enhance skills and performance.",
+      "url": "https://www.raywhite.com.au/careers/sales-training"
+    },
+    {
+      "name": "Internship Opportunities",
+      "description": "Internship programs providing hands-on experience in the real estate industry.",
+      "url": "https://www.raywhite.com.au/careers/internships"
+    },
+    {
+      "name": "Diversity and Inclusion",
+      "description": "Initiatives to promote diversity and inclusion within the workplace.",
+      "url": "https://www.raywhite.com.au/careers/diversity-inclusion"
+    }
+  ],
+  "social_proof": [
+    {
+      "quote": "Ray White helped us find our dream home with exceptional service and professionalism.",
+      "source": "Client — Residential"
+    },
+    {
+      "quote": "Their innovative approach to property management has significantly improved our investment returns.",
+      "source": "Client — Property Investor"
+    },
+    {
+      "quote": "Working at Ray White has been a rewarding experience, with plenty of opportunities for growth.",
+      "source": "Employee"
+    }
+  ],
+  "hiring_interests": [
+    "Real Estate Agents",
+    "Property Managers",
+    "Commercial Sales Specialists",
+    "Marketing Professionals",
+    "Finance and Administration Experts",
+    "Customer Service Representatives"
+  ],
+  "industries_served": [
+    "Residential Real Estate",
+    "Commercial Real Estate",
+    "Rural Real Estate",
+    "Property Management",
+    "Investment Services"
+  ],
+  "specialisations": [
+    "Residential Sales",
+    "Commercial Leasing",
+    "Property Auctions",
+    "Investment Advisory",
+    "Rural Property Sales"
+  ],
+  "skills": [
+    "Negotiation",
+    "Market Analysis",
+    "Customer Service",
+    "Sales Strategy",
+    "Property Management",
+    "Financial Acumen"
+  ],
+  "badges": [],
+  "services": [
+    {
+      "name": "Residential Property Sales",
+      "category": "Service",
+      "short_description": "Expert guidance in buying and selling residential properties.",
+      "who_it_is_for": "Homebuyers and sellers",
+      "problem_it_solves": "Navigating the complexities of the real estate market.",
+      "roles": [
+        "Real Estate Agent",
+        "Sales Consultant"
+      ],
+      "skills": [
+        "Negotiation",
+        "Market Analysis"
+      ],
+      "growth_areas": [
+        "Urban Development",
+        "Sustainable Housing"
+      ],
+      "impact": {
+        "who_it_helps": "Families and individuals",
+        "what_it_improves": "Home ownership experience",
+        "real_world_outcomes": "Successful property transactions"
+      },
+      "we_are_hiring": true,
+      "open_to_partnerships": true,
+      "currently_scaling": true
+    },
+    {
+      "name": "Commercial Property Services",
+      "category": "Service",
+      "short_description": "Comprehensive solutions for commercial property transactions.",
+      "who_it_is_for": "Business owners and investors",
+      "problem_it_solves": "Complexities of commercial real estate deals.",
+      "roles": [
+        "Commercial Sales Specialist",
+        "Leasing Agent"
+      ],
+      "skills": [
+        "Sales Strategy",
+        "Financial Acumen"
+      ],
+      "growth_areas": [
+        "Commercial Leasing",
+        "Investment Properties"
+      ],
+      "impact": {
+        "who_it_helps": "Businesses and investors",
+        "what_it_improves": "Commercial property portfolio",
+        "real_world_outcomes": "Profitable real estate investments"
+      },
+      "we_are_hiring": true,
+      "open_to_partnerships": true,
+      "currently_scaling": true
+    },
+    {
+      "name": "Property Management",
+      "category": "Service",
+      "short_description": "Professional management services for residential and commercial properties.",
+      "who_it_is_for": "Property owners and investors",
+      "problem_it_solves": "Efficient management of property assets.",
+      "roles": [
+        "Property Manager",
+        "Asset Manager"
+      ],
+      "skills": [
+        "Property Management",
+        "Customer Service"
+      ],
+      "growth_areas": [
+        "Technology Integration",
+        "Sustainability"
+      ],
+      "impact": {
+        "who_it_helps": "Property owners",
+        "what_it_improves": "Asset management efficiency",
+        "real_world_outcomes": "Increased property value and returns"
+      },
+      "we_are_hiring": true,
+      "open_to_partnerships": true,
+      "currently_scaling": true
+    },
+    {
+      "name": "Rural Property Sales",
+      "category": "Service",
+      "short_description": "Specialized services for buying and selling rural properties.",
+      "who_it_is_for": "Farmers and rural investors",
+      "problem_it_solves": "Challenges of rural property transactions.",
+      "roles": [
+        "Rural Sales Agent",
+        "Land Consultant"
+      ],
+      "skills": [
+        "Market Analysis",
+        "Negotiation"
+      ],
+      "growth_areas": [
+        "Agricultural Development",
+        "Rural Investments"
+      ],
+      "impact": {
+        "who_it_helps": "Rural property buyers and sellers",
+        "what_it_improves": "Rural property transaction success",
+        "real_world_outcomes": "Thriving rural communities"
+      },
+      "we_are_hiring": true,
+      "open_to_partnerships": true,
+      "currently_scaling": true
+    },
+    {
+      "name": "Investment Advisory",
+      "category": "Service",
+      "short_description": "Strategic advice and solutions for property investors.",
+      "who_it_is_for": "Real estate investors",
+      "problem_it_solves": "Maximizing investment returns.",
+      "roles": [
+        "Investment Advisor",
+        "Financial Analyst"
+      ],
+      "skills": [
+        "Financial Acumen",
+        "Sales Strategy"
+      ],
+      "growth_areas": [
+        "Real Estate Investment Trusts",
+        "Portfolio Diversification"
+      ],
+      "impact": {
+        "who_it_helps": "Investors",
+        "what_it_improves": "Investment decision-making",
+        "real_world_outcomes": "Enhanced investment portfolios"
+      },
+      "we_are_hiring": true,
+      "open_to_partnerships": true,
+      "currently_scaling": true
+    }
+  ],
+  "jobs": [
+    {
+      "title": "Real Estate Agent",
+      "description": "Join our dynamic team to assist clients in buying and selling properties, providing expert advice and exceptional service.",
+      "city": "Sydney",
+      "state": "NSW",
+      "country": "Australia",
+      "location": "Sydney, NSW",
+      "employment_type": "Full-time",
+      "experience_level": "Mid-level",
+      "salary_min": 60000,
+      "salary_max": 80000,
+      "salary_currency": "AUD",
+      "required_skills": [
+        "Negotiation",
+        "Customer Service"
+      ],
+      "preferred_skills": [
+        "Market Analysis",
+        "Sales Strategy"
+      ],
+      "requirements": "Real estate license and 2+ years of experience in property sales."
+    },
+    {
+      "title": "Property Manager",
+      "description": "Manage a portfolio of residential and commercial properties, ensuring efficient operations and client satisfaction.",
+      "city": "Melbourne",
+      "state": "VIC",
+      "country": "Australia",
+      "location": "Melbourne, VIC",
+      "employment_type": "Full-time",
+      "experience_level": "Mid-level",
+      "salary_min": 55000,
+      "salary_max": 75000,
+      "salary_currency": "AUD",
+      "required_skills": [
+        "Property Management",
+        "Customer Service"
+      ],
+      "preferred_skills": [
+        "Financial Acumen",
+        "Problem Solving"
+      ],
+      "requirements": "Experience in property management and a valid driver's license."
+    },
+    {
+      "title": "Commercial Sales Specialist",
+      "description": "Drive sales and leasing of commercial properties, working closely with clients to meet their business needs.",
+      "city": "Brisbane",
+      "state": "QLD",
+      "country": "Australia",
+      "location": "Brisbane, QLD",
+      "employment_type": "Full-time",
+      "experience_level": "Senior",
+      "salary_min": 70000,
+      "salary_max": 100000,
+      "salary_currency": "AUD",
+      "required_skills": [
+        "Sales Strategy",
+        "Negotiation"
+      ],
+      "preferred_skills": [
+        "Market Analysis",
+        "Financial Acumen"
+      ],
+      "requirements": "Proven track record in commercial real estate sales."
+    },
+    {
+      "title": "Marketing Coordinator",
+      "description": "Develop and implement marketing strategies to promote our real estate services and enhance brand visibility.",
+      "city": "Adelaide",
+      "state": "SA",
+      "country": "Australia",
+      "location": "Adelaide, SA",
+      "employment_type": "Full-time",
+      "experience_level": "Entry-level",
+      "salary_min": 50000,
+      "salary_max": 65000,
+      "salary_currency": "AUD",
+      "required_skills": [
+        "Marketing",
+        "Communication"
+      ],
+      "preferred_skills": [
+        "Digital Marketing",
+        "Content Creation"
+      ],
+      "requirements": "Bachelor's degree in Marketing or related field."
+    }
+  ],
+  "dal_le_images": [
+    {
+      "key": "logo",
+      "filename": "logo.jpg",
+      "bank_type": "logo",
+      "title": "Ray White Logo",
+      "prompt": "A professional logo of Ray White, a leading real estate company.",
+      "size": "1024x1024"
+    },
+    {
+      "key": "hero",
+      "filename": "hero.jpg",
+      "bank_type": "image",
+      "title": "Ray White Hero Image",
+      "prompt": "A vibrant image showcasing Ray White's real estate services.",
+      "size": "1792x1024"
+    },
+    {
+      "key": "office",
+      "filename": "office.jpg",
+      "bank_type": "image",
+      "title": "Ray White Office",
+      "prompt": "A modern office space of Ray White, bustling with activity.",
+      "size": "1792x1024"
+    },
+    {
+      "key": "team",
+      "filename": "team.jpg",
+      "bank_type": "image",
+      "title": "Ray White Team",
+      "prompt": "A diverse and dynamic team of Ray White professionals.",
+      "size": "1792x1024"
+    },
+    {
+      "key": "culture",
+      "filename": "culture.jpg",
+      "bank_type": "image",
+      "title": "Ray White Culture",
+      "prompt": "An image depicting the inclusive and collaborative culture at Ray White.",
+      "size": "1792x1024"
+    },
+    {
+      "key": "awards",
+      "filename": "awards.jpg",
+      "bank_type": "image",
+      "title": "Ray White Awards",
+      "prompt": "An image showcasing the awards and accolades received by Ray White.",
+      "size": "1792x1024"
+    },
+    {
+      "key": "work",
+      "filename": "work.jpg",
+      "bank_type": "image",
+      "title": "Ray White at Work",
+      "prompt": "An image of Ray White employees engaged in their daily work activities.",
+      "size": "1792x1024"
+    },
+    {
+      "key": "community",
+      "filename": "community.jpg",
+      "bank_type": "image",
+      "title": "Ray White Community Engagement",
+      "prompt": "An image showing Ray White's involvement in community activities.",
+      "size": "1792x1024"
+    },
+    {
+      "key": "credential1",
+      "filename": "credential1.jpg",
+      "bank_type": "document",
+      "title": "Ray White Credential 1",
+      "prompt": "A document showcasing Ray White's credentials and achievements.",
+      "size": "1024x1024"
+    },
+    {
+      "key": "credential2",
+      "filename": "credential2.jpg",
+      "bank_type": "document",
+      "title": "Ray White Credential 2",
+      "prompt": "Another document highlighting Ray White's industry credentials.",
+      "size": "1024x1024"
+    }
+  ],
+  "narration": "",
+  "credentials": {
+    "email": "demo.ray-white@creerlio.com",
+    "password": "DemoRayWhite2025!"
+  }
+}

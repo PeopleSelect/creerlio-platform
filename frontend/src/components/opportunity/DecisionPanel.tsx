@@ -55,8 +55,71 @@ export default function DecisionPanel({ job, mode, routeInfo, onApply, onSave, o
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
             d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
         </svg>
-        <p className="text-sm font-medium">Select an opportunity</p>
-        <p className="text-xs mt-1 opacity-60">Click any job on the map or in the feed to see your full decision analysis</p>
+        <p className="text-sm font-medium">
+          {mode === 'business' ? 'Select a talent profile' : 'Select an opportunity'}
+        </p>
+        <p className="text-xs mt-1 opacity-60">
+          {mode === 'business'
+            ? 'Click any talent marker on the map or in the pipeline'
+            : 'Click any job on the map or in the feed to see your full decision analysis'}
+        </p>
+      </div>
+    )
+  }
+
+  // Business mode: show talent profile card, not scoring
+  if (mode === 'business') {
+    const skills = job.industry ? job.industry.split(', ') : []
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const portfolioUrl = `${origin}/portfolio/view?talent_id=${job.id}`
+    return (
+      <div className="flex flex-col h-full overflow-y-auto">
+        <div className="px-5 py-4 border-b border-slate-700/60">
+          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold mb-1">Talent Profile</p>
+          <p className="text-sm font-bold text-white leading-tight">{job.title || 'Talent'}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{job.business_name}</p>
+        </div>
+        <div className="flex-1 px-5 py-4 space-y-4">
+          <div className="bg-slate-800/60 rounded-xl p-3.5 space-y-2">
+            {job.city && (
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Location</p>
+                <p className="text-slate-200 text-sm font-semibold mt-0.5">{job.city}</p>
+              </div>
+            )}
+            {job.description && (
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mt-2">Experience</p>
+                <p className="text-slate-200 text-sm font-semibold mt-0.5">{job.description}</p>
+              </div>
+            )}
+            {skills.length > 0 && (
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mt-2">Skills</p>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {skills.map((s) => (
+                    <span key={s} className="text-[11px] bg-slate-700/60 text-slate-300 rounded-full px-2.5 py-0.5">{s}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3.5">
+            <p className="text-[10px] text-blue-400 font-semibold uppercase tracking-wider mb-1">Anonymous Portfolio</p>
+            <p className="text-xs text-blue-300">This talent's full portfolio is available to view — identity only revealed on mutual connection.</p>
+          </div>
+        </div>
+        <div className="px-5 py-4 border-t border-slate-700/60 space-y-2">
+          <a
+            href={portfolioUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-2.5 rounded-xl font-semibold text-sm text-black text-center block transition-all hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, #20C997, #3b82f6)' }}
+          >
+            View Portfolio
+          </a>
+        </div>
       </div>
     )
   }

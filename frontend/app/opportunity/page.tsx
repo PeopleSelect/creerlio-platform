@@ -309,8 +309,8 @@ export default function OpportunityPage() {
     selectedJobRef.current = job
     setRouteInfo(null)
     trackEvent('VIEW_JOB', 'job', job.id)
-    if (!job.score) autoScore(job)
-  }, [trackEvent, autoScore])
+    if (mode === 'talent' && !job.score) autoScore(job)
+  }, [trackEvent, autoScore, mode])
 
   const handleMapMove = useCallback((center: { lat: number; lng: number }) => {
     trackEvent('MAP_MOVE', 'map', undefined, center as any)
@@ -416,20 +416,22 @@ export default function OpportunityPage() {
             Heatmap
           </button>
 
-          {/* Your Details setup button */}
-          <button
-            type="button"
-            onClick={() => setSetupOpen((v) => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all
-              ${homeLat
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                : 'bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse'}`}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            {homeLat ? homeLabel.split(',')[0] : 'Set your details'}
-          </button>
+          {/* Your Details setup button — talent mode only */}
+          {mode === 'talent' && (
+            <button
+              type="button"
+              onClick={() => setSetupOpen((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all
+                ${homeLat
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                  : 'bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse'}`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              {homeLat ? homeLabel.split(',')[0] : 'Set your details'}
+            </button>
+          )}
 
           <a href="/dashboard/talent" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
             ← Dashboard
@@ -437,8 +439,8 @@ export default function OpportunityPage() {
         </div>
       </header>
 
-      {/* Setup panel */}
-      {setupOpen && (
+      {/* Setup panel — talent mode only */}
+      {mode === 'talent' && setupOpen && (
         <div className="bg-slate-900 border-b border-slate-700 px-6 py-4 flex flex-wrap items-end gap-6">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Current Salary (AUD/yr)</label>
@@ -522,8 +524,8 @@ export default function OpportunityPage() {
             selectedJobId={selectedJob?.id || null}
             mode={mode}
             showHeatmap={showHeatmap}
-            homeLat={homeLat}
-            homeLng={homeLng}
+            homeLat={mode === 'talent' ? homeLat : null}
+            homeLng={mode === 'talent' ? homeLng : null}
             onJobSelect={handleJobSelect}
             onMapMove={handleMapMove}
             onRouteCalc={handleRouteCalc}
@@ -544,8 +546,8 @@ export default function OpportunityPage() {
             />
           </div>
 
-          {/* Scenario Simulator (only when job selected) */}
-          {selectedJob && (
+          {/* Scenario Simulator — talent mode only */}
+          {mode === 'talent' && selectedJob && (
             <div className="border-t border-slate-800 p-4">
               <ScenarioSimulator
                 job={selectedJob}

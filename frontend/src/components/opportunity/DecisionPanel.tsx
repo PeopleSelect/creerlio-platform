@@ -14,6 +14,7 @@ interface Props {
   job: Job | null
   mode: AppMode
   routeInfo?: RouteInfo | null
+  isSaved?: boolean
   onApply: (job: Job) => void
   onSave: (job: Job) => void
   onCompare: (job: Job) => void
@@ -48,7 +49,7 @@ function WeeklyImpactRow({ label, value, positive }: { label: string; value: str
   )
 }
 
-export default function DecisionPanel({ job, mode, routeInfo, onApply, onSave, onCompare, onConnect }: Props) {
+export default function DecisionPanel({ job, mode, routeInfo, isSaved, onApply, onSave, onCompare, onConnect }: Props) {
   if (!job) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-slate-500 px-6 text-center">
@@ -319,21 +320,29 @@ export default function DecisionPanel({ job, mode, routeInfo, onApply, onSave, o
       <div className="px-5 py-4 border-t border-slate-700/60 space-y-2">
         {mode === 'talent' && (
           <button
+            type="button"
             onClick={() => onApply(job)}
-            className="w-full py-2.5 rounded-xl font-semibold text-sm text-black transition-all hover:brightness-110 active:scale-[0.98]"
-            style={{ background: 'linear-gradient(135deg, #20C997, #3b82f6)' }}
+            className="w-full py-2.5 rounded-xl font-semibold text-sm text-black transition-all hover:brightness-110 active:scale-[0.98] bg-gradient-to-r from-[#20C997] to-blue-500"
           >
             Apply Now
           </button>
         )}
         <div className="flex gap-2">
           <button
+            type="button"
             onClick={() => onSave(job)}
-            className="flex-1 py-2 rounded-xl text-sm font-medium border border-slate-600 text-slate-300 hover:bg-slate-700/40 transition-colors"
+            className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors flex items-center justify-center gap-1.5
+              ${isSaved
+                ? 'border-[#20C997]/50 text-[#20C997] bg-[#20C997]/10'
+                : 'border-slate-600 text-slate-300 hover:bg-slate-700/40'}`}
           >
-            Save
+            <svg className="w-3.5 h-3.5" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 3a2 2 0 00-2 2v16l7-3 7 3V5a2 2 0 00-2-2H5z" />
+            </svg>
+            {isSaved ? 'Saved' : 'Save'}
           </button>
           <button
+            type="button"
             onClick={() => onCompare(job)}
             className="flex-1 py-2 rounded-xl text-sm font-medium border border-slate-600 text-slate-300 hover:bg-slate-700/40 transition-colors"
           >

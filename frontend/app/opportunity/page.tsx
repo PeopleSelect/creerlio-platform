@@ -27,6 +27,8 @@ export default function OpportunityPage() {
   const [mode, setMode] = useState<AppMode>('talent')
   const [userRole, setUserRole] = useState<'talent' | 'business' | null>(null)
   const [showHeatmap, setShowHeatmap] = useState(false)
+  const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set())
+  const [feedFilter, setFeedFilter] = useState<'all' | 'saved'>('all')
   const [jobs, setJobs] = useState<Job[]>([])
   const [geoInsights, setGeoInsights] = useState<GeoInsight[]>([])
   const [recommendations, setRecommendations] = useState<string[]>([])
@@ -48,15 +50,23 @@ export default function OpportunityPage() {
   const userIdRef = useRef<string | null>(null)
   const selectedJobRef = useRef<Job | null>(null)
 
-  // Auth — detect role and lock mode accordingly
+  // Auth — detect role, lock mode, load saved jobs
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       tokenRef.current = data.session?.access_token || null
       userIdRef.current = data.session?.user?.id || null
       const regType = data.session?.user?.user_metadata?.registration_type
       const role = regType === 'business' ? 'business' : 'talent'
       setUserRole(role)
       setMode(role)
+
+      if (userIdRef.current) {
+        const { data: saved } = await supabase
+          .from('saved_jobs')
+          .select('job_id')
+          .eq('user_id', userIdRef.current)
+        if (saved) setSavedJobIds(new Set(saved.map((r: any) => r.job_id)))
+      }
     })
   }, [])
 
@@ -360,9 +370,18 @@ export default function OpportunityPage() {
     }
   }, [trackEvent, mode])
 
-  const handleSave = useCallback((job: Job) => {
-    trackEvent('SAVE_JOB', 'job', job.id)
-  }, [trackEvent])
+  const handleSave = useCallback(async (job: Job) => {
+    if (!userIdRef.current) return
+    const isSaved = savedJobIds.has(job.id)
+    if (isSaved) {
+      await supabase.from('saved_jobs').delete().eq('user_id', userIdRef.current).eq('job_id', job.id)
+      setSavedJobIds((prev) => { const next = new Set(prev); next.delete(job.id); return next })
+    } else {
+      await supabase.from('saved_jobs').upsert({ user_id: userIdRef.current, job_id: job.id })
+      setSavedJobIds((prev) => new Set(prev).add(job.id))
+      trackEvent('SAVE_JOB', 'job', job.id)
+    }
+  }, [savedJobIds, trackEvent])
 
   const handleCompare = useCallback((job: Job) => {
     // For now just track; future: multi-select compare mode
@@ -527,7 +546,23 @@ export default function OpportunityPage() {
       {/* 3-column layout */}
       <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 100px)' }}>
         {/* Left: Feed */}
-        <div className="w-80 flex-shrink-0 border-r border-slate-800 bg-slate-900/40 overflow-hidden">
+        <div className="w-80 flex-shrink-0 border-r border-slate-800 bg-slate-900/40 overflow-hidden flex flex-col">
+          {/* Filter tabs — talent only */}
+          {mode === 'talent' && (
+            <div className="flex border-b border-slate-800 flex-shrink-0">
+              {(['all', 'saved'] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFeedFilter(f)}
+                  className={`flex-1 py-2 text-xs font-semibold capitalize transition-colors
+                    ${feedFilter === f ? 'text-[#20C997] border-b-2 border-[#20C997]' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  {f === 'saved' ? `Saved (${savedJobIds.size})` : 'All'}
+                </button>
+              ))}
+            </div>
+          )}
           {loadingJobs ? (
             <div className="p-4 space-y-3">
               {[...Array(5)].map((_, i) => (
@@ -536,9 +571,10 @@ export default function OpportunityPage() {
             </div>
           ) : (
             <OpportunityFeed
-              jobs={jobs}
+              jobs={feedFilter === 'saved' ? jobs.filter((j) => savedJobIds.has(j.id)) : jobs}
               selectedJobId={selectedJob?.id || null}
               mode={mode}
+              savedJobIds={savedJobIds}
               onSelect={handleJobSelect}
             />
           )}
@@ -568,6 +604,7 @@ export default function OpportunityPage() {
               job={selectedJob}
               mode={mode}
               routeInfo={routeInfo}
+              isSaved={selectedJob ? savedJobIds.has(selectedJob.id) : false}
               onApply={handleApply}
               onSave={handleSave}
               onCompare={handleCompare}

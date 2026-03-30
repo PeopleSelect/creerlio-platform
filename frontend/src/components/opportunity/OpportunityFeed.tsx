@@ -7,6 +7,7 @@ interface Props {
   jobs: Job[]
   selectedJobId: string | null
   mode: AppMode
+  savedJobIds?: Set<string>
   onSelect: (job: Job) => void
 }
 
@@ -42,7 +43,7 @@ function ScoreRing({ score }: { score: number }) {
   )
 }
 
-export default function OpportunityFeed({ jobs, selectedJobId, mode, onSelect }: Props) {
+export default function OpportunityFeed({ jobs, selectedJobId, mode, savedJobIds, onSelect }: Props) {
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-3 border-b border-slate-700/60">
@@ -66,6 +67,7 @@ export default function OpportunityFeed({ jobs, selectedJobId, mode, onSelect }:
         {jobs.map((job) => {
           const score = job.score
           const isSelected = selectedJobId === job.id
+          const isSaved = savedJobIds?.has(job.id) ?? false
           const salary = job.salary_max
             ? `$${(job.salary_max / 1000).toFixed(0)}k`
             : job.salary_min
@@ -91,7 +93,14 @@ export default function OpportunityFeed({ jobs, selectedJobId, mode, onSelect }:
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-semibold text-white leading-tight truncate">{job.title}</p>
-                  {score && <VerdictBadge verdict={score.verdict} />}
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {isSaved && (
+                      <svg className="w-3.5 h-3.5 text-[#20C997]" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M5 3a2 2 0 00-2 2v16l7-3 7 3V5a2 2 0 00-2-2H5z" />
+                      </svg>
+                    )}
+                    {score && <VerdictBadge verdict={score.verdict} />}
+                  </div>
                 </div>
                 {mode === 'talent' && (
                   <p className="text-xs text-slate-400 mt-0.5 truncate">{job.business_name}</p>

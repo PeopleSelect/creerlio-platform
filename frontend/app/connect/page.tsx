@@ -150,11 +150,19 @@ function ConnectInner() {
   const doConnect = useCallback(async (token: string) => {
     setStatus('connecting')
     try {
-      const res = await fetch('/api/connect', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ business_id: bizId, qr_source: campaign }),
-      })
+      // Fire legacy connect + ROS connect in parallel
+      const [res] = await Promise.all([
+        fetch('/api/connect', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body:    JSON.stringify({ business_id: bizId, qr_source: campaign }),
+        }),
+        fetch('/api/ros/connect', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body:    JSON.stringify({ business_id: bizId, relationship_type: 'customer', entry_source: 'qr', campaign }),
+        }).catch(() => {}), // non-blocking — ROS is additive
+      ])
       const j = await res.json()
       if (!res.ok) { setStatus('error'); setErrMsg(j.error || 'Connection failed.'); return }
       setExperience(j.experience)

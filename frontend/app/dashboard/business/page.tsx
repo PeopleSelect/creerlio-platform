@@ -10,6 +10,7 @@ import { useBusinessContext } from '@/components/BusinessContext'
 import LocationDropdownsString from '@/components/LocationDropdownsString'
 import { INDUSTRY_OPTIONS } from '@/constants/industries'
 import DeleteAccountSection from '@/components/DeleteAccountSection'
+import BusinessROSPanel from '@/components/ros/BusinessROSPanel'
 
 interface User {
   id: string
@@ -30,6 +31,7 @@ type TabType =
   | 'connections'
   | 'service_connections'
   | 'previous_connections'
+  | 'ros_connections'
   | 'calendar'
   | 'locations'
   | 'business_map'
@@ -3030,6 +3032,17 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
               )}
             </div>
             <button
+              onClick={() => setActiveTab('ros_connections')}
+              className={`px-6 py-3 text-sm font-medium transition-all relative ${
+                activeTab === 'ros_connections' ? 'text-[#20C997]' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Network
+              {activeTab === 'ros_connections' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>
+              )}
+            </button>
+            <button
               onClick={() => setActiveTab('video_history')}
               className={`px-6 py-3 text-sm font-medium transition-all relative ${
                 activeTab === 'video_history' ? 'text-[#20C997]' : 'text-gray-600 hover:text-gray-900'
@@ -4517,6 +4530,22 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
           </div>
           )
         })()}
+
+        {activeTab === 'ros_connections' && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Network</h2>
+              <p className="text-gray-500 text-sm mt-1">
+                All inbound connections — customers, talent, and partners who connected via QR, onboarding, or direct link.
+              </p>
+            </div>
+            {activeBusinessId ? (
+              <BusinessROSPanel businessId={activeBusinessId} />
+            ) : (
+              <p className="text-gray-400 text-sm">Select a business to view its network.</p>
+            )}
+          </div>
+        )}
 
         {activeTab === 'connections' && (
           <div className="dashboard-card rounded-xl p-6">

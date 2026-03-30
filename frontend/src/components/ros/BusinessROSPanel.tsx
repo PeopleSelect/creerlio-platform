@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 
+
 interface ROSIncoming {
   id: string
   relationship_type: 'customer' | 'talent' | 'business'
@@ -39,16 +40,23 @@ function initials(name: string | null | undefined) {
 
 interface Props {
   businessId: string
-  token: string
 }
 
-export default function BusinessROSPanel({ businessId, token }: Props) {
+export default function BusinessROSPanel({ businessId }: Props) {
   const [connections, setConnections] = useState<ROSIncoming[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'customer' | 'talent' | 'business'>('all')
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
+  const [token, setToken] = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setToken(data.session?.access_token || null)
+    })
+  }, [])
 
   const load = useCallback(async () => {
+    if (!token) return
     setLoading(true)
     try {
       const url = `/api/ros/connections?view=incoming&business_id=${businessId}&status=active${filter !== 'all' ? `&type=${filter}` : ''}`
@@ -65,6 +73,7 @@ export default function BusinessROSPanel({ businessId, token }: Props) {
   useEffect(() => { load() }, [load])
 
   async function disconnect(id: string, personName: string) {
+    if (!token) return
     if (!confirm(`Remove ${personName}'s connection? You can't undo this, but they can reconnect.`)) return
     setDisconnecting(id)
     try {

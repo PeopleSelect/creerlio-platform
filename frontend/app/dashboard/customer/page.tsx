@@ -12,6 +12,7 @@ import {
   Eye, Zap,
 } from 'lucide-react'
 import OpportunityModal from './components/OpportunityModal'
+import ROSConnections from './components/ROSConnections'
 
 export const dynamic = 'force-dynamic'
 
@@ -459,6 +460,19 @@ export default function NetworkDashboard() {
               </div>
             </div>
           )}
+
+          {/* ROS Connections — QR / onboarding connections */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-gray-900">My Connected Businesses</h2>
+                <span className="text-[11px] font-semibold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">QR &amp; Direct</span>
+              </div>
+            </div>
+            <div className="p-4">
+              <ROSConnections />
+            </div>
+          </div>
 
           {/* Talent crossover */}
           <div className="bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-100 rounded-2xl p-6">

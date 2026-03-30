@@ -347,7 +347,7 @@ export default function NetworkDashboard() {
                   const lastActivity = conn.last_interaction_at || conn.updated_at
 
                   return (
-                    <div key={conn.id} className="flex items-start gap-4 px-6 py-4 hover:bg-gray-50 transition-colors group">
+                    <div key={conn.id} className="flex items-start gap-4 px-6 py-4 hover:bg-gray-50 transition-colors">
                       {/* Avatar */}
                       <div className="h-10 w-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 text-sm font-bold text-blue-600">
                         {page?.logo_url
@@ -355,7 +355,7 @@ export default function NetworkDashboard() {
                           : bizName.charAt(0).toUpperCase()}
                       </div>
 
-                      {/* Details */}
+                      {/* Details + inline actions */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-semibold text-gray-900 text-sm truncate">{bizName}</p>
@@ -379,24 +379,24 @@ export default function NetworkDashboard() {
                             {conn.latest_message.body}
                           </p>
                         )}
-                      </div>
 
-                      {/* Actions */}
-                      <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Link href={`/dashboard/customer/messages?connection_id=${conn.id}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-                          <MessageSquare className="h-3.5 w-3.5" /> Message
-                        </Link>
-                        <button type="button" onClick={() => setShowModal(true)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors">
-                          <Send className="h-3.5 w-3.5" /> Opportunity
-                        </button>
-                        {page?.slug && (
-                          <Link href={`/businesses/${page.slug}`}
-                            className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors">
-                            <ChevronRight className="h-3.5 w-3.5" />
+                        {/* Actions — always visible */}
+                        <div className="flex items-center gap-2 mt-3 flex-wrap">
+                          <Link href={'/dashboard/customer/messages?connection_id=' + conn.id}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                            <MessageSquare className="h-3.5 w-3.5" /> Message
                           </Link>
-                        )}
+                          <button type="button" onClick={() => setShowModal(true)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors">
+                            <Send className="h-3.5 w-3.5" /> Request Quote
+                          </button>
+                          {page?.slug && (
+                            <Link href={'/businesses/' + page.slug}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                              <Eye className="h-3.5 w-3.5" /> View Profile
+                            </Link>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )

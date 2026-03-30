@@ -59,8 +59,9 @@ export default function BusinessROSPanel({ businessId }: Props) {
     if (!token) return
     setLoading(true)
     try {
-      const url = `/api/ros/connections?view=incoming&business_id=${businessId}&status=active${filter !== 'all' ? `&type=${filter}` : ''}`
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      const typeParam = filter !== 'all' ? '&type=' + filter : ''
+      const url = '/api/ros/connections?view=incoming&business_id=' + businessId + '&status=active' + typeParam
+      const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
       if (res.ok) {
         const json = await res.json()
         setConnections(json.connections || [])
@@ -79,7 +80,7 @@ export default function BusinessROSPanel({ businessId }: Props) {
     try {
       await fetch('/api/ros/disconnect', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({ connection_id: id, reason: 'business_removed' }),
       })
       setConnections(prev => prev.filter(c => c.id !== id))

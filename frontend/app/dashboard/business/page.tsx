@@ -2994,13 +2994,13 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                   setConnectionsMenuOpen((open) => !open)
                 }}
                 className={`px-6 py-3 text-sm font-medium transition-all relative ${
-                  activeTab === 'connections' || activeTab === 'service_connections' || activeTab === 'previous_connections'
+                  activeTab === 'connections' || activeTab === 'service_connections' || activeTab === 'previous_connections' || activeTab === 'ros_connections'
                     ? 'text-[#20C997]'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
                 Connections
-                {(activeTab === 'connections' || activeTab === 'service_connections' || activeTab === 'previous_connections') && (
+                {(activeTab === 'connections' || activeTab === 'service_connections' || activeTab === 'previous_connections' || activeTab === 'ros_connections') && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>
                 )}
               </button>
@@ -3028,20 +3028,21 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
                   >
                     Previous Connections
                   </button>
+                  <div className="border-t border-gray-100 my-1" />
+                  <button
+                    onClick={() => {
+                      setActiveTab('ros_connections')
+                      setConnectionsMenuOpen(false)
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 ${
+                      activeTab === 'ros_connections' ? 'text-[#20C997]' : 'text-gray-700'
+                    }`}
+                  >
+                    🔗 Network (QR &amp; Direct)
+                  </button>
                 </div>
               )}
             </div>
-            <button
-              onClick={() => setActiveTab('ros_connections')}
-              className={`px-6 py-3 text-sm font-medium transition-all relative ${
-                activeTab === 'ros_connections' ? 'text-[#20C997]' : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Network
-              {activeTab === 'ros_connections' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#20C997]"></span>
-              )}
-            </button>
             <button
               onClick={() => setActiveTab('video_history')}
               className={`px-6 py-3 text-sm font-medium transition-all relative ${

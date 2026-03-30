@@ -32,6 +32,12 @@ export async function POST(req: NextRequest) {
 
     if (bizErr || !biz) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
 
+    // QR connections auto-share the initiator's full profile with this business
+    const metadata: Record<string, any> = {}
+    if (entry_source === 'qr') {
+      metadata.profile_shared = true
+    }
+
     // Upsert connection — if previously disconnected, re-activate
     const { data: conn, error: connErr } = await supabase
       .from('ros_connections')
@@ -47,6 +53,7 @@ export async function POST(req: NextRequest) {
           disconnected_by: null,
           disconnected_reason: null,
           last_interaction_at: new Date().toISOString(),
+          metadata,
         },
         { onConflict: 'initiator_id,business_id,relationship_type' }
       )

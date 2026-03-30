@@ -19,17 +19,19 @@ export default function CustomerProfilePage() {
   const [saved, setSavedOk]     = useState(false)
   const [error, setError]       = useState<string | null>(null)
   const [editing, setEditing]   = useState(false)
-  const [name, setName]         = useState('')
-  const [phone, setPhone]       = useState('')
-  const [company, setCompany]   = useState('')
-  const [location, setLocation] = useState('')
-  const [email, setEmail]       = useState('')
+  const [name, setName]                         = useState('')
+  const [phone, setPhone]                       = useState('')
+  const [company, setCompany]                   = useState('')
+  const [location, setLocation]                 = useState('')
+  const [email, setEmail]                       = useState('')
+  const [profileVisibility, setProfileVis]      = useState<'private' | 'qr_connections' | 'all_connections'>('private')
 
   // Draft state for the edit form
-  const [draftName, setDraftName]         = useState('')
-  const [draftPhone, setDraftPhone]       = useState('')
-  const [draftCompany, setDraftCompany]   = useState('')
-  const [draftLocation, setDraftLocation] = useState('')
+  const [draftName, setDraftName]               = useState('')
+  const [draftPhone, setDraftPhone]             = useState('')
+  const [draftCompany, setDraftCompany]         = useState('')
+  const [draftLocation, setDraftLocation]       = useState('')
+  const [draftVisibility, setDraftVisibility]   = useState<'private' | 'qr_connections' | 'all_connections'>('private')
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -53,6 +55,7 @@ export default function CustomerProfilePage() {
           setPhone(p.phone || '')
           setCompany(p.company || '')
           setLocation(p.location || '')
+          setProfileVis(p.profile_visibility || 'private')
         }
       }
       setLoad(false)
@@ -64,6 +67,7 @@ export default function CustomerProfilePage() {
     setDraftPhone(phone)
     setDraftCompany(company)
     setDraftLocation(location)
+    setDraftVisibility(profileVisibility)
     setError(null)
     setSavedOk(false)
     setEditing(true)
@@ -77,7 +81,7 @@ export default function CustomerProfilePage() {
     const res = await fetch('/api/customer/profile', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ name: draftName, phone: draftPhone, company: draftCompany, location: draftLocation }),
+      body: JSON.stringify({ name: draftName, phone: draftPhone, company: draftCompany, location: draftLocation, profile_visibility: draftVisibility }),
     })
     const j = await res.json()
     if (res.ok && j.profile) {
@@ -85,6 +89,7 @@ export default function CustomerProfilePage() {
       setPhone(draftPhone)
       setCompany(draftCompany)
       setLocation(draftLocation)
+      setProfileVis(draftVisibility)
       setSavedOk(true)
       setTimeout(() => { setSavedOk(false); setEditing(false) }, 1200)
     } else {
@@ -208,6 +213,18 @@ export default function CustomerProfilePage() {
                     Add your phone, company and location to complete your profile.
                   </div>
                 )}
+                {/* Profile sharing */}
+                <div className="flex items-center gap-3 px-8 py-4 bg-gray-50">
+                  <div className={`h-4 w-4 rounded-full flex-shrink-0 ${profileVisibility === 'private' ? 'bg-slate-400' : profileVisibility === 'qr_connections' ? 'bg-blue-500' : 'bg-emerald-500'}`} />
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Profile sharing</p>
+                    <p className="text-sm text-gray-700">
+                      {profileVisibility === 'private' && 'Private — only you can see your profile'}
+                      {profileVisibility === 'qr_connections' && 'QR connections — businesses you scan can see your profile'}
+                      {profileVisibility === 'all_connections' && 'All connections — any connected business can see your profile'}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
@@ -248,6 +265,33 @@ export default function CustomerProfilePage() {
                   <input value={draftLocation} onChange={e => setDraftLocation(e.target.value)}
                     className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="City, Country" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-2">Profile sharing</label>
+                  <p className="text-xs text-gray-400 mb-3">When you scan a business QR code your full profile is always shared with that business. This setting controls other connections.</p>
+                  <div className="space-y-2">
+                    {([
+                      { value: 'private',         label: 'Private',          desc: 'Only you can see your profile' },
+                      { value: 'qr_connections',  label: 'QR connections',   desc: 'Businesses you scan can see your profile' },
+                      { value: 'all_connections', label: 'All connections',  desc: 'Any connected business can see your profile' },
+                    ] as const).map(opt => (
+                      <label key={opt.value} className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors ${draftVisibility === opt.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                        <input
+                          type="radio"
+                          name="profile_visibility"
+                          value={opt.value}
+                          checked={draftVisibility === opt.value}
+                          onChange={() => setDraftVisibility(opt.value)}
+                          className="mt-0.5 accent-blue-600"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{opt.label}</p>
+                          <p className="text-xs text-gray-400">{opt.desc}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
                 </div>
 
                 {error && <p className="text-sm text-red-600">{error}</p>}

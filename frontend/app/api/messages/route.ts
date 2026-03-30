@@ -51,18 +51,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Verify there is an accepted connection
-    const { data: conn } = await supabase
-      .from('talent_connection_requests')
-      .select('id')
-      .eq('talent_id', talentId)
-      .eq('business_id', businessId)
-      .eq('status', 'accepted')
-      .limit(1)
-      .maybeSingle()
+    // Verify there is an accepted connection (talent_connection_requests OR active ROS connection)
+    const [{ data: talentConn }, { data: rosConn }] = await Promise.all([
+      supabase
+        .from('talent_connection_requests')
+        .select('id')
+        .eq('talent_id', talentId)
+        .eq('business_id', businessId)
+        .eq('status', 'accepted')
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('ros_connections')
+        .select('id')
+        .eq('initiator_id', talentId)
+        .eq('business_id', businessId)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle(),
+    ])
 
-    if (!conn) {
+    if (!talentConn && !rosConn) {
       return NextResponse.json({ error: 'No accepted connection for this pair' }, { status: 403 })
+    }
+
+    // Also allow ROS initiators (customers) to access their own conversations
+    if (!isTalent && !isBusiness) {
+      // Check if the caller is the ROS initiator
+      const isInitiator = rosConn !== null && talentId === user.id
+      if (!isInitiator) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     // Find or create conversation
@@ -147,17 +166,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Verify accepted connection
-    const { data: conn } = await supabase
-      .from('talent_connection_requests')
-      .select('id')
-      .eq('talent_id', talentId)
-      .eq('business_id', businessId)
-      .eq('status', 'accepted')
-      .limit(1)
-      .maybeSingle()
+    // Verify accepted connection (talent_connection_requests OR active ROS connection)
+    const [{ data: talentConnPost }, { data: rosConnPost }] = await Promise.all([
+      supabase
+        .from('talent_connection_requests')
+        .select('id')
+        .eq('talent_id', talentId)
+        .eq('business_id', businessId)
+        .eq('status', 'accepted')
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('ros_connections')
+        .select('id')
+        .eq('initiator_id', talentId)
+        .eq('business_id', businessId)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle(),
+    ])
 
-    if (!conn) {
+    if (!talentConnPost && !rosConnPost) {
       return NextResponse.json({ error: 'No accepted connection for this pair' }, { status: 403 })
     }
 

@@ -111,16 +111,34 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Failed to load connections' }, { status: 500 })
       }
 
-      // Enrich with talent profiles
+      // Enrich with profile data — try talent_profiles first, then auth user metadata
       const initiatorIds = [...new Set((rows || []).map((r: any) => r.initiator_id).filter(Boolean))]
-      let profileMap: Record<string, { name: string; title?: string }> = {}
+      let profileMap: Record<string, { name: string; title?: string; avatar_url?: string; talent_profile_id?: string }> = {}
 
       if (initiatorIds.length > 0) {
+        // 1. Talent profiles (have name + title)
         const { data: tps } = await supabase
           .from('talent_profiles')
-          .select('user_id, name, title')
+          .select('id, user_id, name, title')
           .in('user_id', initiatorIds)
-        if (tps) tps.forEach((tp: any) => { profileMap[tp.user_id] = { name: tp.name, title: tp.title } })
+        if (tps) {
+          tps.forEach((tp: any) => {
+            profileMap[tp.user_id] = { name: tp.name, title: tp.title, talent_profile_id: tp.id }
+          })
+        }
+
+        // 2. For users not in talent_profiles, pull from auth.users metadata via admin API
+        const missingIds = initiatorIds.filter(id => !profileMap[id])
+        if (missingIds.length > 0) {
+          for (const uid of missingIds) {
+            const { data: authUser } = await supabase.auth.admin.getUserById(uid)
+            if (authUser?.user) {
+              const meta = authUser.user.user_metadata || {}
+              const name = meta.full_name || meta.name || (authUser.user.email?.split('@')[0] ?? 'Customer')
+              profileMap[uid] = { name, title: meta.role_field || null }
+            }
+          }
+        }
       }
 
       const enriched = (rows || []).map((r: any) => ({

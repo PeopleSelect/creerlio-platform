@@ -13,7 +13,7 @@ interface ROSIncoming {
   last_interaction_at: string | null
   campaign: string | null
   initiator_id: string
-  profile: { name: string; title?: string } | null
+  profile: { name: string; title?: string; talent_profile_id?: string } | null
 }
 
 const TYPE_META = {
@@ -146,48 +146,58 @@ export default function BusinessROSPanel({ businessId }: Props) {
       ) : (
         <div className="divide-y divide-gray-50">
           {displayed.map(conn => {
-            const name = conn.profile?.name || `Anonymous ${conn.relationship_type}`
+            const name = conn.profile?.name || conn.relationship_type.charAt(0).toUpperCase() + conn.relationship_type.slice(1) + ' User'
             const typeMeta = TYPE_META[conn.relationship_type]
 
             return (
-              <div key={conn.id} className="py-3 flex items-center gap-3 group">
-                {/* Avatar */}
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center text-slate-600 font-bold text-sm flex-shrink-0">
-                  {conn.profile ? initials(conn.profile.name) : typeMeta.icon}
+              <div key={conn.id} className="py-3 flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  {/* Avatar */}
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center text-slate-600 font-bold text-sm flex-shrink-0">
+                    {conn.profile ? initials(conn.profile.name) : typeMeta.icon}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-gray-900 text-sm truncate">{name}</p>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${typeMeta.color} flex-shrink-0`}>
+                        {typeMeta.label}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {conn.profile?.title && (
+                        <p className="text-xs text-gray-400 truncate">{conn.profile.title}</p>
+                      )}
+                      <p className="text-xs text-gray-300">{timeAgo(conn.connected_at)}</p>
+                      {conn.entry_source === 'qr' && (
+                        <span className="text-[10px] text-gray-300">📲 QR</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-gray-900 text-sm truncate">{name}</p>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${typeMeta.color} flex-shrink-0`}>
-                      {typeMeta.label}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {conn.profile?.title && (
-                      <p className="text-xs text-gray-400 truncate">{conn.profile.title}</p>
-                    )}
-                    <p className="text-xs text-gray-300">{timeAgo(conn.connected_at)}</p>
-                    {conn.entry_source === 'qr' && (
-                      <span className="text-[10px] text-gray-300">📲 QR</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    type="button"
+                {/* Actions — always visible */}
+                <div className="flex items-center gap-1.5 pl-[52px]">
+                  <a
+                    href={'/dashboard/business/messages?talent_id=' + conn.initiator_id}
                     className="px-2.5 py-1 rounded-lg text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"
                   >
                     Message
-                  </button>
+                  </a>
+                  {conn.profile?.talent_profile_id ? (
+                    <a
+                      href={'/dashboard/business/talent/' + conn.profile.talent_profile_id}
+                      className="px-2.5 py-1 rounded-lg text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+                    >
+                      View Profile
+                    </a>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => disconnect(conn.id, name)}
                     disabled={disconnecting === conn.id}
-                    className="px-2.5 py-1 rounded-lg text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                    className="px-2.5 py-1 rounded-lg text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40 ml-auto"
                   >
                     {disconnecting === conn.id ? '…' : 'Remove'}
                   </button>

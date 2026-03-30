@@ -31,16 +31,20 @@ export async function POST(req: NextRequest) {
 
     const isInitiator = conn.initiator_id === user.id
 
-    // Check if user is the business owner
+    // Check if user is the business owner (direct, via roles, or legacy)
     let isBusinessOwner = false
     if (!isInitiator) {
-      const { data: owned } = await supabase
-        .from('business_profiles')
-        .select('id')
-        .eq('id', conn.business_id)
-        .eq('user_id', user.id)
-        .maybeSingle()
-      isBusinessOwner = !!owned
+      const { data: direct } = await supabase
+        .from('business_profiles').select('id')
+        .eq('id', conn.business_id).eq('user_id', user.id).maybeSingle()
+      if (direct) {
+        isBusinessOwner = true
+      } else {
+        const { data: role } = await supabase
+          .from('user_business_roles').select('id')
+          .eq('business_id', conn.business_id).eq('user_id', user.id).maybeSingle()
+        isBusinessOwner = !!role
+      }
     }
 
     if (!isInitiator && !isBusinessOwner) {

@@ -57,25 +57,29 @@ export async function determineUserRole(
   const cacheBuster = Date.now()
   console.log('[RBAC DEBUG] Querying profiles from database (cache-busting)...', { userId, cacheBuster })
   const [talentCheck, businessCheck] = await Promise.all([
-    supabase.from('talent_profiles').select('id').eq('user_id', userId).maybeSingle().then(result => {
-      console.log('[RBAC DEBUG] Talent profile query result:', { 
-        hasData: !!result.data, 
-        dataId: result.data?.id || null, 
-        error: result.error?.message || null,
-        status: result.status,
-        timestamp: Date.now()
-      })
-      return result
+    fetch(`/api/talent/profile?user_id=${userId}`).then(async (res) => {
+      if (!res.ok) {
+        console.log('[RBAC DEBUG] Talent profile API error:', res.status, await res.text())
+        return { data: null, error: { message: 'API error', code: res.status.toString() } }
+      }
+      const { profile } = await res.json()
+      console.log('[RBAC DEBUG] Talent profile API result:', { hasData: !!profile, dataId: profile?.id || null })
+      return { data: profile, error: null }
+    }).catch((error) => {
+      console.log('[RBAC DEBUG] Talent profile API fetch error:', error)
+      return { data: null, error: { message: error.message } }
     }),
-    supabase.from('business_profiles').select('id').eq('user_id', userId).maybeSingle().then(result => {
-      console.log('[RBAC DEBUG] Business profile query result:', { 
-        hasData: !!result.data, 
-        dataId: result.data?.id || null, 
-        error: result.error?.message || null,
-        status: result.status,
-        timestamp: Date.now()
-      })
-      return result
+    fetch(`/api/business/profile?user_id=${userId}`).then(async (res) => {
+      if (!res.ok) {
+        console.log('[RBAC DEBUG] Business profile API error:', res.status, await res.text())
+        return { data: null, error: { message: 'API error', code: res.status.toString() } }
+      }
+      const { profile } = await res.json()
+      console.log('[RBAC DEBUG] Business profile API result:', { hasData: !!profile, dataId: profile?.id || null })
+      return { data: profile, error: null }
+    }).catch((error) => {
+      console.log('[RBAC DEBUG] Business profile API fetch error:', error)
+      return { data: null, error: { message: error.message } }
     }),
   ])
 

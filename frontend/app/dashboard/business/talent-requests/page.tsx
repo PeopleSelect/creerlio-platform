@@ -62,13 +62,18 @@ export default function BusinessTalentRequestsPage() {
       // Try user_business_roles for the business id
       let bId = bp?.business_id || null
       if (!bId) {
-        const { data: role } = await supabase
-          .from('user_business_roles')
-          .select('business_id')
-          .eq('user_id', session.user.id)
-          .in('role', ['super_admin', 'business_admin'])
-          .maybeSingle()
-        bId = role?.business_id || null
+        const response = await fetch(`/api/user/business-roles?user_id=${session.user.id}`)
+        if (!response.ok) {
+          console.error('Failed to fetch business roles')
+          setAuthError(true)
+          setLoading(false)
+          return
+        }
+        const { roles } = await response.json()
+        const adminRole = roles?.find((role: any) =>
+          ['super_admin', 'business_admin'].includes(role.role)
+        )
+        bId = adminRole?.business_id || null
       }
 
       if (!bId) { setAuthError(true); setLoading(false); return }

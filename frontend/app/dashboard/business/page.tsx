@@ -366,8 +366,8 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
       setLocations(nextLocations)
 
       // If business roles didn't load (RLS or legacy data), derive businesses from locations
-      if (businessAccess.length === 0 && effectiveLocations.length > 0) {
-        const locationBusinessIds = Array.from(new Set(effectiveLocations.map((l) => String(l.business_id))))
+      if (businessAccess.length === 0 && nextLocations.length > 0) {
+        const locationBusinessIds = Array.from(new Set(nextLocations.map((l) => String(l.business_id))))
         const { data: businessRows } = await supabase
           .from('businesses')
           .select('id, name')
@@ -385,13 +385,13 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
 
       const effectiveBusinessIds = businessAccess.length > 0
         ? businessIds
-        : Array.from(new Set(effectiveLocations.map((l) => String(l.business_id))))
+        : Array.from(new Set(nextLocations.map((l) => String(l.business_id))))
       const firstBusiness = effectiveBusinessIds[0] || null
       const nextBusinessId =
         activeBusinessId && effectiveBusinessIds.includes(activeBusinessId) ? activeBusinessId : firstBusiness
       if (nextBusinessId !== activeBusinessId) setActiveBusinessId(nextBusinessId)
 
-      const candidateLocations = effectiveLocations.filter((l: any) =>
+      const candidateLocations = nextLocations.filter((l: any) =>
         nextBusinessId ? l.business_id === nextBusinessId : true
       )
       const locationIds = candidateLocations.map((l: any) => l.id)
@@ -416,18 +416,20 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
     setTeamError(null)
 
     const loadTeam = async () => {
-      const { data: teamRows, error: teamErr } = await supabase
-        .from('user_business_roles')
-        .select('user_id, role, users(id, email, full_name)')
-        .eq('business_id', activeBusinessId)
-
-      if (cancelled) return
-      if (teamErr) {
-        setTeamError(teamErr.message || 'Failed to load team members.')
+      // Use server-side API to load team members (bypasses RLS)
+      const response = await fetch(`/api/team?business_id=${activeBusinessId}`)
+      if (!response.ok) {
+        const errorData = await response.json()
+        setTeamError(errorData.error || 'Failed to load team members.')
         setTeamLoading(false)
         return
       }
 
+      const { members } = await response.json()
+
+      if (cancelled) return
+
+      // Location loading logic remains the same
       let locationRows = locations.filter((l) => l.business_id === activeBusinessId)
       if (locationRows.length === 0) {
         const { data: locRows } = await supabase
@@ -472,6 +474,7 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
 
       if (cancelled) return
 
+      // Group location roles by user
       const locRolesByUser = new Map<string, any[]>()
       ;(locRoles || []).forEach((r: any) => {
         const userId = String(r.user_id)
@@ -480,17 +483,13 @@ const [sendingOpportunity, setSendingOpportunity] = useState<string | null>(null
         locRolesByUser.set(userId, entry)
       })
 
-      const members = (teamRows || []).map((row: any) => {
-        const userInfo = row.users || {}
-        return {
-          user_id: String(row.user_id),
-          email: userInfo.email || 'Unknown',
-          full_name: userInfo.full_name || userInfo.email || null,
-          business_role: row.role || 'viewer',
-          location_roles: locRolesByUser.get(String(row.user_id)) || [],
-        }
-      })
-      setTeamMembers(members)
+      // Update members with location roles
+      const updatedMembers = members.map((member: any) => ({
+        ...member,
+        location_roles: locRolesByUser.get(String(member.user_id)) || [],
+      }))
+
+      setTeamMembers(updatedMembers)
 
       const { data: inviteRows } = await supabase
         .from('business_user_invites')

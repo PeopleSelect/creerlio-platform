@@ -1,10 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 export async function GET(request: NextRequest) {
+  if (!supabaseUrl) {
+    console.error('Missing Supabase URL in analytics stats route')
+    return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
+  }
   try {
     // Verify admin access
     const authHeader = request.headers.get('authorization')

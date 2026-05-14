@@ -398,7 +398,7 @@ function BusinessProfileViewPageInner() {
   }, [searchParams])
 
   const fromParam = searchParams.get('from')
-  const backToMapHref = fromParam === 'talent-map' ? '/talent-map' : null
+  const backToMapHref = fromParam === 'talent-map' ? '/dashboard/talent' : null
   const adminUserId = searchParams.get('admin_user_id')
   const isAdminPreview = fromParam === 'admin' && !!adminUserId
   const returnTo = searchParams.get('return_to')
